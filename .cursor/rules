@@ -1,0 +1,13 @@
+This is a monorepo for data collection and processing.
+
+## Scrapers (./scrapers/)
+- Python with uv (use `uv add` for packages, never pip)
+- Scrapy for scraping
+- MongoDB for data storage
+- Apache Airflow for scheduling (DAGs in ./scrapers/dags/)
+
+## Conventions
+- Spiders go in ./scrapers/spiders/, one spider per source
+- DAGs in ./scrapers/dags/ orchestrate spider runs
+- Credentials come from environment variables only — never hardcoded
+- Use `uv run` to execute scripts

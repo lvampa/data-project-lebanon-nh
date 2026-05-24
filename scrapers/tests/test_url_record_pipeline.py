@@ -1,0 +1,42 @@
+from datetime import datetime, timezone
+from unittest.mock import patch
+
+import pytest
+
+from items import PoliceLogItem, UrlRecordItem
+from pipelines import UrlRecordPipeline
+
+
+@patch("pipelines.db")
+def test_pipeline_upserts_on_close(mock_db):
+    pipeline = UrlRecordPipeline()
+    pipeline.open_spider(None)
+    now = datetime.now(timezone.utc)
+
+    pipeline.process_item(UrlRecordItem(canonical_url="https://example.com/a.pdf", state="pending", created_at=now), None)
+    pipeline.close_spider(None)
+
+    mock_db.get_collection.assert_called_with("urls")
+    ops = mock_db.get_collection.return_value.bulk_write.call_args[0][0]
+    assert len(ops) == 1
+
+
+@patch("pipelines.db")
+def test_pipeline_passes_through_non_url_record_items(mock_db):
+    pipeline = UrlRecordPipeline()
+    pipeline.open_spider(None)
+    item = PoliceLogItem(source_url="x", raw_text="x", scraped_at=datetime.now(timezone.utc))
+
+    result = pipeline.process_item(item, None)
+
+    assert result is item
+    pipeline.close_spider(None)
+    mock_db.get_collection.return_value.bulk_write.assert_not_called()
+
+
+@patch("pipelines.db")
+def test_pipeline_skips_bulk_write_when_no_items(mock_db):
+    pipeline = UrlRecordPipeline()
+    pipeline.open_spider(None)
+    pipeline.close_spider(None)
+    mock_db.get_collection.return_value.bulk_write.assert_not_called()

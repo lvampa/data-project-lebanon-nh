@@ -40,3 +40,13 @@ def test_pipeline_skips_bulk_write_when_no_items(mock_db):
     pipeline.open_spider(None)
     pipeline.close_spider(None)
     mock_db.get_collection.return_value.bulk_write.assert_not_called()
+
+
+def test_url_record_item_accepts_archive_url():
+    item = UrlRecordItem(
+        canonical_url="https://example.com/a.pdf",
+        archive_url="https://web.archive.org/web/20191015/https://example.com/a.pdf",
+        state="pending",
+        created_at=datetime.now(timezone.utc),
+    )
+    assert item["archive_url"] == "https://web.archive.org/web/20191015/https://example.com/a.pdf"

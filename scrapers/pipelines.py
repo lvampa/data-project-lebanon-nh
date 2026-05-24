@@ -1,4 +1,5 @@
 import logfire
+import scrapy
 from pymongo import UpdateOne
 
 from mongo import db
@@ -10,7 +11,7 @@ class UrlRecordPipeline:
         self._ops: list[UpdateOne] = []
         self._count: int = 0
 
-    def process_item(self, item, spider):
+    def process_item(self, item: scrapy.Item, spider: scrapy.Spider) -> scrapy.Item:
         if not isinstance(item, UrlRecordItem):
             return item
 
@@ -44,7 +45,7 @@ class UrlRecordPipeline:
 
 
 class UrlDownloadPipeline:
-    def process_item(self, item, spider):
+    def process_item(self, item: scrapy.Item, spider: scrapy.Spider) -> scrapy.Item:
         if not isinstance(item, DownloadedUrlItem):
             return item
 
@@ -64,7 +65,7 @@ class UrlDownloadPipeline:
 
 
 class PoliceLogPipeline:
-    def process_item(self, item, spider):
+    def process_item(self, item: scrapy.Item, spider: scrapy.Spider) -> scrapy.Item:
         if not isinstance(item, PoliceLogItem):
             return item
 

@@ -4,12 +4,29 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "logfire>=4.31.0",
+    "mongo",
+    "pydantic>=2.12.5",
     "pymongo>=4.16.0",
     "pypdf>=6.9.1",
     "scrapy>=2.14.2",
 ]
 
+[project.scripts]
+init-db = "scripts.init_db:main"
+
 [tool.uv.workspace]
 members = [
-    "shared",
+    "shared/mongo",
+]
+
+[tool.uv.sources]
+mongo = { workspace = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
 ]

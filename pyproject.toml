@@ -1,2 +1,2 @@
 [tool.uv.workspace]
-members = ["scrapers", "shared/postgres", "shared/mongo"]
+members = ["scrapers", "shared/postgres", "shared/mongo", "api"]

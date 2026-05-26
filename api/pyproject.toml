@@ -1,0 +1,17 @@
+[project]
+name = "api"
+version = "0.1.0"
+description = "Lebanon PD Log — internal dashboard API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "postgres",
+]
+
+[tool.uv.sources]
+postgres = { workspace = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

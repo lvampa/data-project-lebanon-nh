@@ -1,0 +1,4 @@
+body { font-size: 0.875rem; }
+.table td, .table th { vertical-align: middle; }
+.badge-normalized { background: #198754; }
+.badge-unknown   { background: #dc3545; }

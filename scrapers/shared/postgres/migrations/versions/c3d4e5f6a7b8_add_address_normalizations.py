@@ -29,9 +29,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("raw_address"),
     )
-    op.create_index("idx_address_normalizations_raw", "address_normalizations", ["raw_address"])
 
 
 def downgrade() -> None:
-    op.drop_index("idx_address_normalizations_raw", table_name="address_normalizations")
     op.drop_table("address_normalizations")

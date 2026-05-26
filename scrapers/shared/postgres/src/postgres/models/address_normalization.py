@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import DateTime, Float, Index, Text
+from sqlalchemy import DateTime, Float, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from postgres.base import Base
 
@@ -16,5 +16,3 @@ class AddressNormalization(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-
-    __table_args__ = (Index("idx_address_normalizations_raw", "raw_address"),)

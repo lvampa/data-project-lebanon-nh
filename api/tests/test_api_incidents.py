@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
+import pytest
 from fastapi.testclient import TestClient
 from api.main import app
 from api.deps import get_db
@@ -32,6 +33,12 @@ def _client_with_mock_db(mock_db):
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def clear_overrides():
+    yield
+    app.dependency_overrides.clear()
+
+
 def test_incidents_returns_list():
     mock_db = MagicMock()
     entry = _make_entry()
@@ -40,7 +47,6 @@ def test_incidents_returns_list():
 
     client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents")
-    app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     data = resp.json()
@@ -56,7 +62,6 @@ def test_incidents_filters_by_incident_type():
 
     client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents?incident_type=Harassment")
-    app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
@@ -69,7 +74,6 @@ def test_incidents_pagination_defaults():
 
     client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents")
-    app.dependency_overrides.clear()
 
     assert resp.status_code == 200
     data = resp.json()

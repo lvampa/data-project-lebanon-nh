@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
@@ -24,7 +24,7 @@ def list_incidents(
     if date_from:
         stmt = stmt.where(LogEntry.reported_at >= date_from)
     if date_to:
-        stmt = stmt.where(LogEntry.reported_at <= date_to)
+        stmt = stmt.where(LogEntry.reported_at < date_to + timedelta(days=1))
     if incident_type:
         stmt = stmt.where(LogEntry.incident_type.ilike(f"%{incident_type}%"))
     if disposition:

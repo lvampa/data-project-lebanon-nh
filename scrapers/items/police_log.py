@@ -2,8 +2,24 @@ import scrapy
 
 
 class PoliceLogItem(scrapy.Item):
-    source_url = scrapy.Field()     # URL of the PDF
-    pdf_filename = scrapy.Field()   # Original filename
-    log_date = scrapy.Field()       # Date parsed from filename/link text
-    raw_text = scrapy.Field()       # Full extracted text from PDF
-    scraped_at = scrapy.Field()     # Timestamp
+    source_url = scrapy.Field()
+    pdf_filename = scrapy.Field()
+    log_date = scrapy.Field()
+    raw_text = scrapy.Field()
+    scraped_at = scrapy.Field()
+    case_number = scrapy.Field()
+    reported_at = scrapy.Field()
+    call_source = scrapy.Field()
+    incident_type = scrapy.Field()
+    disposition = scrapy.Field()
+    raw_reason_action = scrapy.Field()
+    location = scrapy.Field()
+    officer = scrapy.Field()
+    reference_number = scrapy.Field()
+    dispatched_at = scrapy.Field()
+    enroute_at = scrapy.Field()
+    arrived_at = scrapy.Field()
+    cleared_at = scrapy.Field()
+    response_seconds = scrapy.Field()
+    scene_seconds = scrapy.Field()
+    parse_error = scrapy.Field()

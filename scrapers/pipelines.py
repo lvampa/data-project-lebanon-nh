@@ -1,9 +1,11 @@
 import logfire
-import scrapy
 from pymongo import UpdateOne
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from items import PoliceLogItem, UrlRecordItem
 from mongo import db
-from items import DownloadedUrlItem, PoliceLogItem, UrlRecordItem
+from postgres import SessionLocal
+from postgres.models.log_entry import LogEntry
 
 
 class UrlRecordPipeline:
@@ -11,7 +13,7 @@ class UrlRecordPipeline:
         self._ops: list[UpdateOne] = []
         self._count: int = 0
 
-    def process_item(self, item: scrapy.Item, spider: scrapy.Spider) -> scrapy.Item:
+    def process_item(self, item, spider):
         if not isinstance(item, UrlRecordItem):
             return item
 
@@ -22,6 +24,7 @@ class UrlRecordPipeline:
                 {"$setOnInsert": {
                     "canonical_url": item["canonical_url"],
                     "archive_url": item.get("archive_url"),
+                    "log_date": item.get("log_date"),
                     "state": item["state"],
                     "created_at": item["created_at"],
                 }},
@@ -44,36 +47,40 @@ class UrlRecordPipeline:
             )
 
 
-class UrlDownloadPipeline:
-    def process_item(self, item: scrapy.Item, spider: scrapy.Spider) -> scrapy.Item:
-        if not isinstance(item, DownloadedUrlItem):
-            return item
-
-        with logfire.span("save download result", url_doc_id=str(item["url_doc_id"]), state=item["state"]):
-            update = {"state": item["state"]}
-            if "pdf_data" in item:
-                update["pdf_data"] = item["pdf_data"]
-            if "downloaded_at" in item:
-                update["downloaded_at"] = item["downloaded_at"]
-
-            db.get_collection("urls").update_one(
-                {"_id": item["url_doc_id"]},
-                {"$set": update},
-            )
-
-        return item
-
-
 class PoliceLogPipeline:
-    def process_item(self, item: scrapy.Item, spider: scrapy.Spider) -> scrapy.Item:
+    def open_spider(self, spider) -> None:
+        self._session = SessionLocal()
+
+    def process_item(self, item, spider):
         if not isinstance(item, PoliceLogItem):
             return item
 
-        with logfire.span("save police log", source_url=item["source_url"]):
-            db.get_collection("police_logs").update_one(
-                {"source_url": item["source_url"]},
-                {"$set": dict(item)},
-                upsert=True,
-            )
+        with logfire.span("save police log entry", source_url=item["source_url"]):
+            stmt = pg_insert(LogEntry).values(
+                source_url=item["source_url"],
+                case_number=item.get("case_number"),
+                reported_at=item.get("reported_at"),
+                call_source=item.get("call_source"),
+                incident_type=item.get("incident_type"),
+                disposition=item.get("disposition"),
+                raw_reason_action=item.get("raw_reason_action"),
+                location=item.get("location"),
+                officer=item.get("officer"),
+                reference_number=item.get("reference_number"),
+                dispatched_at=item.get("dispatched_at"),
+                enroute_at=item.get("enroute_at"),
+                arrived_at=item.get("arrived_at"),
+                cleared_at=item.get("cleared_at"),
+                response_seconds=item.get("response_seconds"),
+                scene_seconds=item.get("scene_seconds"),
+                raw_text=item["raw_text"],
+                parse_error=item.get("parse_error", False),
+                scraped_at=item["scraped_at"],
+            ).on_conflict_do_nothing(index_elements=["case_number"])
+            self._session.execute(stmt)
 
         return item
+
+    def close_spider(self, spider) -> None:
+        self._session.commit()
+        self._session.close()

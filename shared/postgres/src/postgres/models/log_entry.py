@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Index, Text
+from sqlalchemy import Boolean, DateTime, Index, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from postgres.base import Base
@@ -20,6 +20,12 @@ class LogEntry(Base):
     location: Mapped[str | None] = mapped_column(Text)
     officer: Mapped[str | None] = mapped_column(Text)
     reference_number: Mapped[str | None] = mapped_column(Text)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime)
+    enroute_at: Mapped[datetime | None] = mapped_column(DateTime)
+    arrived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime)
+    response_seconds: Mapped[int | None] = mapped_column(Integer)
+    scene_seconds: Mapped[int | None] = mapped_column(Integer)
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
     parse_error: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     scraped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

@@ -1,0 +1,17 @@
+[project]
+name = "postgres"
+version = "0.1.0"
+description = "Shared PostgreSQL client and migrations"
+authors = [
+    { name = "Connor Abdelnoor", email = "connor.abd@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.18.4",
+    "psycopg2-binary>=2.9.12",
+    "sqlalchemy>=2.0.50",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"

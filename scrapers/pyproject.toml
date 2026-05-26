@@ -4,24 +4,22 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi[standard]>=0.136.3",
+    "httpx>=0.28.1",
     "logfire>=4.31.0",
     "mongo",
+    "postgres",
     "pydantic>=2.12.5",
     "pymongo>=4.16.0",
     "pypdf>=6.9.1",
+    "python-dotenv>=1.2.2",
     "scrapy>=2.14.2",
 ]
 
-[project.scripts]
-init-db = "scripts.init_db:main"
-
-[tool.uv.workspace]
-members = [
-    "shared/mongo",
-]
 
 [tool.uv.sources]
 mongo = { workspace = true }
+postgres = { workspace = true }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

@@ -4,9 +4,8 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 
 class MongoDB:
-    _client: MongoClient | None = None
-
     def __init__(self) -> None:
+        self._client: MongoClient | None = None
         self.host = os.environ.get("MONGO_HOST", "localhost")
         self.port = int(os.environ.get("MONGO_PORT", 27017))
         self.username = os.environ.get("MONGO_USER", "admin")

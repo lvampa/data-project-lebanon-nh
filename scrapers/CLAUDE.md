@@ -32,4 +32,7 @@
 docker compose up -d          # start mongo + airflow
 uv run scrapy crawl <spider>  # run a spider directly
 uv run pytest                 # run tests
+uv run alembic -c ../shared/postgres/alembic.ini upgrade head  # run DB migrations (from scrapers/)
 ```
+
+> **Note:** `uv sync` must be run from the workspace root (`data-project/`), not from `scrapers/`. uv will find the workspace root automatically when running commands from inside `scrapers/`.

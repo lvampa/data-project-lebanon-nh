@@ -1,4 +1,8 @@
+import logging
+
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 def geocode_nominatim(address: str) -> tuple[float | None, float | None]:
@@ -19,6 +23,6 @@ def geocode_nominatim(address: str) -> tuple[float | None, float | None]:
         results = r.json()
         if results:
             return float(results[0]["lat"]), float(results[0]["lon"])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("geocode_nominatim(%r) failed: %s", address, exc)
     return None, None

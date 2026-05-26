@@ -60,13 +60,13 @@ def update_address(
     body: AddressUpdate,
     db: Annotated[Session, Depends(get_db)],
 ):
-    lat, lng, geocoded_via = None, None, "manual"
+    lat, lng, geocoded_via = None, None, None
     if body.geocode:
         lat, lng = geocode_nominatim(body.normalized_address)
         if lat is not None:
             geocoded_via = "nominatim"
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     existing = db.scalar(
         select(AddressNormalization).where(
             AddressNormalization.raw_address == raw_address

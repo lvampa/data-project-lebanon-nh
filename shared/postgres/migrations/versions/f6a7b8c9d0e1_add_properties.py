@@ -49,8 +49,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["property_id"], ["properties.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index("ix_property_sales_property_id", "property_sales", ["property_id"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_property_sales_property_id", table_name="property_sales")
     op.drop_table("property_sales")
     op.drop_table("properties")

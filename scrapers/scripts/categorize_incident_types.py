@@ -17,6 +17,7 @@ load_dotenv()
 import anthropic
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import Session
 
 from postgres import SessionLocal
 from postgres.models.incident_type_category import IncidentTypeCategory
@@ -47,7 +48,7 @@ Incident types to categorize:
 """
 
 
-def fetch_uncategorized(session) -> list[str]:
+def fetch_uncategorized(session: Session) -> list[str]:
     """Return distinct incident_type values not yet in incident_type_categories."""
     already = select(IncidentTypeCategory.raw_incident_type)
     stmt = (
@@ -72,14 +73,14 @@ def parse_claude_response(text: str) -> list[dict]:
     cleaned = re.sub(r"```(?:json)?\s*", "", text).strip()
     match = re.search(r"\[.*\]", cleaned, re.DOTALL)
     if not match:
-        raise ValueError(f"No JSON array found in response: {text[:200]}")
+        raise ValueError(f"No JSON array found in response: {cleaned[:200]}")
 
     rows = json.loads(match.group())
     result = []
     for row in rows:
         category = row.get("category", "")
         if category not in VALID_CATEGORIES:
-            raise ValueError(f"Invalid category {category!r} — must be one of {VALID_CATEGORIES}")
+            raise ValueError(f"Invalid category {category!r} — must be one of {sorted(VALID_CATEGORIES)}")
         result.append({
             "incident_type": row["incident_type"],
             "category": category,
@@ -88,7 +89,7 @@ def parse_claude_response(text: str) -> list[dict]:
     return result
 
 
-def upsert_categories(session, rows: list[dict]) -> None:
+def upsert_categories(session: Session, rows: list[dict]) -> None:
     """Upsert categorized rows into incident_type_categories."""
     if not rows:
         return
@@ -146,6 +147,9 @@ def categorize() -> None:
             print(f"    → upserted {len(rows)} rows")
 
         print(f"Done. Total upserted: {total_upserted}")
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 

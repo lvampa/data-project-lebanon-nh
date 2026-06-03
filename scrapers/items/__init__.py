@@ -1,5 +1,5 @@
 from .police_log import PoliceLogItem
-from .downloaded_url import DownloadedUrlItem
+from .property import PropertyItem
 from .url_record import UrlRecordItem
 
-__all__ = ["PoliceLogItem", "DownloadedUrlItem", "UrlRecordItem"]
+__all__ = ["PoliceLogItem", "PropertyItem", "UrlRecordItem"]

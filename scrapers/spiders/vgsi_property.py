@@ -76,7 +76,7 @@ class VgsiPropertySpider(scrapy.Spider):
                     "grantor": cells[3] or None,  # seller
                 })
 
-        yield PropertyItem(
+        item = PropertyItem(
             parcel_id=pid,
             location=_text(response, "lblLocation"),
             owner=_text(response, "lblOwner"),
@@ -93,3 +93,4 @@ class VgsiPropertySpider(scrapy.Spider):
             sales=sales,
         )
         logfire.info("vgsi parcel scraped", pid=pid, sales=len(sales))
+        yield item

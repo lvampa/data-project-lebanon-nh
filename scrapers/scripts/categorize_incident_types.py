@@ -1,20 +1,36 @@
 """
-Categorizes all distinct incident_type values in log_entries that don't yet
-have a row in incident_type_categories, using claude-haiku-4-5-20251001.
+Categorizes distinct incident_type values from log_entries that don't yet have
+a row in incident_type_categories.
 
-Run from scrapers/:
-    uv run python scripts/categorize_incident_types.py
+Modes (--mode flag):
 
-Idempotent — already-categorized types are skipped.
+  dump    Print uncategorized types as JSON to stdout.
+          Use for manual subagent runs in Claude Code:
+            uv run python scripts/categorize_incident_types.py --mode dump
+          Then ask Claude Code to categorize and pipe results to import mode.
+
+  import  Read categorized JSON from stdin, upsert to DB.
+            cat categories.json | uv run python scripts/categorize_incident_types.py --mode import
+          JSON format: [{"incident_type": "...", "category": "...", "subcategory": "..."}, ...]
+
+  cli     Categorize using the claude CLI (claude --print).
+          Routes through Claude Code subscription auth — no separate API key needed.
+          Use for Airflow DAGs or scheduled jobs:
+            uv run python scripts/categorize_incident_types.py --mode cli
+          Requires: claude CLI installed and authenticated on the machine.
+
+Idempotent — already-categorized types are skipped in all modes.
 """
+import argparse
 import json
 import re
+import subprocess
+import sys
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 load_dotenv()
 
-import anthropic
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -80,7 +96,9 @@ def parse_claude_response(text: str) -> list[dict]:
     for row in rows:
         category = row.get("category", "")
         if category not in VALID_CATEGORIES:
-            raise ValueError(f"Invalid category {category!r} — must be one of {sorted(VALID_CATEGORIES)}")
+            raise ValueError(
+                f"Invalid category {category!r} — must be one of {sorted(VALID_CATEGORIES)}"
+            )
         result.append({
             "incident_type": row["incident_type"],
             "category": category,
@@ -114,39 +132,59 @@ def upsert_categories(session: Session, rows: list[dict]) -> None:
     session.commit()
 
 
-def _call_claude(incident_types: list[str]) -> list[dict]:
-    client = anthropic.Anthropic()
-    prompt = _PROMPT_TEMPLATE.format(
-        incident_types="\n".join(f"- {t}" for t in incident_types)
-    )
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return parse_claude_response(message.content[0].text)
+def dump_uncategorized(session: Session) -> None:
+    """Print uncategorized incident types as JSON to stdout."""
+    types = fetch_uncategorized(session)
+    print(json.dumps(types, indent=2))
 
 
-def categorize() -> None:
+def import_from_stdin(session: Session) -> None:
+    """Read categorized JSON from stdin and upsert to DB."""
+    rows = json.loads(sys.stdin.read())
+    upsert_categories(session, rows)
+    print(f"Upserted {len(rows)} categories.")
+
+
+def run_via_cli(session: Session) -> None:
+    """Categorize using the claude CLI (routes through Claude Code auth)."""
+    types = fetch_uncategorized(session)
+    if not types:
+        print("Nothing to categorize — all incident types already have categories.")
+        return
+
+    print(f"Found {len(types)} uncategorized types.")
+
+    all_rows: list[dict] = []
+    for i in range(0, len(types), BATCH_SIZE):
+        batch = types[i : i + BATCH_SIZE]
+        prompt = _PROMPT_TEMPLATE.format(
+            incident_types="\n".join(f"- {t}" for t in batch)
+        )
+        print(f"  Batch {i // BATCH_SIZE + 1}: calling claude CLI for {len(batch)} types...")
+        result = subprocess.run(
+            ["claude", "--print", prompt],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        rows = parse_claude_response(result.stdout)
+        all_rows.extend(rows)
+
+    upsert_categories(session, all_rows)
+    print(f"Done. Upserted {len(all_rows)} categories.")
+
+
+def categorize(mode: str) -> None:
     session = SessionLocal()
     try:
-        uncategorized = fetch_uncategorized(session)
-        if not uncategorized:
-            print("Nothing to categorize — all incident types already have categories.")
-            return
-
-        print(f"Found {len(uncategorized)} uncategorized incident types.")
-
-        total_upserted = 0
-        for i in range(0, len(uncategorized), BATCH_SIZE):
-            batch = uncategorized[i : i + BATCH_SIZE]
-            print(f"  Batch {i // BATCH_SIZE + 1}: categorizing {len(batch)} types...")
-            rows = _call_claude(batch)
-            upsert_categories(session, rows)
-            total_upserted += len(rows)
-            print(f"    → upserted {len(rows)} rows")
-
-        print(f"Done. Total upserted: {total_upserted}")
+        if mode == "dump":
+            dump_uncategorized(session)
+        elif mode == "import":
+            import_from_stdin(session)
+        elif mode == "cli":
+            run_via_cli(session)
+        else:
+            raise ValueError(f"Unknown mode: {mode!r}")
     except Exception:
         session.rollback()
         raise
@@ -155,4 +193,15 @@ def categorize() -> None:
 
 
 if __name__ == "__main__":
-    categorize()
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["dump", "import", "cli"],
+        default="cli",
+        help="dump: print uncategorized types | import: read JSON from stdin | cli: use claude --print",
+    )
+    args = parser.parse_args()
+    categorize(args.mode)

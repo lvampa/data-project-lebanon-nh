@@ -115,3 +115,76 @@ def test_upsert_categories_commits():
         {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"},
     ])
     session.commit.assert_called_once()
+
+
+import json
+import subprocess
+from unittest.mock import patch
+
+
+# --- dump_uncategorized ---
+
+def test_dump_uncategorized_prints_json(capsys):
+    from scripts.categorize_incident_types import dump_uncategorized
+    session = MagicMock()
+    session.execute.return_value.scalars.return_value.all.return_value = [
+        "FD Alarm", "MV Accident"
+    ]
+    dump_uncategorized(session)
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data == ["FD Alarm", "MV Accident"]
+
+
+def test_dump_uncategorized_empty(capsys):
+    from scripts.categorize_incident_types import dump_uncategorized
+    session = MagicMock()
+    session.execute.return_value.scalars.return_value.all.return_value = []
+    dump_uncategorized(session)
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == []
+
+
+# --- import_from_stdin ---
+
+def test_import_from_stdin_upserts(monkeypatch):
+    import io
+    from scripts.categorize_incident_types import import_from_stdin
+    categories = [
+        {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}
+    ]
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(categories)))
+    session = MagicMock()
+    import_from_stdin(session)
+    session.execute.assert_called_once()
+    session.commit.assert_called_once()
+
+
+# --- run_via_cli ---
+
+def test_run_via_cli_calls_subprocess():
+    from scripts.categorize_incident_types import run_via_cli
+    session = MagicMock()
+    session.execute.return_value.scalars.return_value.all.return_value = ["FD Alarm"]
+
+    mock_result = MagicMock()
+    mock_result.stdout = '[{"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}]'
+
+    with patch("subprocess.run", return_value=mock_result) as mock_run:
+        run_via_cli(session)
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert args[0] == "claude"
+        assert "--print" in args
+
+    session.commit.assert_called_once()
+
+
+def test_run_via_cli_noop_when_nothing_to_categorize():
+    from scripts.categorize_incident_types import run_via_cli
+    session = MagicMock()
+    session.execute.return_value.scalars.return_value.all.return_value = []
+
+    with patch("subprocess.run") as mock_run:
+        run_via_cli(session)
+        mock_run.assert_not_called()

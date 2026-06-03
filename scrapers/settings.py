@@ -21,10 +21,12 @@ ADDONS = {}
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
 
-# Concurrency and throttling settings
-#CONCURRENT_REQUESTS = 16
+# Concurrency and throttling
 CONCURRENT_REQUESTS_PER_DOMAIN = 1
-DOWNLOAD_DELAY = 1
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 1
+AUTOTHROTTLE_MAX_DELAY = 10
+AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
 
 # Disable cookies (enabled by default)
 #COOKIES_ENABLED = False
@@ -60,8 +62,8 @@ EXTENSIONS = {
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
     "pipelines.UrlRecordPipeline": 100,
-    "pipelines.UrlDownloadPipeline": 200,
     "pipelines.PoliceLogPipeline": 300,
+    "pipelines.PropertyPipeline": 400,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -77,13 +79,13 @@ ITEM_PIPELINES = {
 # Enable showing throttling stats for every response received:
 #AUTOTHROTTLE_DEBUG = False
 
-# Enable and configure HTTP caching (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-#HTTPCACHE_ENABLED = True
-#HTTPCACHE_EXPIRATION_SECS = 0
-#HTTPCACHE_DIR = "httpcache"
-#HTTPCACHE_IGNORE_HTTP_CODES = []
-#HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
+# HTTP cache — enabled in dev via SCRAPY_HTTPCACHE=1 to avoid re-downloading PDFs
+import os as _os
+if _os.environ.get("SCRAPY_HTTPCACHE"):
+    HTTPCACHE_ENABLED = True
+    HTTPCACHE_EXPIRATION_SECS = 86400  # 1 day
+    HTTPCACHE_DIR = ".httpcache"
+    HTTPCACHE_IGNORE_HTTP_CODES = [500, 502, 503, 504]
 
 # Set settings whose default value is deprecated to a future-proof value
 FEED_EXPORT_ENCODING = "utf-8"

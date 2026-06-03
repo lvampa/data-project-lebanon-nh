@@ -109,67 +109,71 @@ class PropertyPipeline:
         if not isinstance(item, PropertyItem):
             return item
 
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        parcel_id = item["parcel_id"]
+        try:
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            parcel_id = item["parcel_id"]
 
-        with logfire.span("save property", parcel_id=parcel_id):
-            # Upsert property
-            stmt = pg_insert(Property).values(
-                parcel_id=parcel_id,
-                location=item.get("location"),
-                owner=item.get("owner"),
-                owner_address=item.get("owner_address"),
-                land_use=item.get("land_use"),
-                lot_size_acres=item.get("lot_size_acres"),
-                year_built=item.get("year_built"),
-                building_sqft=item.get("building_sqft"),
-                assessed_land=item.get("assessed_land"),
-                assessed_building=item.get("assessed_building"),
-                assessed_total=item.get("assessed_total"),
-                assessment_year=item.get("assessment_year"),
-                detail_url=item.get("detail_url"),
-                created_at=now,
-                updated_at=now,
-            ).on_conflict_do_update(
-                index_elements=["parcel_id"],
-                set_={
-                    "location": item.get("location"),
-                    "owner": item.get("owner"),
-                    "owner_address": item.get("owner_address"),
-                    "land_use": item.get("land_use"),
-                    "lot_size_acres": item.get("lot_size_acres"),
-                    "year_built": item.get("year_built"),
-                    "building_sqft": item.get("building_sqft"),
-                    "assessed_land": item.get("assessed_land"),
-                    "assessed_building": item.get("assessed_building"),
-                    "assessed_total": item.get("assessed_total"),
-                    "assessment_year": item.get("assessment_year"),
-                    "detail_url": item.get("detail_url"),
-                    "updated_at": now,
-                },
-            )
-            self._session.execute(stmt)
-
-            # Get the property PK to link sales
-            property_id = self._session.execute(
-                select(Property.id).where(Property.parcel_id == parcel_id)
-            ).scalar_one()
-
-            # Replace sales
-            self._session.execute(
-                delete(PropertySale).where(PropertySale.property_id == property_id)
-            )
-            for sale in item.get("sales") or []:
-                self._session.execute(
-                    pg_insert(PropertySale).values(
-                        property_id=property_id,
-                        sale_date=_parse_sale_date(sale.get("sale_date")),
-                        sale_price=sale.get("sale_price"),
-                        grantee=sale.get("grantee"),
-                        grantor=sale.get("grantor"),
-                        created_at=now,
-                    )
+            with logfire.span("save property", parcel_id=parcel_id):
+                # Upsert property
+                stmt = pg_insert(Property).values(
+                    parcel_id=parcel_id,
+                    location=item.get("location"),
+                    owner=item.get("owner"),
+                    owner_address=item.get("owner_address"),
+                    land_use=item.get("land_use"),
+                    lot_size_acres=item.get("lot_size_acres"),
+                    year_built=item.get("year_built"),
+                    building_sqft=item.get("building_sqft"),
+                    assessed_land=item.get("assessed_land"),
+                    assessed_building=item.get("assessed_building"),
+                    assessed_total=item.get("assessed_total"),
+                    assessment_year=item.get("assessment_year"),
+                    detail_url=item.get("detail_url"),
+                    created_at=now,
+                    updated_at=now,
+                ).on_conflict_do_update(
+                    index_elements=["parcel_id"],
+                    set_={
+                        "location": item.get("location"),
+                        "owner": item.get("owner"),
+                        "owner_address": item.get("owner_address"),
+                        "land_use": item.get("land_use"),
+                        "lot_size_acres": item.get("lot_size_acres"),
+                        "year_built": item.get("year_built"),
+                        "building_sqft": item.get("building_sqft"),
+                        "assessed_land": item.get("assessed_land"),
+                        "assessed_building": item.get("assessed_building"),
+                        "assessed_total": item.get("assessed_total"),
+                        "assessment_year": item.get("assessment_year"),
+                        "detail_url": item.get("detail_url"),
+                        "updated_at": now,
+                    },
                 )
+                self._session.execute(stmt)
+
+                # Get the property PK to link sales
+                property_id = self._session.execute(
+                    select(Property.id).where(Property.parcel_id == parcel_id)
+                ).scalar_one()
+
+                # Replace sales
+                self._session.execute(
+                    delete(PropertySale).where(PropertySale.property_id == property_id)
+                )
+                for sale in item.get("sales") or []:
+                    self._session.execute(
+                        pg_insert(PropertySale).values(
+                            property_id=property_id,
+                            sale_date=_parse_sale_date(sale.get("sale_date")),
+                            sale_price=sale.get("sale_price"),
+                            grantee=sale.get("grantee"),
+                            grantor=sale.get("grantor"),
+                            created_at=now,
+                        )
+                    )
+        except Exception:
+            self._session.rollback()
+            raise
 
         return item
 

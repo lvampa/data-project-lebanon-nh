@@ -64,6 +64,7 @@ ITEM_PIPELINES = {
     "pipelines.UrlRecordPipeline": 100,
     "pipelines.PoliceLogPipeline": 300,
     "pipelines.PropertyPipeline": 400,
+    "pipelines.CityStaffPipeline": 500,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)

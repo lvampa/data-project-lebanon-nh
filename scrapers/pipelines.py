@@ -5,9 +5,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from items import PoliceLogItem, UrlRecordItem
+from items.city_staff import CityStaffItem
 from items.property import PropertyItem
 from mongo import db
 from postgres import SessionLocal
+from postgres.models.city_staff import CityStaff
 from postgres.models.log_entry import LogEntry
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
@@ -171,6 +173,48 @@ class PropertyPipeline:
                             created_at=now,
                         )
                     )
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return item
+
+    def close_spider(self, spider) -> None:
+        self._session.commit()
+        self._session.close()
+
+
+class CityStaffPipeline:
+    def open_spider(self, spider) -> None:
+        self._session = SessionLocal()
+
+    def process_item(self, item, spider):
+        if not isinstance(item, CityStaffItem):
+            return item
+
+        try:
+            with logfire.span("save city staff", name=item["name"], department=item["department"]):
+                stmt = pg_insert(CityStaff).values(
+                    name=item["name"],
+                    title=item.get("title"),
+                    department=item["department"],
+                    division=item.get("division"),
+                    email=item.get("email"),
+                    phone=item.get("phone"),
+                    source_url=item["source_url"],
+                    scraped_at=item["scraped_at"],
+                ).on_conflict_do_update(
+                    constraint="uq_city_staff_name_dept",
+                    set_={
+                        "title": item.get("title"),
+                        "division": item.get("division"),
+                        "email": item.get("email"),
+                        "phone": item.get("phone"),
+                        "source_url": item["source_url"],
+                        "scraped_at": item["scraped_at"],
+                    },
+                )
+                self._session.execute(stmt)
         except Exception:
             self._session.rollback()
             raise

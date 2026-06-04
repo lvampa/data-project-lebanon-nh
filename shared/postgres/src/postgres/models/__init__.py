@@ -1,8 +1,11 @@
 from .log_entry import LogEntry
 from .address_normalization import AddressNormalization
 from .incident_type_category import IncidentTypeCategory
-from .officer import Officer
 from .property import Property
 from .property_sale import PropertySale
+from .city_staff import CityStaff
 
-__all__ = ["LogEntry", "AddressNormalization", "IncidentTypeCategory", "Officer", "Property", "PropertySale"]
+__all__ = [
+    "LogEntry", "AddressNormalization", "IncidentTypeCategory",
+    "Property", "PropertySale", "CityStaff",
+]

@@ -131,7 +131,8 @@ def test_format_properties_lot_size_as_float():
 
 
 def test_format_properties_null_fields():
-    result = format_properties([make_property(location=None, assessed_total=None)])
+    result = format_properties([make_property(location=None, assessed_total=None, lot_size_acres=None)])
     item = result[0]
     assert item["location"] is None
     assert item["assessed_total"] is None
+    assert item["lot_size_acres"] is None

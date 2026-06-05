@@ -20,6 +20,7 @@ from postgres import SessionLocal
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.city_staff import CityStaff
 from postgres.models.log_entry import LogEntry
+from postgres.models.property import Property
 
 OUT_DIR = Path(__file__).parent.parent / "web" / "public" / "data"
 
@@ -68,6 +69,27 @@ def format_staff(rows: list) -> list[dict]:
             "email": r.email,
             "phone": r.phone,
             "source_url": r.source_url,
+        }
+        for r in rows
+    ]
+
+
+def format_properties(rows: list) -> list[dict]:
+    return [
+        {
+            "parcel_id": r.parcel_id,
+            "location": r.location,
+            "owner": r.owner,
+            "owner_address": r.owner_address,
+            "land_use": r.land_use,
+            "lot_size_acres": float(r.lot_size_acres) if r.lot_size_acres is not None else None,
+            "year_built": r.year_built,
+            "building_sqft": r.building_sqft,
+            "assessed_land": r.assessed_land,
+            "assessed_building": r.assessed_building,
+            "assessed_total": r.assessed_total,
+            "assessment_year": r.assessment_year,
+            "detail_url": r.detail_url,
         }
         for r in rows
     ]
@@ -157,10 +179,16 @@ def main() -> None:
             )
         ).all()
 
+        property_rows = db.scalars(
+            select(Property)
+            .order_by(Property.assessed_total.desc().nullslast())
+        ).all()
+
         _write("stats.json", format_stats(by_type_rows, by_weekday_rows, total))
         _write("incidents.json", format_incidents(incident_rows))
         _write("addresses.json", format_addresses(address_rows))
         _write("staff.json", format_staff(staff_rows))
+        _write("properties.json", format_properties(property_rows))
 
         print("Done.")
     finally:

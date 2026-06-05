@@ -45,3 +45,19 @@ export interface StaffMember {
   phone: string | null
   source_url: string
 }
+
+export interface PropertyRecord {
+  parcel_id: string
+  location: string | null
+  owner: string | null
+  owner_address: string | null
+  land_use: string | null
+  lot_size_acres: number | null
+  year_built: number | null
+  building_sqft: number | null
+  assessed_land: number | null
+  assessed_building: number | null
+  assessed_total: number | null
+  assessment_year: number | null
+  detail_url: string | null
+}

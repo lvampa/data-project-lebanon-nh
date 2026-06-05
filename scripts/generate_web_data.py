@@ -10,7 +10,7 @@ Writes to web/public/data/:
     staff.json      — city staff (police, fire, clerk, council)
 """
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import func, select
@@ -76,7 +76,7 @@ def format_staff(rows: list) -> list[dict]:
 def format_stats(by_type_rows: list, by_weekday_rows: list, total: int) -> dict:
     return {
         "total": total,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "by_type": [
             {"incident_type": r.incident_type, "count": r.count}
             for r in by_type_rows

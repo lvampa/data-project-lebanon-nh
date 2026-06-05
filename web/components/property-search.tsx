@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import {
@@ -29,6 +29,10 @@ export function PropertySearch({ properties }: Props) {
 
   const q = searchParams.get('q') ?? ''
 
+  useEffect(() => {
+    setPage(1)
+  }, [q])
+
   const filtered = useMemo(() => {
     if (!q) return properties
     const lower = q.toLowerCase()
@@ -55,15 +59,12 @@ export function PropertySearch({ properties }: Props) {
       <div className="flex gap-2 mb-4">
         <Input
           placeholder="Search by address or owner…"
-          defaultValue={q}
+          value={q}
           className="max-w-sm"
-          onBlur={e => updateQ(e.target.value)}
-          onKeyDown={e => {
-            if (e.key === 'Enter') updateQ((e.target as HTMLInputElement).value)
-          }}
+          onChange={e => updateQ(e.target.value)}
         />
         {q && (
-          <Button variant="ghost" onClick={() => router.replace(pathname)}>
+          <Button variant="ghost" onClick={() => { router.replace(pathname); setPage(1) }}>
             Clear
           </Button>
         )}
@@ -113,6 +114,7 @@ export function PropertySearch({ properties }: Props) {
                   <Link
                     href={p.detail_url}
                     target="_blank"
+                    aria-label={`View VGSI record for ${p.location ?? p.parcel_id}`}
                     className="text-xs text-blue-600 hover:underline"
                   >
                     VGSI →

@@ -6,6 +6,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import logfire
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -28,16 +29,23 @@ def _write(name: str, data: object) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUTPUT_DIR / name
     path.write_text(json.dumps(data, default=_json_default, indent=2))
-    print(f"  wrote {path} ({path.stat().st_size:,} bytes)")
+    logfire.info(
+        "wrote {name}",
+        name=name,
+        bytes=path.stat().st_size,
+        records=len(data) if isinstance(data, list) else None,
+    )
 
 
 def generate() -> None:
-    db = SessionLocal()
-    try:
-        _write_summary(db)
-        _write_incidents(db)
-    finally:
-        db.close()
+    logfire.configure()
+    with logfire.span("generate report"):
+        db = SessionLocal()
+        try:
+            _write_summary(db)
+            _write_incidents(db)
+        finally:
+            db.close()
 
 
 def _write_summary(db) -> None:
@@ -118,6 +126,4 @@ def _write_incidents(db) -> None:
 
 
 if __name__ == "__main__":
-    print("Generating report...")
     generate()
-    print("Done.")

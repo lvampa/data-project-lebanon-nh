@@ -1,0 +1,124 @@
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
+    volumes:
+      - mongo_data:/data/db
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app"]
+      interval: 10s
+      retries: 5
+
+  airflow-init:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airflow
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:app@postgres/app
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
+    entrypoint: /bin/bash
+    command: >-
+      -c "airflow db migrate &&
+          (airflow users create
+            --username $$_AIRFLOW_WWW_USER_USERNAME
+            --password $$_AIRFLOW_WWW_USER_PASSWORD
+            --firstname Admin
+            --lastname User
+            --role Admin
+            --email admin@example.com || true)"
+
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airflow
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:app@postgres/app
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      UV_PROJECT_ENVIRONMENT: /opt/airflow/.scrapers-venv
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_USER: ${MONGO_USER:-admin}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:-changeme}
+      MONGO_DB: ${MONGO_DB:-scraped_data}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - ./scrapers/dags:/opt/airflow/dags
+      - ./scrapers:/opt/project/scrapers
+      - ./shared:/opt/project/shared
+      - ./pyproject.toml:/opt/project/pyproject.toml:ro
+      - ./uv.lock:/opt/project/uv.lock:ro
+      - airflow_logs:/opt/airflow/logs
+    command: webserver
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.airflow
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:app@postgres/app
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      UV_PROJECT_ENVIRONMENT: /opt/airflow/.scrapers-venv
+      MONGO_HOST: mongo
+      MONGO_PORT: "27017"
+      MONGO_USER: ${MONGO_USER:-admin}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:-changeme}
+      MONGO_DB: ${MONGO_DB:-scraped_data}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - ./scrapers/dags:/opt/airflow/dags
+      - ./scrapers:/opt/project/scrapers
+      - ./shared:/opt/project/shared
+      - ./pyproject.toml:/opt/project/pyproject.toml:ro
+      - ./uv.lock:/opt/project/uv.lock:ro
+      - airflow_logs:/opt/airflow/logs
+    command: scheduler
+
+volumes:
+  mongo_data:
+  postgres_data:
+  airflow_logs:

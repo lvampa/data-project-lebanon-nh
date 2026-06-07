@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class PoliceLogRecord(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, extra="ignore")
 
     source_url: str = Field(min_length=1)
     scraped_at: datetime

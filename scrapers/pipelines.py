@@ -70,29 +70,33 @@ class PoliceLogPipeline:
 
         record = PoliceLogRecord.model_validate(dict(item))
 
-        with logfire.span("save police log entry", source_url=record.source_url):
-            stmt = pg_insert(LogEntry).values(
-                source_url=record.source_url,
-                case_number=record.case_number,
-                reported_at=record.reported_at,
-                call_source=record.call_source,
-                incident_type=record.incident_type,
-                disposition=record.disposition,
-                raw_reason_action=record.raw_reason_action,
-                location=record.location,
-                officer=record.officer,
-                reference_number=record.reference_number,
-                dispatched_at=record.dispatched_at,
-                enroute_at=record.enroute_at,
-                arrived_at=record.arrived_at,
-                cleared_at=record.cleared_at,
-                response_seconds=record.response_seconds,
-                scene_seconds=record.scene_seconds,
-                raw_text=record.raw_text,
-                parse_error=record.parse_error,
-                scraped_at=record.scraped_at,
-            ).on_conflict_do_nothing(index_elements=["case_number"])
-            self._session.execute(stmt)
+        try:
+            with logfire.span("save police log entry", source_url=record.source_url):
+                stmt = pg_insert(LogEntry).values(
+                    source_url=record.source_url,
+                    case_number=record.case_number,
+                    reported_at=record.reported_at,
+                    call_source=record.call_source,
+                    incident_type=record.incident_type,
+                    disposition=record.disposition,
+                    raw_reason_action=record.raw_reason_action,
+                    location=record.location,
+                    officer=record.officer,
+                    reference_number=record.reference_number,
+                    dispatched_at=record.dispatched_at,
+                    enroute_at=record.enroute_at,
+                    arrived_at=record.arrived_at,
+                    cleared_at=record.cleared_at,
+                    response_seconds=record.response_seconds,
+                    scene_seconds=record.scene_seconds,
+                    raw_text=record.raw_text,
+                    parse_error=record.parse_error,
+                    scraped_at=record.scraped_at,
+                ).on_conflict_do_nothing(index_elements=["case_number"])
+                self._session.execute(stmt)
+        except Exception:
+            self._session.rollback()
+            raise
 
         return item
 

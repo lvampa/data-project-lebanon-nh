@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import logfire
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -113,86 +114,89 @@ def format_stats(by_type_rows: list, by_weekday_rows: list, total: int) -> dict:
 def _write(filename: str, data: object) -> None:
     path = OUT_DIR / filename
     path.write_text(json.dumps(data, default=str), encoding="utf-8")
-    print(f"  wrote {path} ({path.stat().st_size:,} bytes)")
+    logfire.info(
+        "wrote {filename}",
+        filename=filename,
+        bytes=path.stat().st_size,
+        records=len(data) if isinstance(data, list) else None,
+    )
 
 
 def main() -> None:
+    logfire.configure()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    db: Session = SessionLocal()
-    try:
-        print("Generating web data...")
+    with logfire.span("generate web data"):
+        db: Session = SessionLocal()
+        try:
+            total = db.scalar(
+                select(func.count()).select_from(LogEntry).where(LogEntry.parse_error == False)  # noqa: E712
+            ) or 0
 
-        total = db.scalar(
-            select(func.count()).select_from(LogEntry).where(LogEntry.parse_error == False)  # noqa: E712
-        ) or 0
+            by_type_rows = db.execute(
+                select(LogEntry.incident_type, func.count().label("count"))
+                .where(LogEntry.parse_error == False, LogEntry.incident_type.isnot(None))  # noqa: E712
+                .group_by(LogEntry.incident_type)
+                .order_by(func.count().desc())
+                .limit(20)
+            ).all()
 
-        by_type_rows = db.execute(
-            select(LogEntry.incident_type, func.count().label("count"))
-            .where(LogEntry.parse_error == False, LogEntry.incident_type.isnot(None))  # noqa: E712
-            .group_by(LogEntry.incident_type)
-            .order_by(func.count().desc())
-            .limit(20)
-        ).all()
+            by_weekday_rows = db.execute(
+                select(
+                    func.extract("dow", LogEntry.reported_at).label("dow"),
+                    func.count().label("count"),
+                )
+                .where(LogEntry.parse_error == False, LogEntry.reported_at.isnot(None))  # noqa: E712
+                .group_by(func.extract("dow", LogEntry.reported_at))
+                .order_by(func.extract("dow", LogEntry.reported_at))
+            ).all()
 
-        by_weekday_rows = db.execute(
-            select(
-                func.extract("dow", LogEntry.reported_at).label("dow"),
-                func.count().label("count"),
-            )
-            .where(LogEntry.parse_error == False, LogEntry.reported_at.isnot(None))  # noqa: E712
-            .group_by(func.extract("dow", LogEntry.reported_at))
-            .order_by(func.extract("dow", LogEntry.reported_at))
-        ).all()
+            incident_rows = db.scalars(
+                select(LogEntry)
+                .where(LogEntry.parse_error == False)  # noqa: E712
+                .order_by(LogEntry.reported_at.desc())
+                .limit(2000)
+            ).all()
 
-        incident_rows = db.scalars(
-            select(LogEntry)
-            .where(LogEntry.parse_error == False)  # noqa: E712
-            .order_by(LogEntry.reported_at.desc())
-            .limit(2000)
-        ).all()
+            address_rows = db.execute(
+                select(
+                    LogEntry.location,
+                    func.count().label("count"),
+                    AddressNormalization.normalized_address,
+                    AddressNormalization.lat,
+                    AddressNormalization.lng,
+                )
+                .outerjoin(
+                    AddressNormalization,
+                    LogEntry.location == AddressNormalization.raw_address,
+                )
+                .where(LogEntry.location.isnot(None))
+                .group_by(
+                    LogEntry.location,
+                    AddressNormalization.normalized_address,
+                    AddressNormalization.lat,
+                    AddressNormalization.lng,
+                )
+                .order_by(func.count().desc())
+            ).all()
 
-        address_rows = db.execute(
-            select(
-                LogEntry.location,
-                func.count().label("count"),
-                AddressNormalization.normalized_address,
-                AddressNormalization.lat,
-                AddressNormalization.lng,
-            )
-            .outerjoin(
-                AddressNormalization,
-                LogEntry.location == AddressNormalization.raw_address,
-            )
-            .where(LogEntry.location.isnot(None))
-            .group_by(
-                LogEntry.location,
-                AddressNormalization.normalized_address,
-                AddressNormalization.lat,
-                AddressNormalization.lng,
-            )
-            .order_by(func.count().desc())
-        ).all()
+            staff_rows = db.scalars(
+                select(CityStaff).order_by(
+                    CityStaff.department, CityStaff.division, CityStaff.name
+                )
+            ).all()
 
-        staff_rows = db.scalars(
-            select(CityStaff).order_by(
-                CityStaff.department, CityStaff.division, CityStaff.name
-            )
-        ).all()
+            property_rows = db.scalars(
+                select(Property)
+                .order_by(Property.assessed_total.desc().nullslast())
+            ).all()
 
-        property_rows = db.scalars(
-            select(Property)
-            .order_by(Property.assessed_total.desc().nullslast())
-        ).all()
-
-        _write("stats.json", format_stats(by_type_rows, by_weekday_rows, total))
-        _write("incidents.json", format_incidents(incident_rows))
-        _write("addresses.json", format_addresses(address_rows))
-        _write("staff.json", format_staff(staff_rows))
-        _write("properties.json", format_properties(property_rows))
-
-        print("Done.")
-    finally:
-        db.close()
+            _write("stats.json", format_stats(by_type_rows, by_weekday_rows, total))
+            _write("incidents.json", format_incidents(incident_rows))
+            _write("addresses.json", format_addresses(address_rows))
+            _write("staff.json", format_staff(staff_rows))
+            _write("properties.json", format_properties(property_rows))
+        finally:
+            db.close()
 
 
 if __name__ == "__main__":

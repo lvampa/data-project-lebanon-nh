@@ -1,3 +1,14 @@
+from .city_staff import CityStaffRecord
+from .police_log import PoliceLogRecord
+from .property import PropertyRecord, SaleRecord
 from .url_document import UrlDocument
+from .url_record import UrlRecord
 
-__all__ = ["UrlDocument"]
+__all__ = [
+    "CityStaffRecord",
+    "PoliceLogRecord",
+    "PropertyRecord",
+    "SaleRecord",
+    "UrlDocument",
+    "UrlRecord",
+]

@@ -1,25 +1,19 @@
 from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from api.deps import get_db
 from api.geocoding import geocode_nominatim
+from api.schemas import AddressRecord, AddressResult, AddressUpdate
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 
 router = APIRouter()
 
 
-class AddressUpdate(BaseModel):
-    normalized_address: str
-    notes: str | None = None
-    geocode: bool = True
-
-
-@router.get("")
-def list_addresses(db: Annotated[Session, Depends(get_db)]):
+@router.get("", response_model=list[AddressRecord])
+def list_addresses(db: Annotated[Session, Depends(get_db)]) -> list[AddressRecord]:
     rows = db.execute(
         select(
             LogEntry.location,
@@ -42,24 +36,24 @@ def list_addresses(db: Annotated[Session, Depends(get_db)]):
         .order_by(func.count().desc())
     ).all()
     return [
-        {
-            "raw_address": r.location,
-            "count": r.count,
-            "normalized_address": r.normalized_address,
-            "lat": r.lat,
-            "lng": r.lng,
-            "is_normalized": r.normalized_address is not None,
-        }
+        AddressRecord(
+            raw_address=r.location,
+            count=r.count,
+            normalized_address=r.normalized_address,
+            lat=r.lat,
+            lng=r.lng,
+            is_normalized=r.normalized_address is not None,
+        )
         for r in rows
     ]
 
 
-@router.patch("/{raw_address:path}")
+@router.patch("/{raw_address:path}", response_model=AddressResult)
 def update_address(
     raw_address: str,
     body: AddressUpdate,
     db: Annotated[Session, Depends(get_db)],
-):
+) -> AddressResult:
     lat, lng, geocoded_via = None, None, None
     if body.geocode:
         lat, lng = geocode_nominatim(body.normalized_address)
@@ -93,10 +87,10 @@ def update_address(
             )
         )
     db.commit()
-    return {
-        "raw_address": raw_address,
-        "normalized_address": body.normalized_address,
-        "lat": lat,
-        "lng": lng,
-        "geocoded_via": geocoded_via,
-    }
+    return AddressResult(
+        raw_address=raw_address,
+        normalized_address=body.normalized_address,
+        lat=lat,
+        lng=lng,
+        geocoded_via=geocoded_via,
+    )

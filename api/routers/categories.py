@@ -1,23 +1,18 @@
 from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from api.deps import get_db
+from api.schemas import CategoryRecord, CategoryResult, CategoryUpdate
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 
 router = APIRouter()
 
 
-class CategoryUpdate(BaseModel):
-    category: str
-    subcategory: str | None = None
-
-
-@router.get("")
-def list_categories(db: Annotated[Session, Depends(get_db)]):
+@router.get("", response_model=list[CategoryRecord])
+def list_categories(db: Annotated[Session, Depends(get_db)]) -> list[CategoryRecord]:
     rows = db.execute(
         select(
             LogEntry.incident_type,
@@ -38,23 +33,23 @@ def list_categories(db: Annotated[Session, Depends(get_db)]):
         .order_by(func.count().desc())
     ).all()
     return [
-        {
-            "raw_incident_type": r.incident_type,
-            "count": r.count,
-            "category": r.category,
-            "subcategory": r.subcategory,
-            "is_categorized": r.category is not None,
-        }
+        CategoryRecord(
+            raw_incident_type=r.incident_type,
+            count=r.count,
+            category=r.category,
+            subcategory=r.subcategory,
+            is_categorized=r.category is not None,
+        )
         for r in rows
     ]
 
 
-@router.patch("/{raw_incident_type:path}")
+@router.patch("/{raw_incident_type:path}", response_model=CategoryResult)
 def update_category(
     raw_incident_type: str,
     body: CategoryUpdate,
     db: Annotated[Session, Depends(get_db)],
-):
+) -> CategoryResult:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     existing = db.scalar(
         select(IncidentTypeCategory).where(
@@ -76,8 +71,8 @@ def update_category(
             )
         )
     db.commit()
-    return {
-        "raw_incident_type": raw_incident_type,
-        "category": body.category,
-        "subcategory": body.subcategory,
-    }
+    return CategoryResult(
+        raw_incident_type=raw_incident_type,
+        category=body.category,
+        subcategory=body.subcategory,
+    )

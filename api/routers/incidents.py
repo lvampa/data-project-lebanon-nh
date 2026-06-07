@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from api.deps import get_db
+from api.schemas import Incident, IncidentsResponse
 from postgres.models.log_entry import LogEntry
 
 router = APIRouter()
 
 
-@router.get("")
+@router.get("", response_model=IncidentsResponse)
 def list_incidents(
     db: Annotated[Session, Depends(get_db)],
     date_from: date | None = None,
@@ -19,7 +20,7 @@ def list_incidents(
     officer: str | None = None,
     page: int = 1,
     per_page: int = Query(default=50, le=200),
-):
+) -> IncidentsResponse:
     stmt = select(LogEntry).where(LogEntry.parse_error == False)  # noqa: E712
     if date_from:
         stmt = stmt.where(LogEntry.reported_at >= date_from)
@@ -39,22 +40,9 @@ def list_incidents(
         .limit(per_page)
     ).all()
 
-    return {
-        "total": total,
-        "page": page,
-        "per_page": per_page,
-        "items": [
-            {
-                "case_number": r.case_number,
-                "reported_at": r.reported_at.isoformat() if r.reported_at else None,
-                "call_source": r.call_source,
-                "incident_type": r.incident_type,
-                "disposition": r.disposition,
-                "location": r.location,
-                "officer": r.officer,
-                "reference_number": r.reference_number,
-                "source_url": r.source_url,
-            }
-            for r in rows
-        ],
-    }
+    return IncidentsResponse(
+        total=total,
+        page=page,
+        per_page=per_page,
+        items=[Incident.model_validate(r) for r in rows],
+    )

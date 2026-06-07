@@ -62,3 +62,15 @@ def test_police_log_record_missing_source_url_raises():
     del data["source_url"]
     with pytest.raises(ValidationError):
         PoliceLogRecord.model_validate(data)
+
+
+def test_police_log_record_missing_scraped_at_raises():
+    data = make_log()
+    del data["scraped_at"]
+    with pytest.raises(ValidationError):
+        PoliceLogRecord.model_validate(data)
+
+
+def test_police_log_record_whitespace_source_url_raises():
+    with pytest.raises(ValidationError):
+        PoliceLogRecord.model_validate(make_log(source_url="   "))

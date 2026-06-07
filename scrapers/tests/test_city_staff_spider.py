@@ -2,7 +2,7 @@ import pytest
 from scrapy.http import HtmlResponse
 
 from items.city_staff import CityStaffItem
-from spiders.city_staff import CityStaffSpider
+from spiders.city_staff import CityStaffSpider, DIRECTORY_SOURCES
 
 ROSTER_HTML = b"""
 <html><body>
@@ -148,6 +148,22 @@ def test_parse_council_index_yields_member_requests(spider):
     # Should follow the two councilor links, not the "Back" link
     assert len(results) == 2
     assert all("Councilor" in r.url for r in results)
+
+
+def test_airport_directory_in_sources(spider):
+    urls = [url for url, _ in DIRECTORY_SOURCES if "flyleb.com" in url]
+    assert len(urls) == 1
+    assert "flyleb.com" in spider.allowed_domains
+
+
+def test_parse_directory_table_airport_department(spider):
+    response = HtmlResponse(
+        url="https://flyleb.com/directory.aspx?did=6",
+        body=DIRECTORY_HTML,
+    )
+    items = list(spider.parse_directory_table(response, department="Airport"))
+    assert len(items) == 2
+    assert all(item["department"] == "Airport" for item in items)
 
 
 def test_parse_council_member_extracts_fields(spider):

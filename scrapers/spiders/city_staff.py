@@ -15,6 +15,7 @@ DEPT_ROSTER_SOURCES = [
 
 DIRECTORY_SOURCES = [
     ("https://www.lebanonnh.gov/Directory.aspx?did=37", "Clerk"),
+    ("https://flyleb.com/directory.aspx?did=6", "Airport"),
 ]
 
 COUNCIL_INDEX_URL = "https://www.lebanonnh.gov/337/City-Council"
@@ -29,7 +30,7 @@ def _clean(text: str | None) -> str | None:
 
 class CityStaffSpider(scrapy.Spider):
     name = "city_staff"
-    allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov"]
+    allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov", "flyleb.com"]
 
     def start_requests(self) -> Generator[Request, None, None]:
         for url, dept in DEPT_ROSTER_SOURCES:

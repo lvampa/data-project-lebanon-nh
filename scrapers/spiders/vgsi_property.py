@@ -3,9 +3,8 @@ from urllib.parse import urljoin
 
 import logfire
 import scrapy
-from scrapy.http import Request, Response
-
 from items.property import PropertyItem
+from scrapy.http import Request, Response
 
 BASE_URL = "https://gis.vgsi.com/LebanonNH/"
 
@@ -43,7 +42,7 @@ class VgsiPropertySpider(scrapy.Spider):
     name = "vgsi_property"
     allowed_domains = ["gis.vgsi.com"]
 
-    def start_requests(self):
+    async def start(self):
         yield Request(urljoin(BASE_URL, "Streets.aspx"), callback=self.parse)
 
     def parse(self, response: Response, **kwargs):
@@ -56,25 +55,27 @@ class VgsiPropertySpider(scrapy.Spider):
             )
 
     def parse_street(self, response: Response, **kwargs):
-        for link in response.css("a[href*='Parcel.aspx?Pid=']"):
+        for link in response.css("a[href*='Parcel.aspx?pid=']"):
             yield Request(
                 urljoin(BASE_URL, link.attrib["href"]),
                 callback=self.parse_parcel,
             )
 
     def parse_parcel(self, response: Response, **kwargs):
-        pid = response.url.split("Pid=")[-1].split("&")[0]
+        pid = response.url.split("pid=")[-1].split("&")[0]
 
         sales = []
         for row in response.css("[id$='grdSales'] tbody tr"):
             cells = [td.css("::text").get("").strip() for td in row.css("td")]
             if len(cells) >= 4:
-                sales.append({
-                    "sale_date": cells[0] or None,
-                    "sale_price": _parse_money(cells[1]),
-                    "grantee": cells[2] or None,  # buyer
-                    "grantor": cells[3] or None,  # seller
-                })
+                sales.append(
+                    {
+                        "sale_date": cells[0] or None,
+                        "sale_price": _parse_money(cells[1]),
+                        "grantee": cells[2] or None,  # buyer
+                        "grantor": cells[3] or None,  # seller
+                    }
+                )
 
         item = PropertyItem(
             parcel_id=pid,

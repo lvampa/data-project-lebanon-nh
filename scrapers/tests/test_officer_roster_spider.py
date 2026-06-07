@@ -1,19 +1,16 @@
-from datetime import datetime
-
 import pytest
-from scrapy.http import HtmlResponse
-
 from items.officer import OfficerItem
+from scrapy.http import HtmlResponse
 from spiders.officer_roster import OfficerRosterSpider
 
 ROSTER_INDEX_HTML = b"""
 <html><body>
-<div id="main-content">
+<nav class="siteNav secondaryNav">
   <ul>
     <li><a href="/290/Patrol-Division">Patrol Division</a></li>
     <li><a href="/291/Investigations">Investigations</a></li>
   </ul>
-</div>
+</nav>
 </body></html>
 """
 

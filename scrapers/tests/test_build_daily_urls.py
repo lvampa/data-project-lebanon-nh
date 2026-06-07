@@ -1,6 +1,5 @@
-from scrapy.http import HtmlResponse
-
 from items import UrlRecordItem
+from scrapy.http import HtmlResponse
 from spiders.create_url_records import BuildDailyUrlsSpider
 
 
@@ -88,9 +87,9 @@ def test_parse_extracts_log_date_from_url():
     spider = BuildDailyUrlsSpider.__new__(BuildDailyUrlsSpider)
     items = list(spider.parse(make_response(["/DocumentCenter/View/22973/2026-05-01"])))
     assert len(items) == 1
-    from datetime import date
+    from datetime import datetime
 
-    assert items[0]["log_date"] == date(2026, 5, 1)
+    assert items[0]["log_date"] == datetime(2026, 5, 1)
 
 
 def test_parse_log_date_none_when_not_in_url():

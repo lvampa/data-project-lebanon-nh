@@ -1,16 +1,15 @@
 import io
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import logfire
 import scrapy
-from pypdf import PdfReader
-from scrapy.http import Request, Response
-
 from items import PoliceLogItem
 from models import UrlDocument
 from mongo import db
 from parsers import parse_log_entries
+from pypdf import PdfReader
+from scrapy.http import Request, Response
 
 
 class ProcessUrlsSpider(scrapy.Spider):
@@ -37,7 +36,7 @@ class ProcessUrlsSpider(scrapy.Spider):
         logfire.info("queued urls for processing", count=len(claimed), limit=self.limit)
         for doc in claimed:
             url_doc = UrlDocument(**doc)
-            yield Request(url_doc.canonical_url, cb_kwargs={"url_doc": url_doc})
+            yield Request(url_doc.canonical_url, cb_kwargs={"url_doc": url_doc}, dont_filter=True)
 
     def parse(self, response: Response, url_doc: UrlDocument, **kwargs: Any) -> Any:
         if not response.body.startswith(b"%PDF"):
@@ -75,7 +74,7 @@ class ProcessUrlsSpider(scrapy.Spider):
             reader = PdfReader(io.BytesIO(pdf_bytes))
             raw_text = "\n".join(page.extract_text() for page in reader.pages)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         entries = parse_log_entries(raw_text)
 
         if not entries:
@@ -120,7 +119,7 @@ class ProcessUrlsSpider(scrapy.Spider):
                 "$set": {
                     "state": "error",
                     "error_message": error_message,
-                    "completed_at": datetime.now(timezone.utc),
+                    "completed_at": datetime.now(UTC),
                 }
             },
         )

@@ -1,6 +1,6 @@
 import pytest
-from scrapy.http import HtmlResponse
 from items.property import PropertyItem
+from scrapy.http import HtmlResponse
 from spiders.vgsi_property import VgsiPropertySpider
 
 STREETS_INDEX_HTML = b"""
@@ -19,11 +19,11 @@ STREET_LIST_HTML = b"""
 <table class="table">
   <tbody>
     <tr>
-      <td><a href="Parcel.aspx?Pid=10001">123 ABBOTT ST</a></td>
+      <td><a href="Parcel.aspx?pid=10001">123 ABBOTT ST</a></td>
       <td>SMITH, JOHN</td>
     </tr>
     <tr>
-      <td><a href="Parcel.aspx?Pid=10002">125 ABBOTT ST</a></td>
+      <td><a href="Parcel.aspx?pid=10002">125 ABBOTT ST</a></td>
       <td>DOE, JANE</td>
     </tr>
   </tbody>
@@ -87,7 +87,7 @@ def test_parse_street_list_yields_parcel_requests(spider):
 
 def test_parse_parcel_yields_property_item(spider):
     response = HtmlResponse(
-        url="https://gis.vgsi.com/LebanonNH/Parcel.aspx?Pid=10001",
+        url="https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=10001",
         body=PARCEL_HTML,
     )
     results = list(spider.parse_parcel(response))
@@ -105,12 +105,12 @@ def test_parse_parcel_yields_property_item(spider):
     assert item["lot_size_acres"] == pytest.approx(0.25)
     assert item["year_built"] == 1985
     assert item["building_sqft"] == 1450
-    assert item["detail_url"] == "https://gis.vgsi.com/LebanonNH/Parcel.aspx?Pid=10001"
+    assert item["detail_url"] == "https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=10001"
 
 
 def test_parse_parcel_extracts_sales(spider):
     response = HtmlResponse(
-        url="https://gis.vgsi.com/LebanonNH/Parcel.aspx?Pid=10001",
+        url="https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=10001",
         body=PARCEL_HTML,
     )
     item = list(spider.parse_parcel(response))[0]
@@ -118,5 +118,5 @@ def test_parse_parcel_extracts_sales(spider):
     sale = item["sales"][0]
     assert sale["sale_date"] == "01/15/2019"
     assert sale["sale_price"] == 320000
-    assert sale["grantee"] == "SMITH, JOHN"   # buyer
-    assert sale["grantor"] == "JONES, BOB"    # seller
+    assert sale["grantee"] == "SMITH, JOHN"  # buyer
+    assert sale["grantor"] == "JONES, BOB"  # seller

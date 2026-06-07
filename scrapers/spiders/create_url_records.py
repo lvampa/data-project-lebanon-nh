@@ -1,13 +1,12 @@
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, cast
 from urllib.parse import urljoin, urlparse, urlunparse
 
+from items import UrlRecordItem
 from scrapy.http import Request, TextResponse
 from scrapy.selector import Selector
 from scrapy.spiders import Spider
-
-from items import UrlRecordItem
 
 _ARCHIVE_RE = re.compile(r"https://web\.archive\.org/web/\d+[a-z]*/(.+)")
 _LOG_DATE_RE = re.compile(r"/(\d{4}-\d{2}-\d{2})(?:[/?#]|$)")
@@ -47,7 +46,7 @@ class BuildDailyUrlsSpider(Spider):
         return cleaned, None
 
     def parse(self, response: TextResponse, **kwargs: Any) -> Any:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for link in cast(list[Selector], response.css("a.fileType.pdf")):
             result = self.extract_url(link, response.url)
             if not result:
@@ -55,7 +54,7 @@ class BuildDailyUrlsSpider(Spider):
             canonical_url, archive_url = result
             date_match = _LOG_DATE_RE.search(canonical_url)
             log_date = (
-                datetime.strptime(date_match.group(1), "%Y-%m-%d").date()
+                datetime.strptime(date_match.group(1), "%Y-%m-%d")
                 if date_match
                 else None
             )

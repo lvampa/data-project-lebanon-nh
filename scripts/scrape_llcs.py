@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 SEARCH_URL = "https://quickstart.sos.nh.gov/online/BusinessInquire/"
 
 
-def parse_llc_detail(html: str, business_id: str) -> dict:
+def parse_llc_detail(html: str, business_id: str | None) -> dict:
     soup = BeautifulSoup(html, "html.parser")
 
     def find_labeled_value(label: str) -> str | None:
@@ -49,7 +49,7 @@ def parse_llc_detail(html: str, business_id: str) -> dict:
                 registered_agent_address = text.removeprefix("Registered Office Address:").strip()
 
     return {
-        "nh_business_id": business_id,
+        "nh_business_id": business_id or None,
         "business_status": find_labeled_value("Business Status:"),
         "formation_date": formation_date,
         "business_email": find_labeled_value("Business Email:"),
@@ -83,7 +83,7 @@ async def scrape_llc(page, name: str) -> tuple[str | None, dict | None]:
     if not business_id:
         business_id = page.url.split("businessID=")[-1] if "businessID=" in page.url else None
 
-    return business_id, parse_llc_detail(html, business_id or "")
+    return business_id, parse_llc_detail(html, business_id)
 
 
 async def run(limit: int) -> None:
@@ -102,6 +102,7 @@ async def run(limit: int) -> None:
             select(Llc)
             .where(Llc.lookup_status == "pending")
             .limit(limit)
+            .with_for_update(skip_locked=True)
         ).all()
 
         if not rows:

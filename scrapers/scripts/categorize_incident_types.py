@@ -21,23 +21,24 @@ Modes (--mode flag):
 
 Idempotent — already-categorized types are skipped in all modes.
 """
+
 import argparse
 import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dotenv import load_dotenv
-load_dotenv()
 
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+load_dotenv()
 
 from postgres import SessionLocal
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import Session
 
 VALID_CATEGORIES = {"Fire", "EMS", "Police", "Traffic", "Administrative"}
 BATCH_SIZE = 50
@@ -99,11 +100,13 @@ def parse_claude_response(text: str) -> list[dict]:
             raise ValueError(
                 f"Invalid category {category!r} — must be one of {sorted(VALID_CATEGORIES)}"
             )
-        result.append({
-            "incident_type": row["incident_type"],
-            "category": category,
-            "subcategory": row.get("subcategory") or None,
-        })
+        result.append(
+            {
+                "incident_type": row["incident_type"],
+                "category": category,
+                "subcategory": row.get("subcategory") or None,
+            }
+        )
     return result
 
 
@@ -112,21 +115,25 @@ def upsert_categories(session: Session, rows: list[dict]) -> None:
     if not rows:
         return
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     for row in rows:
-        stmt = pg_insert(IncidentTypeCategory).values(
-            raw_incident_type=row["incident_type"],
-            category=row["category"],
-            subcategory=row["subcategory"],
-            created_at=now,
-            updated_at=now,
-        ).on_conflict_do_update(
-            index_elements=["raw_incident_type"],
-            set_={
-                "category": row["category"],
-                "subcategory": row["subcategory"],
-                "updated_at": now,
-            },
+        stmt = (
+            pg_insert(IncidentTypeCategory)
+            .values(
+                raw_incident_type=row["incident_type"],
+                category=row["category"],
+                subcategory=row["subcategory"],
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["raw_incident_type"],
+                set_={
+                    "category": row["category"],
+                    "subcategory": row["subcategory"],
+                    "updated_at": now,
+                },
+            )
         )
         session.execute(stmt)
     session.commit()
@@ -160,7 +167,9 @@ def run_via_cli(session: Session) -> None:
         prompt = _PROMPT_TEMPLATE.format(
             incident_types="\n".join(f"- {t}" for t in batch)
         )
-        print(f"  Batch {i // BATCH_SIZE + 1}: calling claude CLI for {len(batch)} types...")
+        print(
+            f"  Batch {i // BATCH_SIZE + 1}: calling claude CLI for {len(batch)} types..."
+        )
         result = subprocess.run(
             ["claude", "--print", prompt],
             capture_output=True,

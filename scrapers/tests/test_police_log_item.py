@@ -1,23 +1,21 @@
 """Tests for PoliceLogItem fields and items package exports."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import pytest
-
-from items import PoliceLogItem, UrlRecordItem
+from items import PoliceLogItem
 
 
 def test_police_log_item_has_new_case_number_field():
     item = PoliceLogItem(
         source_url="https://example.com/log.pdf",
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         case_number="2024-001",
     )
     assert item["case_number"] == "2024-001"
 
 
 def test_police_log_item_has_reported_at_field():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     item = PoliceLogItem(
         source_url="https://example.com/log.pdf",
         scraped_at=now,
@@ -29,7 +27,7 @@ def test_police_log_item_has_reported_at_field():
 def test_police_log_item_has_incident_type_field():
     item = PoliceLogItem(
         source_url="https://example.com/log.pdf",
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         incident_type="Theft",
     )
     assert item["incident_type"] == "Theft"
@@ -38,7 +36,7 @@ def test_police_log_item_has_incident_type_field():
 def test_police_log_item_has_location_field():
     item = PoliceLogItem(
         source_url="https://example.com/log.pdf",
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         location="123 Main St",
     )
     assert item["location"] == "123 Main St"
@@ -47,7 +45,7 @@ def test_police_log_item_has_location_field():
 def test_police_log_item_has_officer_field():
     item = PoliceLogItem(
         source_url="https://example.com/log.pdf",
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         officer="Officer Smith",
     )
     assert item["officer"] == "Officer Smith"
@@ -56,7 +54,7 @@ def test_police_log_item_has_officer_field():
 def test_police_log_item_has_disposition_field():
     item = PoliceLogItem(
         source_url="https://example.com/log.pdf",
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         disposition="Closed",
     )
     assert item["disposition"] == "Closed"
@@ -65,7 +63,7 @@ def test_police_log_item_has_disposition_field():
 def test_police_log_item_has_parse_error_field():
     item = PoliceLogItem(
         source_url="https://example.com/log.pdf",
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=datetime.now(UTC),
         parse_error="Could not parse date",
     )
     assert item["parse_error"] == "Could not parse date"

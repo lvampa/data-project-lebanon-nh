@@ -2,8 +2,8 @@ import scrapy
 
 
 class PropertyItem(scrapy.Item):
-    parcel_id = scrapy.Field()       # VGSI map/lot/sub identifier
-    location = scrapy.Field()        # street address
+    parcel_id = scrapy.Field()  # VGSI map/lot/sub identifier
+    location = scrapy.Field()  # street address
     owner = scrapy.Field()
     owner_address = scrapy.Field()
     land_use = scrapy.Field()
@@ -15,4 +15,6 @@ class PropertyItem(scrapy.Item):
     assessed_total = scrapy.Field()
     assessment_year = scrapy.Field()
     detail_url = scrapy.Field()
-    sales = scrapy.Field()           # list of sale dicts: {sale_date, sale_price, grantor, grantee}
+    sales = (
+        scrapy.Field()
+    )  # list of sale dicts: {sale_date, sale_price, grantor, grantee}

@@ -1,10 +1,10 @@
-import pendulum
 from datetime import timedelta
 
+import pendulum
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.operators.bash import BashOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
-from airflow.models.param import Param
 
 with DAG(
     dag_id="discover_urls",

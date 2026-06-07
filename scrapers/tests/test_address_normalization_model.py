@@ -1,8 +1,10 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from postgres.models.address_normalization import AddressNormalization
 
+
 def test_address_normalization_model_fields():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     norm = AddressNormalization(
         raw_address="TIMBERWOOD DR",
         normalized_address="Timberwood Drive",

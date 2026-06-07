@@ -1,26 +1,27 @@
-import pytest
 from datetime import date
-from pydantic import ValidationError
+
+import pytest
 from models.property import PropertyRecord, SaleRecord
+from pydantic import ValidationError
 
 
 def make_property(**kwargs):
-    defaults = dict(
-        parcel_id="10001",
-        location="  123 MAIN ST  ",
-        owner="SMITH, JOHN",
-        owner_address="PO BOX 1, LEBANON NH 03766",
-        land_use="101 - Res 1 Family",
-        lot_size_acres=0.25,
-        year_built=1985,
-        building_sqft=1450,
-        assessed_land=100000,
-        assessed_building=250000,
-        assessed_total=350000,
-        assessment_year=2025,
-        detail_url="https://gis.vgsi.com/LebanonNH/Parcel.aspx?Pid=10001",
-        sales=[],
-    )
+    defaults = {
+        "parcel_id": "10001",
+        "location": "  123 MAIN ST  ",
+        "owner": "SMITH, JOHN",
+        "owner_address": "PO BOX 1, LEBANON NH 03766",
+        "land_use": "101 - Res 1 Family",
+        "lot_size_acres": 0.25,
+        "year_built": 1985,
+        "building_sqft": 1450,
+        "assessed_land": 100000,
+        "assessed_building": 250000,
+        "assessed_total": 350000,
+        "assessment_year": 2025,
+        "detail_url": "https://gis.vgsi.com/LebanonNH/Parcel.aspx?Pid=10001",
+        "sales": [],
+    }
     return {**defaults, **kwargs}
 
 
@@ -37,7 +38,9 @@ def test_property_record_strips_whitespace():
 
 
 def test_property_record_null_fields():
-    record = PropertyRecord.model_validate(make_property(location=None, assessed_total=None, lot_size_acres=None))
+    record = PropertyRecord.model_validate(
+        make_property(location=None, assessed_total=None, lot_size_acres=None)
+    )
     assert record.location is None
     assert record.assessed_total is None
     assert record.lot_size_acres is None
@@ -66,9 +69,18 @@ def test_sale_record_null_date_returns_none():
 
 
 def test_property_record_sales_parsed():
-    record = PropertyRecord.model_validate(make_property(sales=[
-        {"sale_date": "01/01/2020", "sale_price": 200000, "grantee": "JONES", "grantor": "SMITH"}
-    ]))
+    record = PropertyRecord.model_validate(
+        make_property(
+            sales=[
+                {
+                    "sale_date": "01/01/2020",
+                    "sale_price": 200000,
+                    "grantee": "JONES",
+                    "grantor": "SMITH",
+                }
+            ]
+        )
+    )
     assert len(record.sales) == 1
     assert record.sales[0].sale_date == date(2020, 1, 1)
     assert record.sales[0].sale_price == 200000
@@ -86,6 +98,7 @@ def test_property_record_whitespace_parcel_id_raises():
 
 def test_sale_record_date_object_passthrough():
     from datetime import date as date_type
+
     d = date_type(2020, 6, 15)
     sale = SaleRecord.model_validate({"sale_date": d})
     assert sale.sale_date == d

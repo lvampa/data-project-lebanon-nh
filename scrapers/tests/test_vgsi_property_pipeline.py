@@ -1,11 +1,9 @@
 from datetime import datetime
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 from items.property import PropertyItem
 from pipelines import PropertyPipeline
-
 
 SAMPLE_ITEM = PropertyItem(
     parcel_id="10001",
@@ -43,7 +41,10 @@ def pipeline():
 
 def test_ignores_non_property_items(pipeline):
     from items.police_log import PoliceLogItem
-    other = PoliceLogItem(raw_text="x", source_url="http://x", scraped_at=datetime.now())
+
+    other = PoliceLogItem(
+        raw_text="x", source_url="http://x", scraped_at=datetime.now()
+    )
     result = pipeline.process_item(other, MagicMock())
     assert result is other
 

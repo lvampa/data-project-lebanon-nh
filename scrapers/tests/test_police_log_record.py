@@ -1,31 +1,32 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
-from pydantic import ValidationError
 from models.police_log import PoliceLogRecord
+from pydantic import ValidationError
 
 
 def make_log(**kwargs):
-    defaults = dict(
-        source_url="https://example.com/log.pdf",
-        scraped_at=datetime.now(timezone.utc),
-        case_number="2025-001",
-        reported_at=datetime.now(timezone.utc),
-        call_source="911",
-        incident_type="TRAFFIC STOP",
-        disposition="GONE ON ARRIVAL",
-        raw_reason_action="SPEEDING",
-        location="123 MAIN ST",
-        officer="SMITH",
-        reference_number="REF-001",
-        dispatched_at=None,
-        enroute_at=None,
-        arrived_at=None,
-        cleared_at=None,
-        response_seconds=None,
-        scene_seconds=None,
-        raw_text="raw text here",
-        parse_error=False,
-    )
+    defaults = {
+        "source_url": "https://example.com/log.pdf",
+        "scraped_at": datetime.now(UTC),
+        "case_number": "2025-001",
+        "reported_at": datetime.now(UTC),
+        "call_source": "911",
+        "incident_type": "TRAFFIC STOP",
+        "disposition": "GONE ON ARRIVAL",
+        "raw_reason_action": "SPEEDING",
+        "location": "123 MAIN ST",
+        "officer": "SMITH",
+        "reference_number": "REF-001",
+        "dispatched_at": None,
+        "enroute_at": None,
+        "arrived_at": None,
+        "cleared_at": None,
+        "response_seconds": None,
+        "scene_seconds": None,
+        "raw_text": "raw text here",
+        "parse_error": False,
+    }
     return {**defaults, **kwargs}
 
 
@@ -44,9 +45,9 @@ def test_police_log_record_parse_error_defaults_false():
 
 
 def test_police_log_record_null_optional_fields():
-    record = PoliceLogRecord.model_validate(make_log(
-        case_number=None, incident_type=None, location=None
-    ))
+    record = PoliceLogRecord.model_validate(
+        make_log(case_number=None, incident_type=None, location=None)
+    )
     assert record.case_number is None
     assert record.incident_type is None
     assert record.location is None

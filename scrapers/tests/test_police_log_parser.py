@@ -112,7 +112,10 @@ def test_empty_text_returns_empty_list():
 
 
 def test_no_date_header_returns_empty_list():
-    assert parse_log_entries("26-13339        0106 Phone - Something Log Information") == []
+    assert (
+        parse_log_entries("26-13339        0106 Phone - Something Log Information")
+        == []
+    )
 
 
 SAMPLE_WITH_TIMESTAMPS = """\
@@ -130,33 +133,40 @@ Call   Number   Time   Call   Reason   Action
                        Disp-06:54:31                 Arvd-06:55:08  Clrd-09:04:39
 """
 
+
 def test_dispatched_at_parsed():
     entries = parse_log_entries(SAMPLE_WITH_TIMESTAMPS)
     e = entries[0]
     assert e["dispatched_at"] == datetime(2026, 5, 1, 1, 7, 39)
 
+
 def test_arrived_at_parsed():
     entries = parse_log_entries(SAMPLE_WITH_TIMESTAMPS)
     assert entries[0]["arrived_at"] == datetime(2026, 5, 1, 2, 5, 44)
 
+
 def test_cleared_at_parsed():
     entries = parse_log_entries(SAMPLE_WITH_TIMESTAMPS)
     assert entries[0]["cleared_at"] == datetime(2026, 5, 1, 2, 41, 21)
+
 
 def test_response_seconds_computed():
     entries = parse_log_entries(SAMPLE_WITH_TIMESTAMPS)
     # Arvd(02:05:44) - Disp(01:07:39) = 58m5s = 3485 seconds
     assert entries[0]["response_seconds"] == 3485
 
+
 def test_scene_seconds_computed():
     entries = parse_log_entries(SAMPLE_WITH_TIMESTAMPS)
     # Clrd(02:41:21) - Arvd(02:05:44) = 35m37s = 2137 seconds
     assert entries[0]["scene_seconds"] == 2137
 
+
 def test_enroute_at_none_when_missing():
     entries = parse_log_entries(SAMPLE_WITH_TIMESTAMPS)
     # Second entry (BOL) has no Enrt field
     assert entries[1]["enroute_at"] is None
+
 
 def test_timestamps_none_when_no_dispatch_line():
     entries = parse_log_entries(SAMPLE_PAGE_BREAK)  # no dispatch timing line

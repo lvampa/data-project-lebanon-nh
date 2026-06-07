@@ -1,16 +1,15 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-from pydantic import ValidationError
-
 from models.url_document import UrlDocument
+from pydantic import ValidationError
 
 
 def test_requires_canonical_url():
     doc = UrlDocument(
         canonical_url="https://example.com/a.pdf",
         state="pending",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     assert doc.canonical_url == "https://example.com/a.pdf"
 
@@ -19,7 +18,7 @@ def test_archive_url_optional():
     doc = UrlDocument(
         canonical_url="https://example.com/a.pdf",
         state="pending",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     assert doc.archive_url is None
 
@@ -29,16 +28,19 @@ def test_archive_url_stored():
         canonical_url="https://example.com/a.pdf",
         archive_url="https://web.archive.org/web/20191015/https://example.com/a.pdf",
         state="pending",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
-    assert doc.archive_url == "https://web.archive.org/web/20191015/https://example.com/a.pdf"
+    assert (
+        doc.archive_url
+        == "https://web.archive.org/web/20191015/https://example.com/a.pdf"
+    )
 
 
 def test_raw_text_optional():
     doc = UrlDocument(
         canonical_url="https://example.com/a.pdf",
         state="pending",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     assert doc.raw_text is None
 
@@ -48,7 +50,7 @@ def test_valid_states():
         doc = UrlDocument(
             canonical_url="https://example.com/a.pdf",
             state=state,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
         assert doc.state == state
 
@@ -58,5 +60,5 @@ def test_invalid_state_raises():
         UrlDocument(
             canonical_url="https://example.com/a.pdf",
             state="downloaded",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )

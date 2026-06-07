@@ -1,8 +1,7 @@
 import pytest
-from scrapy.http import HtmlResponse
-
 from items.city_staff import CityStaffItem
-from spiders.city_staff import CityStaffSpider, DIRECTORY_SOURCES
+from scrapy.http import HtmlResponse
+from spiders.city_staff import DIRECTORY_SOURCES, CityStaffSpider
 
 ROSTER_HTML = b"""
 <html><body>

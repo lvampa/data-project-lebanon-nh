@@ -1,9 +1,9 @@
-import pendulum
 from datetime import timedelta
 
+import pendulum
 from airflow import DAG
-from airflow.operators.bash import BashOperator
 from airflow.models.param import Param
+from airflow.operators.bash import BashOperator
 
 with DAG(
     dag_id="process_urls",

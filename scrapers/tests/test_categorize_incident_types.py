@@ -1,22 +1,22 @@
 # scrapers/tests/test_categorize_incident_types.py
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from scripts.categorize_incident_types import (
     fetch_uncategorized,
     parse_claude_response,
     upsert_categories,
 )
 
-
 # --- fetch_uncategorized ---
+
 
 def test_fetch_uncategorized_returns_distinct_types():
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = [
-        "FD Alarm", "Telephone Harassment", "MV Accident"
+        "FD Alarm",
+        "Telephone Harassment",
+        "MV Accident",
     ]
     result = fetch_uncategorized(session)
     assert result == ["FD Alarm", "Telephone Harassment", "MV Accident"]
@@ -66,7 +66,11 @@ INVALID_CATEGORY_JSON = """
 def test_parse_valid_json():
     rows = parse_claude_response(VALID_JSON)
     assert len(rows) == 3
-    assert rows[0] == {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}
+    assert rows[0] == {
+        "incident_type": "FD Alarm",
+        "category": "Fire",
+        "subcategory": "Alarm Activation",
+    }
     assert rows[2]["category"] == "Traffic"
 
 
@@ -93,11 +97,20 @@ def test_parse_empty_list():
 
 # --- upsert_categories ---
 
+
 def test_upsert_categories_executes_for_each_row():
     session = MagicMock()
     rows = [
-        {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"},
-        {"incident_type": "MV Accident", "category": "Traffic", "subcategory": "Accident"},
+        {
+            "incident_type": "FD Alarm",
+            "category": "Fire",
+            "subcategory": "Alarm Activation",
+        },
+        {
+            "incident_type": "MV Accident",
+            "category": "Traffic",
+            "subcategory": "Accident",
+        },
     ]
     upsert_categories(session, rows)
     assert session.execute.call_count == 2
@@ -111,24 +124,31 @@ def test_upsert_categories_noop_on_empty():
 
 def test_upsert_categories_commits():
     session = MagicMock()
-    upsert_categories(session, [
-        {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"},
-    ])
+    upsert_categories(
+        session,
+        [
+            {
+                "incident_type": "FD Alarm",
+                "category": "Fire",
+                "subcategory": "Alarm Activation",
+            },
+        ],
+    )
     session.commit.assert_called_once()
 
 
 import json
-import subprocess
-from unittest.mock import patch
-
 
 # --- dump_uncategorized ---
 
+
 def test_dump_uncategorized_prints_json(capsys):
     from scripts.categorize_incident_types import dump_uncategorized
+
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = [
-        "FD Alarm", "MV Accident"
+        "FD Alarm",
+        "MV Accident",
     ]
     dump_uncategorized(session)
     captured = capsys.readouterr()
@@ -138,6 +158,7 @@ def test_dump_uncategorized_prints_json(capsys):
 
 def test_dump_uncategorized_empty(capsys):
     from scripts.categorize_incident_types import dump_uncategorized
+
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = []
     dump_uncategorized(session)
@@ -147,11 +168,18 @@ def test_dump_uncategorized_empty(capsys):
 
 # --- import_from_stdin ---
 
+
 def test_import_from_stdin_upserts(monkeypatch):
     import io
+
     from scripts.categorize_incident_types import import_from_stdin
+
     categories = [
-        {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}
+        {
+            "incident_type": "FD Alarm",
+            "category": "Fire",
+            "subcategory": "Alarm Activation",
+        }
     ]
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(categories)))
     session = MagicMock()
@@ -162,8 +190,10 @@ def test_import_from_stdin_upserts(monkeypatch):
 
 # --- run_via_cli ---
 
+
 def test_run_via_cli_calls_subprocess():
     from scripts.categorize_incident_types import run_via_cli
+
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = ["FD Alarm"]
 
@@ -182,6 +212,7 @@ def test_run_via_cli_calls_subprocess():
 
 def test_run_via_cli_noop_when_nothing_to_categorize():
     from scripts.categorize_incident_types import run_via_cli
+
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = []
 

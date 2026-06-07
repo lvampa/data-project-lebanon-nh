@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        language: system
+        entry: uv run ruff check --fix
+        types: [python]
+        stages: [pre-push]
+
+      - id: ruff-format
+        name: ruff format
+        language: system
+        entry: uv run ruff format
+        types: [python]
+        stages: [pre-push]
+
+      - id: pytest
+        name: pytest
+        language: system
+        entry: uv run pytest scrapers/tests/ --ignore=scrapers/tests/test_officer_roster_spider.py -q
+        pass_filenames: false
+        stages: [pre-push]

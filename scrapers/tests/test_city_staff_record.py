@@ -1,20 +1,21 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
-from pydantic import ValidationError
 from models.city_staff import CityStaffRecord
+from pydantic import ValidationError
 
 
 def make_staff(**kwargs):
-    defaults = dict(
-        name="Jane Smith",
-        title="Chief of Police",
-        department="Police",
-        division="Patrol",
-        email="jane@lebanon.gov",
-        phone="603-555-0100",
-        source_url="https://www.lebcity.com/staff",
-        scraped_at=datetime.now(timezone.utc),
-    )
+    defaults = {
+        "name": "Jane Smith",
+        "title": "Chief of Police",
+        "department": "Police",
+        "division": "Patrol",
+        "email": "jane@lebanon.gov",
+        "phone": "603-555-0100",
+        "source_url": "https://www.lebcity.com/staff",
+        "scraped_at": datetime.now(UTC),
+    }
     return {**defaults, **kwargs}
 
 
@@ -30,7 +31,9 @@ def test_city_staff_record_strips_whitespace():
 
 
 def test_city_staff_record_null_optional_fields():
-    record = CityStaffRecord.model_validate(make_staff(title=None, division=None, email=None, phone=None))
+    record = CityStaffRecord.model_validate(
+        make_staff(title=None, division=None, email=None, phone=None)
+    )
     assert record.title is None
     assert record.division is None
 

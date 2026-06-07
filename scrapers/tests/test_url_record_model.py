@@ -1,17 +1,18 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
-from pydantic import ValidationError
 from models.url_record import UrlRecord
+from pydantic import ValidationError
 
 
 def make_url(**kwargs):
-    defaults = dict(
-        canonical_url="https://example.com/log.pdf",
-        archive_url=None,
-        log_date=None,
-        state="pending",
-        created_at=datetime.now(timezone.utc),
-    )
+    defaults = {
+        "canonical_url": "https://example.com/log.pdf",
+        "archive_url": None,
+        "log_date": None,
+        "state": "pending",
+        "created_at": datetime.now(UTC),
+    }
     return {**defaults, **kwargs}
 
 

@@ -4,6 +4,7 @@ members = ["scrapers", "shared/postgres", "shared/mongo", "api"]
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.0.0",
     "ruff>=0.15.16",
 ]
 
@@ -13,7 +14,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]
-ignore = ["E501"]
+ignore = ["E501", "E402"]
 
 [tool.ruff.format]
 quote-style = "double"

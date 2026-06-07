@@ -2,10 +2,8 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
-
 from items.city_staff import CityStaffItem
 from pipelines import CityStaffPipeline
-
 
 SAMPLE_ITEM = CityStaffItem(
     name="Jane Doe",
@@ -28,7 +26,10 @@ def pipeline():
 
 def test_ignores_non_city_staff_items(pipeline):
     from items.police_log import PoliceLogItem
-    other = PoliceLogItem(raw_text="x", source_url="http://x", scraped_at=datetime.now())
+
+    other = PoliceLogItem(
+        raw_text="x", source_url="http://x", scraped_at=datetime.now()
+    )
     result = pipeline.process_item(other, MagicMock())
     assert result is other
     pipeline._session.execute.assert_not_called()

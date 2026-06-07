@@ -45,10 +45,14 @@ _ENTRY_RE = re.compile(
 )
 
 # "Primary Id:    SMN - Officer Stephan Nix"
-_OFFICER_RE = re.compile(r"Primary Id:\s*\S+\s+-\s+(?:Officer\s+)?(.+?)\s*$", re.MULTILINE)
+_OFFICER_RE = re.compile(
+    r"Primary Id:\s*\S+\s+-\s+(?:Officer\s+)?(.+?)\s*$", re.MULTILINE
+)
 
 # "Location/Address:    [L TWD4] TIMBERWOOD COMMONS - TIMBERWOOD DR"
-_LOCATION_RE = re.compile(r"Location/Address:\s*(?:\[[^\]]*\]\s*)?(.+?)\s*$", re.MULTILINE)
+_LOCATION_RE = re.compile(
+    r"Location/Address:\s*(?:\[[^\]]*\]\s*)?(.+?)\s*$", re.MULTILINE
+)
 
 # "Refer To Incident:      26L-426-OF" or "Refer To Arrest:      26L-346-AR"
 _REFERENCE_RE = re.compile(r"Refer To (?:Incident|Arrest):\s*(\S+)", re.MULTILINE)
@@ -107,14 +111,16 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
         call_source = m.group("call_source")
         reason_action = m.group("reason_action")
 
-        block_end = entry_matches[i + 1].start() if i + 1 < len(entry_matches) else len(clean)
-        block = clean[m.end():block_end]
-        raw_text = clean[m.start():block_end].strip()
+        block_end = (
+            entry_matches[i + 1].start() if i + 1 < len(entry_matches) else len(clean)
+        )
+        block = clean[m.end() : block_end]
+        raw_text = clean[m.start() : block_end].strip()
 
         disp_match = _DISPOSITION_RE.search(reason_action)
         if disp_match:
             disposition = disp_match.group(1)
-            incident_type = reason_action[:disp_match.start()].strip()
+            incident_type = reason_action[: disp_match.start()].strip()
         else:
             incident_type = reason_action
             disposition = None
@@ -149,30 +155,34 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
 
         try:
             hour, minute = int(time_str[:2]), int(time_str[2:])
-            reported_at = datetime(log_date.year, log_date.month, log_date.day, hour, minute)
+            reported_at = datetime(
+                log_date.year, log_date.month, log_date.day, hour, minute
+            )
             parse_error = False
         except ValueError:
             reported_at = None
             parse_error = True
 
-        entries.append({
-            "case_number": case_number,
-            "reported_at": reported_at,
-            "call_source": call_source,
-            "incident_type": incident_type,
-            "disposition": disposition,
-            "raw_reason_action": reason_action,
-            "location": location,
-            "officer": officer,
-            "reference_number": reference_number,
-            "raw_text": raw_text,
-            "parse_error": parse_error,
-            "dispatched_at": dispatched_at,
-            "enroute_at": enroute_at,
-            "arrived_at": arrived_at,
-            "cleared_at": cleared_at,
-            "response_seconds": response_seconds,
-            "scene_seconds": scene_seconds,
-        })
+        entries.append(
+            {
+                "case_number": case_number,
+                "reported_at": reported_at,
+                "call_source": call_source,
+                "incident_type": incident_type,
+                "disposition": disposition,
+                "raw_reason_action": reason_action,
+                "location": location,
+                "officer": officer,
+                "reference_number": reference_number,
+                "raw_text": raw_text,
+                "parse_error": parse_error,
+                "dispatched_at": dispatched_at,
+                "enroute_at": enroute_at,
+                "arrived_at": arrived_at,
+                "cleared_at": cleared_at,
+                "response_seconds": response_seconds,
+                "scene_seconds": scene_seconds,
+            }
+        )
 
     return entries

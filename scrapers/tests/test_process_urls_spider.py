@@ -1,10 +1,7 @@
-import io
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from scrapy.http import Request, Response
-
 from items import PoliceLogItem
+from scrapy.http import Request, Response
 from spiders.process_url_records import ProcessUrlsSpider
 
 FAKE_PDF = b"%PDF-1.4 fake pdf content"

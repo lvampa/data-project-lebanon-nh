@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from items import PoliceLogItem, UrlRecordItem
@@ -6,18 +6,18 @@ from pipelines import PoliceLogPipeline
 
 
 def make_item(**kwargs):
-    defaults = dict(
-        source_url="https://example.com/a.pdf",
-        raw_text="some text",
-        scraped_at=datetime.now(timezone.utc),
-        case_number="2024-1001",
-        reported_at=datetime(2024, 3, 15, 8, 32),
-        incident_type="MV STOP",
-        location="N MAIN ST",
-        officer="Jones",
-        disposition="WARNING",
-        parse_error=False,
-    )
+    defaults = {
+        "source_url": "https://example.com/a.pdf",
+        "raw_text": "some text",
+        "scraped_at": datetime.now(UTC),
+        "case_number": "2024-1001",
+        "reported_at": datetime(2024, 3, 15, 8, 32),
+        "incident_type": "MV STOP",
+        "location": "N MAIN ST",
+        "officer": "Jones",
+        "disposition": "WARNING",
+        "parse_error": False,
+    }
     defaults.update(kwargs)
     return PoliceLogItem(**defaults)
 
@@ -46,7 +46,7 @@ def test_pipeline_passes_through_non_police_log_items(mock_session_local, mock_d
     pipeline.open_spider(None)
 
     item = UrlRecordItem(
-        canonical_url="x", state="pending", created_at=datetime.now(timezone.utc)
+        canonical_url="x", state="pending", created_at=datetime.now(UTC)
     )
     result = pipeline.process_item(item, None)
 

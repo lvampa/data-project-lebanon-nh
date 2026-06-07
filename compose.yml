@@ -16,13 +16,13 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
-      POSTGRES_DB: app
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "app"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-app}"]
       interval: 10s
       retries: 5
 
@@ -35,7 +35,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:app@postgres/app
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres/${POSTGRES_DB:-app}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
       _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
@@ -63,7 +63,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:app@postgres/app
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres/${POSTGRES_DB:-app}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       UV_PROJECT_ENVIRONMENT: /opt/airflow/.scrapers-venv
       MONGO_HOST: mongo
@@ -73,9 +73,9 @@ services:
       MONGO_DB: ${MONGO_DB:-scraped_data}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
-      POSTGRES_DB: app
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
     volumes:
       - ./scrapers/dags:/opt/airflow/dags
       - ./scrapers:/opt/project/scrapers
@@ -96,7 +96,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
     environment:
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://app:app@postgres/app
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres/${POSTGRES_DB:-app}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       UV_PROJECT_ENVIRONMENT: /opt/airflow/.scrapers-venv
       MONGO_HOST: mongo
@@ -106,9 +106,9 @@ services:
       MONGO_DB: ${MONGO_DB:-scraped_data}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
-      POSTGRES_DB: app
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
     volumes:
       - ./scrapers/dags:/opt/airflow/dags
       - ./scrapers:/opt/project/scrapers

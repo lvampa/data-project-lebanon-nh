@@ -5,6 +5,7 @@ const LINKS = [
   { href: '/stats', label: 'Stats' },
   { href: '/addresses', label: 'Addresses' },
   { href: '/categories', label: 'Categories' },
+  { href: '/llcs', label: 'LLCs' },
 ]
 
 export function Nav() {

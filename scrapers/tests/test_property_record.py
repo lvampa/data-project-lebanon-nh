@@ -72,3 +72,20 @@ def test_property_record_sales_parsed():
     assert len(record.sales) == 1
     assert record.sales[0].sale_date == date(2020, 1, 1)
     assert record.sales[0].sale_price == 200000
+
+
+def test_property_record_blank_parcel_id_raises():
+    with pytest.raises(ValidationError):
+        PropertyRecord.model_validate(make_property(parcel_id=""))
+
+
+def test_property_record_whitespace_parcel_id_raises():
+    with pytest.raises(ValidationError):
+        PropertyRecord.model_validate(make_property(parcel_id="   "))
+
+
+def test_sale_record_date_object_passthrough():
+    from datetime import date as date_type
+    d = date_type(2020, 6, 15)
+    sale = SaleRecord.model_validate({"sale_date": d})
+    assert sale.sale_date == d

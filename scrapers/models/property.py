@@ -12,7 +12,7 @@ class SaleRecord(BaseModel):
 
     @field_validator("sale_date", mode="before")
     @classmethod
-    def parse_sale_date(cls, v: object) -> date | None:
+    def parse_sale_date(cls, v: object) -> object:
         if not isinstance(v, str):
             return v
         try:
@@ -25,7 +25,7 @@ class SaleRecord(BaseModel):
 class PropertyRecord(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    parcel_id: str
+    parcel_id: str = Field(min_length=1)
     location: str | None = None
     owner: str | None = None
     owner_address: str | None = None

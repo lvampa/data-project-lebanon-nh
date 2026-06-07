@@ -1,5 +1,5 @@
 import logfire
-from datetime import date as _date, datetime, timezone
+from datetime import datetime, timezone
 from pymongo import UpdateOne
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -7,6 +7,10 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from items import PoliceLogItem, UrlRecordItem
 from items.city_staff import CityStaffItem
 from items.property import PropertyItem
+from models.city_staff import CityStaffRecord
+from models.police_log import PoliceLogRecord
+from models.property import PropertyRecord
+from models.url_record import UrlRecord
 from mongo import db
 from postgres import SessionLocal
 from postgres.models.city_staff import CityStaff
@@ -24,16 +28,18 @@ class UrlRecordPipeline:
         if not isinstance(item, UrlRecordItem):
             return item
 
+        record = UrlRecord.model_validate(dict(item))
+
         self._count += 1
         self._ops.append(
             UpdateOne(
-                {"canonical_url": item["canonical_url"]},
+                {"canonical_url": record.canonical_url},
                 {"$setOnInsert": {
-                    "canonical_url": item["canonical_url"],
-                    "archive_url": item.get("archive_url"),
-                    "log_date": item.get("log_date"),
-                    "state": item["state"],
-                    "created_at": item["created_at"],
+                    "canonical_url": record.canonical_url,
+                    "archive_url": record.archive_url,
+                    "log_date": record.log_date,
+                    "state": record.state,
+                    "created_at": record.created_at,
                 }},
                 upsert=True,
             )
@@ -62,27 +68,29 @@ class PoliceLogPipeline:
         if not isinstance(item, PoliceLogItem):
             return item
 
-        with logfire.span("save police log entry", source_url=item["source_url"]):
+        record = PoliceLogRecord.model_validate(dict(item))
+
+        with logfire.span("save police log entry", source_url=record.source_url):
             stmt = pg_insert(LogEntry).values(
-                source_url=item["source_url"],
-                case_number=item.get("case_number"),
-                reported_at=item.get("reported_at"),
-                call_source=item.get("call_source"),
-                incident_type=item.get("incident_type"),
-                disposition=item.get("disposition"),
-                raw_reason_action=item.get("raw_reason_action"),
-                location=item.get("location"),
-                officer=item.get("officer"),
-                reference_number=item.get("reference_number"),
-                dispatched_at=item.get("dispatched_at"),
-                enroute_at=item.get("enroute_at"),
-                arrived_at=item.get("arrived_at"),
-                cleared_at=item.get("cleared_at"),
-                response_seconds=item.get("response_seconds"),
-                scene_seconds=item.get("scene_seconds"),
-                raw_text=item["raw_text"],
-                parse_error=item.get("parse_error", False),
-                scraped_at=item["scraped_at"],
+                source_url=record.source_url,
+                case_number=record.case_number,
+                reported_at=record.reported_at,
+                call_source=record.call_source,
+                incident_type=record.incident_type,
+                disposition=record.disposition,
+                raw_reason_action=record.raw_reason_action,
+                location=record.location,
+                officer=record.officer,
+                reference_number=record.reference_number,
+                dispatched_at=record.dispatched_at,
+                enroute_at=record.enroute_at,
+                arrived_at=record.arrived_at,
+                cleared_at=record.cleared_at,
+                response_seconds=record.response_seconds,
+                scene_seconds=record.scene_seconds,
+                raw_text=record.raw_text,
+                parse_error=record.parse_error,
+                scraped_at=record.scraped_at,
             ).on_conflict_do_nothing(index_elements=["case_number"])
             self._session.execute(stmt)
 
@@ -93,16 +101,6 @@ class PoliceLogPipeline:
         self._session.close()
 
 
-def _parse_sale_date(raw: str | None) -> _date | None:
-    if not raw:
-        return None
-    try:
-        m, d, y = raw.strip().split("/")
-        return _date(int(y), int(m), int(d))
-    except Exception:
-        return None
-
-
 class PropertyPipeline:
     def open_spider(self, spider) -> None:
         self._session = SessionLocal()
@@ -111,43 +109,44 @@ class PropertyPipeline:
         if not isinstance(item, PropertyItem):
             return item
 
+        record = PropertyRecord.model_validate(dict(item))
+
         try:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
-            parcel_id = item["parcel_id"]
 
-            with logfire.span("save property", parcel_id=parcel_id):
+            with logfire.span("save property", parcel_id=record.parcel_id):
                 # Upsert property
                 stmt = pg_insert(Property).values(
-                    parcel_id=parcel_id,
-                    location=item.get("location"),
-                    owner=item.get("owner"),
-                    owner_address=item.get("owner_address"),
-                    land_use=item.get("land_use"),
-                    lot_size_acres=item.get("lot_size_acres"),
-                    year_built=item.get("year_built"),
-                    building_sqft=item.get("building_sqft"),
-                    assessed_land=item.get("assessed_land"),
-                    assessed_building=item.get("assessed_building"),
-                    assessed_total=item.get("assessed_total"),
-                    assessment_year=item.get("assessment_year"),
-                    detail_url=item.get("detail_url"),
+                    parcel_id=record.parcel_id,
+                    location=record.location,
+                    owner=record.owner,
+                    owner_address=record.owner_address,
+                    land_use=record.land_use,
+                    lot_size_acres=record.lot_size_acres,
+                    year_built=record.year_built,
+                    building_sqft=record.building_sqft,
+                    assessed_land=record.assessed_land,
+                    assessed_building=record.assessed_building,
+                    assessed_total=record.assessed_total,
+                    assessment_year=record.assessment_year,
+                    detail_url=record.detail_url,
                     created_at=now,
                     updated_at=now,
                 ).on_conflict_do_update(
                     index_elements=["parcel_id"],
                     set_={
-                        "location": item.get("location"),
-                        "owner": item.get("owner"),
-                        "owner_address": item.get("owner_address"),
-                        "land_use": item.get("land_use"),
-                        "lot_size_acres": item.get("lot_size_acres"),
-                        "year_built": item.get("year_built"),
-                        "building_sqft": item.get("building_sqft"),
-                        "assessed_land": item.get("assessed_land"),
-                        "assessed_building": item.get("assessed_building"),
-                        "assessed_total": item.get("assessed_total"),
-                        "assessment_year": item.get("assessment_year"),
-                        "detail_url": item.get("detail_url"),
+                        "location": record.location,
+                        "owner": record.owner,
+                        "owner_address": record.owner_address,
+                        "land_use": record.land_use,
+                        "lot_size_acres": record.lot_size_acres,
+                        "year_built": record.year_built,
+                        "building_sqft": record.building_sqft,
+                        "assessed_land": record.assessed_land,
+                        "assessed_building": record.assessed_building,
+                        "assessed_total": record.assessed_total,
+                        "assessment_year": record.assessment_year,
+                        "detail_url": record.detail_url,
                         "updated_at": now,
                     },
                 )
@@ -155,21 +154,21 @@ class PropertyPipeline:
 
                 # Get the property PK to link sales
                 property_id = self._session.execute(
-                    select(Property.id).where(Property.parcel_id == parcel_id)
+                    select(Property.id).where(Property.parcel_id == record.parcel_id)
                 ).scalar_one()
 
                 # Replace sales
                 self._session.execute(
                     delete(PropertySale).where(PropertySale.property_id == property_id)
                 )
-                for sale in item.get("sales") or []:
+                for sale in record.sales:
                     self._session.execute(
                         pg_insert(PropertySale).values(
                             property_id=property_id,
-                            sale_date=_parse_sale_date(sale.get("sale_date")),
-                            sale_price=sale.get("sale_price"),
-                            grantee=sale.get("grantee"),
-                            grantor=sale.get("grantor"),
+                            sale_date=sale.sale_date,
+                            sale_price=sale.sale_price,
+                            grantee=sale.grantee,
+                            grantor=sale.grantor,
                             created_at=now,
                         )
                     )
@@ -192,26 +191,28 @@ class CityStaffPipeline:
         if not isinstance(item, CityStaffItem):
             return item
 
+        record = CityStaffRecord.model_validate(dict(item))
+
         try:
-            with logfire.span("save city staff", name=item["name"], department=item["department"]):
+            with logfire.span("save city staff", name=record.name, department=record.department):
                 stmt = pg_insert(CityStaff).values(
-                    name=item["name"],
-                    title=item.get("title"),
-                    department=item["department"],
-                    division=item.get("division"),
-                    email=item.get("email"),
-                    phone=item.get("phone"),
-                    source_url=item["source_url"],
-                    scraped_at=item["scraped_at"],
+                    name=record.name,
+                    title=record.title,
+                    department=record.department,
+                    division=record.division,
+                    email=record.email,
+                    phone=record.phone,
+                    source_url=record.source_url,
+                    scraped_at=record.scraped_at,
                 ).on_conflict_do_update(
                     constraint="uq_city_staff_name_dept",
                     set_={
-                        "title": item.get("title"),
-                        "division": item.get("division"),
-                        "email": item.get("email"),
-                        "phone": item.get("phone"),
-                        "source_url": item["source_url"],
-                        "scraped_at": item["scraped_at"],
+                        "title": record.title,
+                        "division": record.division,
+                        "email": record.email,
+                        "phone": record.phone,
+                        "source_url": record.source_url,
+                        "scraped_at": record.scraped_at,
                     },
                 )
                 self._session.execute(stmt)

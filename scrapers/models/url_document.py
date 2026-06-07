@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 
 from bson import ObjectId
@@ -11,7 +11,10 @@ class UrlDocument(BaseModel):
     id: Optional[ObjectId] = Field(default=None, alias="_id")
     canonical_url: str
     archive_url: Optional[str] = None
-    state: Literal["pending", "complete", "error"]
+    log_date: Optional[date] = None
+    state: Literal["pending", "in_progress", "complete", "error"]
     created_at: datetime
     completed_at: Optional[datetime] = None
     raw_text: Optional[str] = None
+    entry_count: Optional[int] = None
+    error_message: Optional[str] = None

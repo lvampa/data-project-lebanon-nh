@@ -1,8 +1,8 @@
 'use client'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useCallback } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { Input } from '@project/ui/components/ui/input'
+import { Button } from '@project/ui/components/ui/button'
 
 export function IncidentsFilters() {
   const router = useRouter()

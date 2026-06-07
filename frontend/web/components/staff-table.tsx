@@ -1,8 +1,8 @@
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+} from '@project/ui/components/ui/table'
+import { Badge } from '@project/ui/components/ui/badge'
 import type { StaffMember } from '@/lib/types'
 
 const DEPT_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {

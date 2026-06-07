@@ -3,7 +3,7 @@ import { formatTypeData, formatWeekdayData } from '@/lib/chart-utils'
 import { StatsCards } from '@/components/stats-cards'
 import { IncidentTypeChart } from '@/components/incident-type-chart'
 import { WeekdayChart } from '@/components/weekday-chart'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@project/ui/components/ui/card'
 import type { StatsData } from '@/lib/types'
 
 export default function DashboardPage() {

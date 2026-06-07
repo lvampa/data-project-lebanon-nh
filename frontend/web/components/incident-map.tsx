@@ -19,7 +19,7 @@ export function IncidentMap({ addresses }: Props) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://tiles.openfreemap.org/styles/liberty',
+      style: process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? 'https://tiles.openfreemap.org/styles/liberty',
       center: LEBANON_CENTER,
       zoom: 13,
     })

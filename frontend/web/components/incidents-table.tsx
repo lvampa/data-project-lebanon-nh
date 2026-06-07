@@ -1,13 +1,13 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+} from '@project/ui/components/ui/table'
+import { Badge } from '@project/ui/components/ui/badge'
+import { Pagination } from '@/components/pagination'
 import type { Incident } from '@/lib/types'
 
 const PER_PAGE = 50
@@ -21,6 +21,10 @@ export function IncidentsTable({ incidents }: Props) {
   const searchParams = useSearchParams()
   const incidentType = searchParams.get('incident_type')
   const officer = searchParams.get('officer')
+
+  useEffect(() => {
+    setPage(1)
+  }, [incidentType, officer])
 
   const filtered = useMemo(() => {
     return incidents.filter(r => {
@@ -86,23 +90,7 @@ export function IncidentsTable({ incidents }: Props) {
           ))}
         </TableBody>
       </Table>
-      {totalPages > 1 && (
-        <div className="flex items-center gap-2 mt-4">
-          {page > 1 && (
-            <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)}>
-              ← Prev
-            </Button>
-          )}
-          <span className="text-sm text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages && (
-            <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)}>
-              Next →
-            </Button>
-          )}
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
     </div>
   )
 }

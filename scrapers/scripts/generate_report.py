@@ -1,5 +1,5 @@
 """
-Queries PostgreSQL and writes static JSON files to ../../public/data/.
+Queries PostgreSQL and writes static JSON files to frontend/web/public/data/.
 Run from data-project/: uv run python scrapers/scripts/generate_report.py
 """
 import json
@@ -15,7 +15,7 @@ from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 
-OUTPUT_DIR = Path(__file__).parent.parent.parent / "public" / "data"
+OUTPUT_DIR = Path(__file__).parent.parent.parent / "frontend" / "web" / "public" / "data"
 
 
 def _json_default(obj: object) -> str:

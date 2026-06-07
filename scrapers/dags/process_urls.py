@@ -19,7 +19,7 @@ with DAG(
         task_id="process_urls",
         bash_command=(
             "cd /opt/project/scrapers && "
-            "uv run scrapy crawl process_urls -a limit='{{ params.limit }}'"
+            "uv run --frozen scrapy crawl process_urls -a limit='{{ params.limit }}'"
         ),
         retries=1,
         retry_delay=timedelta(minutes=5),

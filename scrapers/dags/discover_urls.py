@@ -24,7 +24,7 @@ with DAG(
         task_id="build_daily_urls",
         bash_command=(
             "cd /opt/project/scrapers && "
-            "uv run scrapy crawl build_daily_urls -a url='{{ params.url }}'"
+            "uv run --frozen scrapy crawl build_daily_urls -a url='{{ params.url }}'"
         ),
         retries=1,
         retry_delay=timedelta(minutes=5),

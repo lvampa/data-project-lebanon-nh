@@ -13,7 +13,7 @@ with DAG(
 ) as dag:
     BashOperator(
         task_id="scrape_vgsi",
-        bash_command="cd /opt/project/scrapers && uv run scrapy crawl vgsi_property",
+        bash_command="cd /opt/project/scrapers && uv run --frozen scrapy crawl vgsi_property",
         retries=1,
         retry_delay=timedelta(minutes=5),
     )

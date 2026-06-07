@@ -16,11 +16,13 @@ VALID_CATEGORIES = {"Fire", "EMS", "Police", "Traffic", "Administrative"}
 
 
 def parse_categories(text: str) -> list[dict]:
-    cleaned = re.sub(r"```(?:json)?\s*", "", text).strip()
-    match = re.search(r"\[.*\]", cleaned, re.DOTALL)
-    if not match:
-        raise ValueError(f"No JSON array found in: {text[:200]}")
-    rows = json.loads(match.group())
+    cleaned = re.sub(r"^```(?:json)?\s*$", "", text, flags=re.MULTILINE).strip()
+    try:
+        rows = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Could not parse JSON: {e}\nInput (first 200 chars): {text[:200]}") from e
+    if not isinstance(rows, list):
+        raise ValueError(f"Expected a JSON array, got {type(rows).__name__}")
     result = []
     for row in rows:
         category = row.get("category", "")
@@ -28,6 +30,8 @@ def parse_categories(text: str) -> list[dict]:
             raise ValueError(
                 f"Invalid category {category!r} — must be one of {VALID_CATEGORIES}"
             )
+        if "incident_type" not in row:
+            raise ValueError(f"Row missing 'incident_type': {row}")
         result.append({
             "incident_type": row["incident_type"],
             "category": category,

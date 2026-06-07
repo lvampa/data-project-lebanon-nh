@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,11 +9,12 @@ from postgres.base import Base
 
 class Llc(Base):
     __tablename__ = "llcs"
+    __table_args__ = (Index("idx_llcs_lookup_status", "lookup_status"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     raw_owner_name: Mapped[str | None] = mapped_column(Text)
-    lookup_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending")
+    lookup_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending", server_default="pending")
     nh_business_id: Mapped[str | None] = mapped_column(Text)
     business_status: Mapped[str | None] = mapped_column(Text)
     formation_date: Mapped[date | None] = mapped_column(Date)

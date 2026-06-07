@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl *)",
+      "Bash(npx *)",
+      "Bash(npm run *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git status)",
+      "Bash(uv *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pytest *)",
+      "Bash(scrapy *)",
+      "Bash(docker compose *)",
+      "Bash(jq *)",
+      "Bash(wrangler *)",
+      "Bash(bash scripts/*)"
+    ]
+  }
+}

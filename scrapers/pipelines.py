@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 
 import logfire
@@ -13,6 +14,7 @@ from models.url_record import UrlRecord
 from mongo import db
 from postgres import SessionLocal
 from postgres.models.city_staff import CityStaff
+from postgres.models.llc import Llc, PropertyLlc
 from postgres.models.log_entry import LogEntry
 from postgres.models.officer import Officer
 from postgres.models.property import Property
@@ -20,6 +22,11 @@ from postgres.models.property_sale import PropertySale
 from pymongo import UpdateOne
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+_LLC_PATTERN = re.compile(
+    r'\b(LLC|L\.L\.C|INC|CORP|CORPORATION|TRUST|LP|LLP|PLLC)\b',
+    re.IGNORECASE,
+)
 
 
 class UrlRecordPipeline:
@@ -175,6 +182,28 @@ class PropertyPipeline:
                 property_id = self._session.execute(
                     select(Property.id).where(Property.parcel_id == record.parcel_id)
                 ).scalar_one()
+
+                # Queue LLC lookup if owner looks like a business entity
+                if record.owner and _LLC_PATTERN.search(record.owner):
+                    normalized = record.owner.strip().upper()
+                    self._session.execute(
+                        pg_insert(Llc)
+                        .values(
+                            name=normalized,
+                            raw_owner_name=record.owner,
+                            lookup_status="pending",
+                            created_at=now,
+                        )
+                        .on_conflict_do_nothing(index_elements=["name"])
+                    )
+                    llc_id = self._session.execute(
+                        select(Llc.id).where(Llc.name == normalized)
+                    ).scalar_one()
+                    self._session.execute(
+                        pg_insert(PropertyLlc)
+                        .values(property_id=property_id, llc_id=llc_id)
+                        .on_conflict_do_nothing()
+                    )
 
                 # Replace sales
                 self._session.execute(

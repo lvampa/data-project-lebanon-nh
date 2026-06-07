@@ -23,7 +23,7 @@ def test_fetch_uncategorized_calls_execute():
     session.execute.assert_called_once()
 
 
-def test_fetch_uncategorized_returns_empty_when_none():
+def test_fetch_uncategorized_returns_empty_when_no_rows():
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = []
     assert fetch_uncategorized(session) == []

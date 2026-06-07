@@ -29,8 +29,7 @@ def fetch_uncategorized(session) -> list[str]:
 def main() -> None:
     logfire.configure()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    session = SessionLocal()
-    try:
+    with SessionLocal() as session:
         with logfire.span("export incident types"):
             types = fetch_uncategorized(session)
             if not types:
@@ -42,8 +41,6 @@ def main() -> None:
                 count=len(types),
                 path=str(OUTPUT_FILE),
             )
-    finally:
-        session.close()
 
 
 if __name__ == "__main__":

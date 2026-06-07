@@ -10,8 +10,6 @@ from postgres.models.llc import Llc as LlcModel
 
 router = APIRouter()
 
-VALID_STATUSES = {"pending", "in_progress", "complete", "error", "skipped"}
-
 
 @router.get("", response_model=LlcsResponse)
 def list_llcs(
@@ -32,8 +30,6 @@ def update_llc_status(
     body: LlcStatusUpdate,
     db: Annotated[Session, Depends(get_db)],
 ) -> Llc:
-    if body.lookup_status not in VALID_STATUSES:
-        raise HTTPException(status_code=422, detail=f"Invalid status: {body.lookup_status}")
     row = db.get(LlcModel, llc_id)
     if row is None:
         raise HTTPException(status_code=404, detail="LLC not found")

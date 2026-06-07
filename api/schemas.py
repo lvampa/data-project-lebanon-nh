@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 from pydantic import BaseModel
 
 
@@ -98,7 +99,7 @@ class Llc(BaseModel):
     phone: str | None
     registered_agent: str | None
     registered_agent_address: str | None
-    principals: list | None
+    principals: list[LlcPrincipal] | None
     last_looked_up_at: datetime | None
     error_message: str | None
 
@@ -111,4 +112,4 @@ class LlcsResponse(BaseModel):
 
 
 class LlcStatusUpdate(BaseModel):
-    lookup_status: str
+    lookup_status: Literal["pending", "in_progress", "complete", "error", "skipped"]

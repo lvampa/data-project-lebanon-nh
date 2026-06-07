@@ -53,6 +53,7 @@ def test_llc_owner_queues_lookup(mock_session_cls):
     # Verify an LLC insert was attempted (pg_insert called with Llc table)
     calls = _sql_strings(mock_session.execute.call_args_list)
     assert any("llcs" in c.lower() for c in calls)
+    assert any("property_llcs" in c.lower() for c in calls)
 
 
 @patch("pipelines.SessionLocal")

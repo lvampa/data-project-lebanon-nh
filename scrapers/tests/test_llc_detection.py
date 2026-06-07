@@ -1,10 +1,5 @@
-import re
 import pytest
-
-LLC_PATTERN = re.compile(
-    r'\b(LLC|L\.L\.C|INC|CORP|CORPORATION|TRUST|LP|LLP|PLLC)\b',
-    re.IGNORECASE,
-)
+from pipelines import _LLC_PATTERN as LLC_PATTERN
 
 
 @pytest.mark.parametrize("owner", [

@@ -209,3 +209,7 @@ __marimo__/
 
 # Generated report data
 public/data/*.json
+
+# Incident type export data
+scripts/data/incident_types.txt
+scripts/data/incident_categories.json

@@ -5,8 +5,9 @@ from .property import Property
 from .property_sale import PropertySale
 from .city_staff import CityStaff
 from .officer import Officer
+from .llc import Llc, PropertyLlc
 
 __all__ = [
     "LogEntry", "AddressNormalization", "IncidentTypeCategory",
-    "Property", "PropertySale", "CityStaff", "Officer",
+    "Property", "PropertySale", "CityStaff", "Officer", "Llc", "PropertyLlc",
 ]

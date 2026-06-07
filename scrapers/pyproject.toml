@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.136.3",
     "httpx>=0.28.1",
-    "logfire>=4.31.0",
+    "logfire[pymongo]>=4.31.0",
     "mongo",
     "postgres",
     "pydantic>=2.12.5",

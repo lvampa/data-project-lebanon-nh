@@ -786,6 +786,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3b/30/526aa2f7f08073d56e9d9d4d8dffb991225dbd02ec537a06b1c1f8f1c4e9/logfire-4.33.0-py3-none-any.whl", hash = "sha256:eb876a497f2f8cc450005541192ca2e87e0f8781dc20f88b952ab0b141a1ae76", size = 339969, upload-time = "2026-05-13T15:14:12.516Z" },
 ]
 
+[package.optional-dependencies]
+pymongo = [
+    { name = "opentelemetry-instrumentation-pymongo" },
+]
+
 [[package]]
 name = "lxml"
 version = "6.1.1"
@@ -1029,6 +1034,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/52/cb/0523b92c112a6cc70be43724343dc45225d3af134419844d7879a07755d4/opentelemetry_instrumentation-0.62b1.tar.gz", hash = "sha256:90e92a905ba4f84db06ac3aec96701df6c079b2d66e9379f8739f0a1bdcc7f45", size = 34043, upload-time = "2026-04-24T13:22:31.997Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/0f/45adbaea1f81b847cffdcee4f4b5f89297e42facf7fac78c7aaac4c38e75/opentelemetry_instrumentation-0.62b1-py3-none-any.whl", hash = "sha256:976fc6e640f2006599e97429c949e622c108d0c17c2059347d1e6c93c707f257", size = 34163, upload-time = "2026-04-24T13:21:31.722Z" },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-pymongo"
+version = "0.62b1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-semantic-conventions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/de/9d60bc4ceda8ecf97f0372b6042513531838cf5d8b4cbb2abfa00067d18a/opentelemetry_instrumentation_pymongo-0.62b1.tar.gz", hash = "sha256:9b6dbe927101e9634119b54930b0f0e18b6b29574e54cb0f058733f60f9f6d97", size = 10339, upload-time = "2026-04-24T13:22:58.558Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/09/53/3ad8ea9f0187491309e8bbdfd37cb0fa0c10293c5eb8e14c0c41bde4525f/opentelemetry_instrumentation_pymongo-0.62b1-py3-none-any.whl", hash = "sha256:a91061dfb30fdfffbcc5df618519e6228914b2e2276c951d504afc3e7721c3df", size = 11409, upload-time = "2026-04-24T13:22:07.899Z" },
 ]
 
 [[package]]
@@ -1678,7 +1697,7 @@ source = { virtual = "scrapers" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
-    { name = "logfire" },
+    { name = "logfire", extra = ["pymongo"] },
     { name = "mongo" },
     { name = "postgres" },
     { name = "pydantic" },
@@ -1697,7 +1716,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.136.3" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "logfire", specifier = ">=4.31.0" },
+    { name = "logfire", extras = ["pymongo"], specifier = ">=4.31.0" },
     { name = "mongo", editable = "shared/mongo" },
     { name = "postgres", editable = "shared/postgres" },
     { name = "pydantic", specifier = ">=2.12.5" },

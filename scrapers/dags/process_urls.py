@@ -1,11 +1,13 @@
 import pendulum
+from datetime import timedelta
+
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.models.param import Param
 
 with DAG(
     dag_id="process_urls",
-    schedule="0 7 * * 1",
+    schedule=None,  # triggered by discover_urls; can also be run manually
     start_date=pendulum.datetime(2024, 1, 1, tz="UTC"),
     catchup=False,
     params={
@@ -19,4 +21,6 @@ with DAG(
             "cd /opt/project/scrapers && "
             "uv run scrapy crawl process_urls -a limit='{{ params.limit }}'"
         ),
+        retries=1,
+        retry_delay=timedelta(minutes=5),
     )

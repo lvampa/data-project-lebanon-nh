@@ -1,4 +1,6 @@
 import pendulum
+from datetime import timedelta
+
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
@@ -12,4 +14,6 @@ with DAG(
     BashOperator(
         task_id="scrape_vgsi",
         bash_command="cd /opt/project/scrapers && uv run scrapy crawl vgsi_property",
+        retries=1,
+        retry_delay=timedelta(minutes=5),
     )

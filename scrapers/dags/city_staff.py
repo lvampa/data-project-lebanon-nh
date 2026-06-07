@@ -11,5 +11,5 @@ with DAG(
 ) as dag:
     BashOperator(
         task_id="scrape_city_staff",
-        bash_command="cd /opt/scrapers && uv run scrapy crawl city_staff",
+        bash_command="cd /opt/project/scrapers && uv run scrapy crawl city_staff",
     )

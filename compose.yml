@@ -20,14 +20,11 @@ x-airflow-common:
     POSTGRES_USER: ${POSTGRES_USER:-app}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
     POSTGRES_DB: ${POSTGRES_DB:-app}
-    UV_PROJECT_ENVIRONMENT: /opt/airflow/.scrapers-venv
   volumes:
     &airflow-volumes
     - ./scrapers/dags:/opt/airflow/dags
     - ./scrapers:/opt/project/scrapers
     - ./shared:/opt/project/shared
-    - ./pyproject.toml:/opt/project/pyproject.toml:ro
-    - ./uv.lock:/opt/project/uv.lock:ro
     - airflow_logs:/opt/airflow/logs
   depends_on:
     &airflow-depends

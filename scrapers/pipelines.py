@@ -3,8 +3,10 @@ from datetime import UTC, datetime
 import logfire
 from items import PoliceLogItem, UrlRecordItem
 from items.city_staff import CityStaffItem
+from items.officer import OfficerItem
 from items.property import PropertyItem
 from models.city_staff import CityStaffRecord
+from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
@@ -12,6 +14,7 @@ from mongo import db
 from postgres import SessionLocal
 from postgres.models.city_staff import CityStaff
 from postgres.models.log_entry import LogEntry
+from postgres.models.officer import Officer
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
 from pymongo import UpdateOne
@@ -229,6 +232,53 @@ class CityStaffPipeline:
                         constraint="uq_city_staff_name_dept",
                         set_={
                             "title": record.title,
+                            "division": record.division,
+                            "email": record.email,
+                            "phone": record.phone,
+                            "source_url": record.source_url,
+                            "scraped_at": record.scraped_at,
+                        },
+                    )
+                )
+                self._session.execute(stmt)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return item
+
+    def close_spider(self, spider) -> None:
+        self._session.commit()
+        self._session.close()
+
+
+class OfficerPipeline:
+    def open_spider(self, spider) -> None:
+        self._session = SessionLocal()
+
+    def process_item(self, item, spider):
+        if not isinstance(item, OfficerItem):
+            return item
+
+        record = OfficerRecord.model_validate(dict(item))
+
+        try:
+            with logfire.span("save officer", name=record.name):
+                stmt = (
+                    pg_insert(Officer)
+                    .values(
+                        name=record.name,
+                        rank=record.rank,
+                        division=record.division,
+                        email=record.email,
+                        phone=record.phone,
+                        source_url=record.source_url,
+                        scraped_at=record.scraped_at,
+                    )
+                    .on_conflict_do_update(
+                        index_elements=["name"],
+                        set_={
+                            "rank": record.rank,
                             "division": record.division,
                             "email": record.email,
                             "phone": record.phone,

@@ -7,6 +7,8 @@ from .incident_type_category import IncidentTypeCategory
 from .llc import Llc, PropertyLlc
 from .log_entry import LogEntry
 from .officer import Officer
+from .planning_document import PlanningDocument
+from .planning_meeting import PlanningMeeting
 from .property import Property
 from .property_sale import PropertySale
 
@@ -21,6 +23,8 @@ __all__ = [
     "PropertyLlc",
     "LogEntry",
     "Officer",
+    "PlanningDocument",
+    "PlanningMeeting",
     "Property",
     "PropertySale",
 ]

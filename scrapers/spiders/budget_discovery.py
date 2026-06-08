@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import logfire
 import scrapy
@@ -51,7 +51,7 @@ class BudgetDiscoverySpider(scrapy.Spider):
 
     def parse_year_page(self, response: Response, **kwargs):
         """Year sub-page — extract PDF download links."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(UTC).replace(tzinfo=None)
         fiscal_year = _extract_fiscal_year(response.url)
         if not fiscal_year:
             logfire.warning("could not extract fiscal year", url=response.url)

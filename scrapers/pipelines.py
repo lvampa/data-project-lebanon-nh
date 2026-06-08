@@ -3,9 +3,11 @@ from datetime import UTC, datetime
 
 import logfire
 from items import PoliceLogItem, UrlRecordItem
+from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
 from items.officer import OfficerItem
 from items.property import PropertyItem
+from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
@@ -13,6 +15,7 @@ from models.property import PropertyRecord
 from models.url_record import UrlRecord
 from mongo import db
 from postgres import SessionLocal
+from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
 from postgres.models.llc import Llc, PropertyLlc
 from postgres.models.log_entry import LogEntry
@@ -311,6 +314,47 @@ class OfficerPipeline:
                             "division": record.division,
                             "email": record.email,
                             "phone": record.phone,
+                            "source_url": record.source_url,
+                            "scraped_at": record.scraped_at,
+                        },
+                    )
+                )
+                self._session.execute(stmt)
+        except Exception:
+            self._session.rollback()
+            raise
+
+        return item
+
+    def close_spider(self, spider) -> None:
+        self._session.commit()
+        self._session.close()
+
+
+class BudgetDocumentPipeline:
+    def open_spider(self, spider) -> None:
+        self._session = SessionLocal()
+
+    def process_item(self, item, spider):
+        if not isinstance(item, BudgetDocumentItem):
+            return item
+
+        record = BudgetDocumentRecord.model_validate(dict(item))
+
+        try:
+            with logfire.span("save budget document", fiscal_year=record.fiscal_year):
+                stmt = (
+                    pg_insert(BudgetDocument)
+                    .values(
+                        fiscal_year=record.fiscal_year,
+                        document_type=record.document_type,
+                        source_url=record.source_url,
+                        text_extracted=False,
+                        scraped_at=record.scraped_at,
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_budget_document_year_type",
+                        set_={
                             "source_url": record.source_url,
                             "scraped_at": record.scraped_at,
                         },

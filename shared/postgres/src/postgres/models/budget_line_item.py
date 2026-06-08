@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy import Index, Integer, Numeric, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,9 +16,9 @@ class BudgetLineItem(Base):
     fund_name: Mapped[str] = mapped_column(Text, nullable=False)
     department: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    prior_year_amended: Mapped[float | None] = mapped_column(Numeric(14, 2))
-    year_requested: Mapped[float | None] = mapped_column(Numeric(14, 2))
-    year_approved: Mapped[float | None] = mapped_column(Numeric(14, 2))
+    prior_year_amended: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    year_requested: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    year_approved: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
 
     __table_args__ = (
         UniqueConstraint("fiscal_year", "gl_number", name="uq_budget_line_item_year_gl"),

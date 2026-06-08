@@ -19,7 +19,9 @@ eggs/
 .eggs/
 lib/
 !web/lib/
+!frontend/web/lib/
 !frontend/admin/lib/
+!frontend/shared/lib/
 lib64/
 parts/
 sdist/

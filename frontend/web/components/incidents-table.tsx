@@ -9,8 +9,7 @@ import {
 import { Badge } from '@project/ui/components/ui/badge'
 import { Pagination } from '@/components/pagination'
 import type { Incident } from '@/lib/types'
-
-const PER_PAGE = 50
+import { PER_PAGE } from '@project/ui/lib/constants'
 
 interface Props {
   incidents: Incident[]

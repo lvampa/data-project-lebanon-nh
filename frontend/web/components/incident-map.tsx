@@ -4,8 +4,7 @@ import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { addressToMarker } from '@/lib/map-utils'
 import type { Address } from '@/lib/types'
-
-const LEBANON_CENTER: [number, number] = [-72.252, 43.642]
+import { LEBANON_CENTER, LEBANON_ZOOM } from '@project/ui/lib/constants'
 
 interface Props {
   addresses: Address[]
@@ -21,7 +20,7 @@ export function IncidentMap({ addresses }: Props) {
       container: containerRef.current,
       style: process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? 'https://tiles.openfreemap.org/styles/liberty',
       center: LEBANON_CENTER,
-      zoom: 13,
+      zoom: LEBANON_ZOOM,
     })
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right')

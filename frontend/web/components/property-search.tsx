@@ -6,8 +6,7 @@ import { Input } from '@project/ui/components/ui/input'
 import { Pagination } from '@/components/pagination'
 import { PropertyTable } from '@/components/property-table'
 import type { PropertyRecord } from '@/lib/types'
-
-const PER_PAGE = 50
+import { PER_PAGE } from '@project/ui/lib/constants'
 
 interface Props {
   properties: PropertyRecord[]

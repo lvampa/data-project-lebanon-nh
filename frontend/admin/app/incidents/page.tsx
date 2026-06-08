@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { fetchIncidents } from '@/lib/api'
+import { PER_PAGE } from '@project/ui/lib/constants'
 import { IncidentsFilters } from '@/components/incidents-filters'
 import { IncidentsTable } from '@/components/incidents-table'
 
@@ -15,7 +16,7 @@ export default async function IncidentsPage({
     incident_type: params.incident_type,
     officer: params.officer,
     page: params.page ? parseInt(params.page) : 1,
-    per_page: 50,
+    per_page: PER_PAGE,
   })
 
   return (

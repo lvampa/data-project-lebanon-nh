@@ -32,6 +32,25 @@ x-airflow-common:
       condition: service_healthy
 
 services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    volumes:
+      - ./api:/opt/project/api
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   mongo:
     image: mongo:8
     restart: unless-stopped

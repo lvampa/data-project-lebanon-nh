@@ -3,7 +3,7 @@ import { Tag } from './tag'
 
 const meta: Meta<typeof Tag> = {
   component: Tag,
-  title: 'UI/Tag',
+  title: 'Feedback/Tag',
 }
 export default meta
 

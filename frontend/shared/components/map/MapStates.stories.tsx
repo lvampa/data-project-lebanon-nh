@@ -4,7 +4,7 @@ import { MapEmptyState } from './MapEmptyState'
 import { MapErrorState } from './MapErrorState'
 
 const meta: Meta = {
-  title: 'Map/MapStates',
+  title: 'Map/States',
   decorators: [
     (Story) => (
       <div style={{ width: 520, height: 340, borderRadius: 8, overflow: 'hidden', border: '1px solid oklch(0.922 0 0)' }}>

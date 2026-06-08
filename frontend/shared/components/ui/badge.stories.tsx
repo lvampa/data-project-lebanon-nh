@@ -3,7 +3,7 @@ import { Badge } from './badge'
 
 const meta: Meta<typeof Badge> = {
   component: Badge,
-  title: 'UI/Badge',
+  title: 'Feedback/Badge',
   argTypes: {
     variant: {
       control: 'select',

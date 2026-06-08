@@ -3,7 +3,7 @@ import { MapControls } from './MapControls'
 
 const meta: Meta<typeof MapControls> = {
   component: MapControls,
-  title: 'Map/MapControls',
+  title: 'Map/Controls',
   decorators: [
     (Story) => (
       <div style={{

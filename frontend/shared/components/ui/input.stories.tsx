@@ -3,7 +3,7 @@ import { Input } from './input'
 
 const meta: Meta<typeof Input> = {
   component: Input,
-  title: 'UI/Input',
+  title: 'Forms/Input',
 }
 export default meta
 

@@ -3,7 +3,7 @@ import { IncidentPopup } from './IncidentPopup'
 
 const meta: Meta<typeof IncidentPopup> = {
   component: IncidentPopup,
-  title: 'Map/IncidentPopup',
+  title: 'Map/Popup',
   decorators: [
     (Story) => (
       <div style={{

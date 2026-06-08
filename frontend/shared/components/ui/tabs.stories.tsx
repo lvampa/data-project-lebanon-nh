@@ -10,7 +10,7 @@ const ITEMS = [
 
 const meta: Meta<typeof Tabs> = {
   component: Tabs,
-  title: 'UI/Tabs',
+  title: 'Navigation/Tabs',
   argTypes: {
     variant: { control: 'select', options: ['underline', 'pill'] },
   },

@@ -4,7 +4,7 @@ import { MapSurfacePlaceholder } from './MapLoadingState'
 
 const meta: Meta<typeof MapFrame> = {
   component: MapFrame,
-  title: 'Map/MapFrame',
+  title: 'Map/Frame',
   decorators: [
     (Story) => (
       <div style={{ width: 600, height: 420 }}>

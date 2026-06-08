@@ -3,7 +3,7 @@ import { Separator } from './separator'
 
 const meta: Meta<typeof Separator> = {
   component: Separator,
-  title: 'UI/Separator',
+  title: 'Surfaces/Separator',
 }
 export default meta
 

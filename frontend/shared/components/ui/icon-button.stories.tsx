@@ -4,7 +4,7 @@ import { Settings, Plus, X, Download } from 'lucide-react'
 
 const meta: Meta<typeof IconButton> = {
   component: IconButton,
-  title: 'UI/IconButton',
+  title: 'Forms/IconButton',
   argTypes: {
     variant: { control: 'select', options: ['ghost', 'outline', 'primary'] },
     size: { control: 'select', options: ['sm', 'md', 'lg'] },

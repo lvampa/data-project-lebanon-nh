@@ -4,7 +4,7 @@ import { IconButton } from './icon-button'
 import { Info } from 'lucide-react'
 
 const meta: Meta = {
-  title: 'UI/Tooltip',
+  title: 'Feedback/Tooltip',
   parameters: { layout: 'padded' },
 }
 export default meta

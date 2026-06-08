@@ -3,7 +3,7 @@ import { MapFilterPanel } from './MapFilterPanel'
 
 const meta: Meta<typeof MapFilterPanel> = {
   component: MapFilterPanel,
-  title: 'Map/MapFilterPanel',
+  title: 'Map/Filter Panel',
   decorators: [
     (Story) => (
       <div style={{

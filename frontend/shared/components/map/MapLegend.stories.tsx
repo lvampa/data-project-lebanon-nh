@@ -3,7 +3,7 @@ import { MapLegend } from './MapLegend'
 
 const meta: Meta<typeof MapLegend> = {
   component: MapLegend,
-  title: 'Map/MapLegend',
+  title: 'Map/Legend',
   decorators: [
     (Story) => (
       <div style={{

@@ -219,3 +219,8 @@ public/data/*.json
 # Incident type export data
 scripts/data/incident_types.txt
 scripts/data/incident_categories.json
+
+# Budget PDF downloads and extracted text
+scripts/data/budgets/*.pdf
+scripts/data/budgets/*.txt
+scripts/data/budget_data.json

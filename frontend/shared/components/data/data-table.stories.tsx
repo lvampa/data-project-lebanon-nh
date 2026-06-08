@@ -16,26 +16,42 @@ const INCIDENTS = [
 ]
 
 const COLUMNS = [
-  { key: 'case_number', header: 'Case #', sortable: true },
-  { key: 'reported_at', header: 'Date', sortable: true },
-  { key: 'incident_type', header: 'Type', sortable: true },
-  { key: 'officer', header: 'Officer', sortable: true },
-  { key: 'disposition', header: 'Disposition' },
+  { id: 'case_number', header: 'Case #', sortable: true },
+  { id: 'reported_at', header: 'Date', sortable: true },
+  { id: 'incident_type', header: 'Type', sortable: true },
+  { id: 'officer', header: 'Officer', sortable: true },
+  { id: 'disposition', header: 'Disposition' },
 ]
 
 export const Default: StoryObj = {
-  render: () => <DataTable columns={COLUMNS} data={INCIDENTS} />,
+  render: () => <DataTable columns={COLUMNS} rows={INCIDENTS} rowKey={(r) => r.case_number} />,
 }
 
 export const Compact: StoryObj = {
-  render: () => <DataTable columns={COLUMNS} data={INCIDENTS} density="compact" />,
+  render: () => <DataTable columns={COLUMNS} rows={INCIDENTS} density="compact" rowKey={(r) => r.case_number} />,
+}
+
+export const Unborderd: StoryObj = {
+  render: () => <DataTable columns={COLUMNS} rows={INCIDENTS} bordered={false} rowKey={(r) => r.case_number} />,
+}
+
+export const WithCaption: StoryObj = {
+  render: () => (
+    <DataTable
+      columns={COLUMNS}
+      rows={INCIDENTS}
+      rowKey={(r) => r.case_number}
+      caption="Source: Lebanon Police Department CAD export · Provisional · Updated daily"
+    />
+  ),
 }
 
 export const Clickable: StoryObj = {
   render: () => (
     <DataTable
       columns={COLUMNS}
-      data={INCIDENTS}
+      rows={INCIDENTS}
+      rowKey={(r) => r.case_number}
       onRowClick={(row) => alert(`Selected: ${row.case_number}`)}
     />
   ),
@@ -43,27 +59,28 @@ export const Clickable: StoryObj = {
 
 export const Empty: StoryObj = {
   render: () => (
-    <DataTable columns={COLUMNS} data={[]} emptyMessage="No incidents match the current filters." />
+    <DataTable columns={COLUMNS} rows={[]} empty="No incidents match the current filters." />
   ),
 }
 
 const BUDGET = [
   { indicator: 'Operating budget', fy24: '$61.4M', fy23: '$58.9M', change: '+4.2%' },
-  { indicator: 'Mill rate', fy24: '$18.32', fy23: '$17.91', change: '+2.3%' },
-  { indicator: 'SAU88 enrollment', fy24: '3,402', fy23: '3,466', change: '−1.8%' },
-  { indicator: 'Building permits', fy24: '284', fy23: '261', change: '+8.8%' },
+  { indicator: 'Mill rate',         fy24: '$18.32', fy23: '$17.91', change: '+2.3%' },
+  { indicator: 'SAU88 enrollment',  fy24: '3,402',  fy23: '3,466',  change: '−1.8%' },
+  { indicator: 'Building permits',  fy24: '284',    fy23: '261',    change: '+8.8%' },
 ]
 
 export const MunicipalData: StoryObj = {
   render: () => (
     <DataTable
       columns={[
-        { key: 'indicator', header: 'Indicator', sortable: true },
-        { key: 'fy24', header: 'FY24', numeric: true },
-        { key: 'fy23', header: 'FY23', numeric: true },
-        { key: 'change', header: 'Change', numeric: true },
+        { id: 'indicator', header: 'Indicator', sortable: true },
+        { id: 'fy24', header: 'FY24', numeric: true },
+        { id: 'fy23', header: 'FY23', numeric: true },
+        { id: 'change', header: 'Change', numeric: true },
       ]}
-      data={BUDGET}
+      rows={BUDGET}
+      caption="Lebanon, NH · FY23–24 · Source: City of Lebanon annual report"
     />
   ),
 }

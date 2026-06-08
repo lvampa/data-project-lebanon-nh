@@ -1,92 +1,119 @@
 'use client'
 import React, { useState, useMemo } from 'react'
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
 type SortDir = 'asc' | 'desc' | null
 
 export interface DataTableColumn<T> {
-  key: keyof T | string
+  id: string
   header: string
   numeric?: boolean
+  align?: 'left' | 'right' | 'center'
+  width?: number | string
   sortable?: boolean
-  render?: (row: T) => React.ReactNode
+  /** Custom sort value extractor */
+  sortBy?: (row: T) => unknown
+  /** Custom cell renderer */
+  accessor?: (row: T) => React.ReactNode
 }
 
 interface DataTableProps<T> {
   columns: DataTableColumn<T>[]
-  data: T[]
+  rows: T[]
+  rowKey?: (row: T, index: number) => React.Key
   density?: 'compact' | 'comfortable'
   bordered?: boolean
+  stickyHeader?: boolean
+  hoverable?: boolean
+  caption?: React.ReactNode
+  empty?: React.ReactNode
   onRowClick?: (row: T) => void
-  emptyMessage?: string
   className?: string
 }
 
 export function DataTable<T extends Record<string, unknown>>({
   columns,
-  data,
+  rows,
+  rowKey = (_, i) => i,
   density = 'comfortable',
-  bordered = false,
+  bordered = true,
+  stickyHeader = false,
+  hoverable = true,
+  caption,
+  empty = 'No data.',
   onRowClick,
-  emptyMessage = 'No data',
   className,
 }: DataTableProps<T>) {
-  const [sortKey, setSortKey] = useState<string | null>(null)
-  const [sortDir, setSortDir] = useState<SortDir>(null)
-
-  const handleSort = (key: string) => {
-    if (sortKey !== key) {
-      setSortKey(key)
-      setSortDir('asc')
-    } else if (sortDir === 'asc') {
-      setSortDir('desc')
-    } else if (sortDir === 'desc') {
-      setSortKey(null)
-      setSortDir(null)
-    }
-  }
+  const [sort, setSort] = useState<{ id: string; dir: 'asc' | 'desc' } | null>(null)
 
   const sorted = useMemo(() => {
-    if (!sortKey || !sortDir) return data
-    return [...data].sort((a, b) => {
-      const av = a[sortKey]
-      const bv = b[sortKey]
-      if (av == null && bv == null) return 0
-      if (av == null) return 1
-      if (bv == null) return -1
-      const cmp = av < bv ? -1 : av > bv ? 1 : 0
-      return sortDir === 'asc' ? cmp : -cmp
+    if (!sort) return rows
+    const col = columns.find((c) => c.id === sort.id)
+    if (!col) return rows
+    const get = col.sortBy ?? ((r: T) => r[col.id])
+    const out = [...rows].sort((a, b) => {
+      const va = get(a)
+      const vb = get(b)
+      if (va == null) return 1
+      if (vb == null) return -1
+      if (typeof va === 'number' && typeof vb === 'number') return va - vb
+      return String(va).localeCompare(String(vb))
     })
-  }, [data, sortKey, sortDir])
+    if (sort.dir === 'desc') out.reverse()
+    return out
+  }, [rows, columns, sort])
 
-  const py = density === 'compact' ? 'py-1.5' : 'py-2.5'
+  const handleHeaderClick = (col: DataTableColumn<T>) => {
+    if (!col.sortable) return
+    setSort((prev) => {
+      if (!prev || prev.id !== col.id) return { id: col.id, dir: 'asc' }
+      if (prev.dir === 'asc') return { id: col.id, dir: 'desc' }
+      return null
+    })
+  }
+
+  const cellPy = density === 'compact' ? 'py-1.5' : 'py-2.5'
+  const headPy = density === 'compact' ? 'py-2' : 'py-2.5'
 
   return (
-    <div className={cn('w-full overflow-auto', className)}>
-      <table className="w-full border-collapse text-sm">
+    <div
+      className={cn(
+        'w-full overflow-auto',
+        bordered && 'rounded-lg border border-border',
+        className,
+      )}
+    >
+      <table className="w-full border-collapse text-[13px] text-foreground">
         <thead>
-          <tr className="border-b border-border">
-            {columns.map((col) => (
-              <th
-                key={String(col.key)}
-                className={cn(
-                  'px-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground',
-                  py,
-                  col.numeric ? 'text-right' : 'text-left',
-                  col.sortable && 'cursor-pointer select-none hover:text-foreground',
-                  bordered && 'border-r border-border last:border-r-0',
-                )}
-                onClick={col.sortable ? () => handleSort(String(col.key)) : undefined}
-              >
-                <span className="inline-flex items-center gap-1">
-                  {col.header}
-                  {col.sortable && (
-                    <SortIcon sortKey={String(col.key)} activeKey={sortKey} dir={sortDir} />
+          <tr className="border-b border-border bg-muted">
+            {columns.map((col) => {
+              const isActive = sort?.id === col.id
+              const isNumeric = col.numeric || col.align === 'right'
+              return (
+                <th
+                  key={col.id}
+                  style={{ width: col.width, textAlign: col.align }}
+                  className={cn(
+                    'px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap',
+                    headPy,
+                    !col.align && (isNumeric ? 'text-right' : 'text-left'),
+                    col.sortable && 'cursor-pointer select-none hover:text-foreground',
+                    stickyHeader && 'sticky top-0 z-10 bg-muted',
                   )}
-                </span>
-              </th>
-            ))}
+                  data-sort={isActive ? sort?.dir : undefined}
+                  onClick={() => handleHeaderClick(col)}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <span>{col.header}</span>
+                    {col.sortable && (
+                      <span className={cn('text-[9px]', isActive ? 'text-foreground' : 'text-muted-foreground/50')}>
+                        {isActive ? (sort?.dir === 'asc' ? '▲' : '▼') : '▴▾'}
+                      </span>
+                    )}
+                  </span>
+                </th>
+              )
+            })}
           </tr>
         </thead>
         <tbody>
@@ -94,58 +121,52 @@ export function DataTable<T extends Record<string, unknown>>({
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-3 py-8 text-center text-sm text-muted-foreground"
+                className="px-3 py-6 text-center text-sm text-muted-foreground"
               >
-                {emptyMessage}
+                {empty}
               </td>
             </tr>
           ) : (
             sorted.map((row, i) => (
               <tr
-                key={i}
+                key={rowKey(row, i)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
-                  'border-b border-border last:border-b-0 transition-colors',
-                  onRowClick && 'cursor-pointer hover:bg-muted/50',
+                  'border-b border-border/60 last:border-b-0 transition-colors',
+                  hoverable && 'hover:bg-muted/30',
+                  onRowClick && 'cursor-pointer',
                 )}
               >
-                {columns.map((col) => (
-                  <td
-                    key={String(col.key)}
-                    className={cn(
-                      'px-3 text-[13px] text-foreground',
-                      py,
-                      col.numeric && 'text-right font-mono tabular-nums',
-                      bordered && 'border-r border-border last:border-r-0',
-                    )}
-                  >
-                    {col.render
-                      ? col.render(row)
-                      : (row[String(col.key)] as React.ReactNode) ?? (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                  </td>
-                ))}
+                {columns.map((col) => {
+                  const isNumeric = col.numeric || col.align === 'right'
+                  return (
+                    <td
+                      key={col.id}
+                      style={{ textAlign: col.align }}
+                      className={cn(
+                        'px-3',
+                        cellPy,
+                        !col.align && (isNumeric ? 'text-right font-mono tabular-nums' : ''),
+                      )}
+                    >
+                      {col.accessor
+                        ? col.accessor(row)
+                        : row[col.id] != null
+                          ? (row[col.id] as React.ReactNode)
+                          : <span className="text-muted-foreground">—</span>}
+                    </td>
+                  )
+                })}
               </tr>
             ))
           )}
         </tbody>
       </table>
+      {caption && (
+        <div className="border-t border-border bg-muted px-3 py-2.5 text-[11px] text-muted-foreground">
+          {caption}
+        </div>
+      )}
     </div>
   )
-}
-
-function SortIcon({
-  sortKey,
-  activeKey,
-  dir,
-}: {
-  sortKey: string
-  activeKey: string | null
-  dir: SortDir
-}) {
-  if (activeKey !== sortKey) return <ChevronsUpDown size={12} className="opacity-40" />
-  if (dir === 'asc') return <ChevronUp size={12} />
-  if (dir === 'desc') return <ChevronDown size={12} />
-  return <ChevronsUpDown size={12} className="opacity-40" />
 }

@@ -5,6 +5,7 @@ interface AvatarProps {
   src?: string
   name?: string
   size?: number
+  bg?: string
   className?: string
 }
 
@@ -30,7 +31,7 @@ function colorFor(name: string) {
   return SHADES[hash % SHADES.length]
 }
 
-export function Avatar({ src, name = '?', size = 32, className }: AvatarProps) {
+export function Avatar({ src, name = '?', size = 32, bg, className }: AvatarProps) {
   return (
     <span
       className={cn('inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden font-medium text-white', className)}
@@ -38,7 +39,7 @@ export function Avatar({ src, name = '?', size = 32, className }: AvatarProps) {
         width: size,
         height: size,
         fontSize: Math.round(size * 0.42),
-        background: src ? undefined : colorFor(name),
+        background: src ? undefined : (bg ?? colorFor(name)),
         border: '1px solid color-mix(in oklch, var(--foreground) 6%, transparent)',
       }}
       aria-label={name}

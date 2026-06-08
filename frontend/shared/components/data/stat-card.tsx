@@ -41,7 +41,10 @@ export function StatCard({
       </div>
 
       <div className="flex items-baseline gap-1.5">
-        <span className="font-serif text-[32px] font-medium leading-none tabular-nums tracking-tight text-foreground">
+        <span
+          className="text-[32px] font-medium leading-none tabular-nums tracking-tight text-foreground"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
           {value}
         </span>
         {unit && (

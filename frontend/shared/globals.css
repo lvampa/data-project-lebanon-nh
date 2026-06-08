@@ -124,3 +124,12 @@
     @apply font-sans;
   }
 }
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer { animation: none !important; }
+}

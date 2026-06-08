@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter, Source_Serif_4 } from 'next/font/google'
 import './globals.css'
-import { Nav } from '@/components/nav'
+import { Sidebar } from '@/components/sidebar'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
 
@@ -24,9 +24,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${sourceSerif.variable} ${inter.className}`}>
-        <Nav />
-        <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+      <body className={`${inter.variable} ${sourceSerif.variable} ${inter.className} flex h-screen overflow-hidden bg-background`}>
+        <Sidebar />
+        <main className="flex flex-1 flex-col min-w-0 overflow-auto">
+          <div className="flex-1 px-6 py-6">
+            {children}
+          </div>
+        </main>
       </body>
     </html>
   )

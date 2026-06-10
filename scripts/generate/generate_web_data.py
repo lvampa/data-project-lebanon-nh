@@ -1,16 +1,17 @@
 """Generate static JSON data files for the Next.js frontend.
 
 Run from the repo root:
-    uv run python scripts/generate_web_data.py
+    uv run python scripts/generate/generate_web_data.py
 
-Writes to web/public/data/:
+Writes to frontend/web/public/data/:
     stats.json      — totals, by-type counts, by-weekday counts
     incidents.json  — most recent 2000 incidents
     addresses.json  — geocoded incident locations with counts
     staff.json      — city staff (police, fire, clerk, council)
+    properties.json — property assessment data
 """
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import logfire
@@ -23,7 +24,7 @@ from postgres.models.city_staff import CityStaff
 from postgres.models.log_entry import LogEntry
 from postgres.models.property import Property
 
-OUT_DIR = Path(__file__).parent.parent / "web" / "public" / "data"
+OUT_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "web" / "public" / "data"
 
 _DAYS = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat"}
 
@@ -111,9 +112,15 @@ def format_stats(by_type_rows: list, by_weekday_rows: list, total: int) -> dict:
     }
 
 
+def _json_default(obj: object) -> str:
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    raise TypeError(f"Not serializable: {type(obj)}")
+
+
 def _write(filename: str, data: object) -> None:
     path = OUT_DIR / filename
-    path.write_text(json.dumps(data, default=str), encoding="utf-8")
+    path.write_text(json.dumps(data, default=_json_default, indent=2), encoding="utf-8")
     logfire.info(
         "wrote {filename}",
         filename=filename,

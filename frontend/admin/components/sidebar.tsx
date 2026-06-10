@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Activity, BarChart2, MapPin, Tag, Building2 } from 'lucide-react'
+import { Activity, BarChart2, MapPin, Tag, Building2, Search } from 'lucide-react'
 import { cn } from '@project/ui/lib/utils'
 
 const SECTIONS = [
   {
     heading: 'Operations',
     items: [
+      { href: '/search',    label: 'Search',    icon: Search    },
       { href: '/incidents', label: 'Incidents', icon: Activity },
       { href: '/stats',     label: 'Stats',     icon: BarChart2 },
     ],

@@ -6,6 +6,7 @@ import type {
   AddressRecord,
   CategoryRecord,
   LlcsResponse,
+  SearchResponse,
 } from './types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
@@ -66,4 +67,10 @@ export async function updateLlcStatus(id: number, status: string): Promise<void>
     body: JSON.stringify({ lookup_status: status }),
   })
   if (!res.ok) throw new Error(`Failed to update LLC ${id} status: ${res.status}`)
+}
+
+export async function fetchSearch(q: string): Promise<SearchResponse> {
+  const url = new URL(`${API_BASE}/api/search`)
+  url.searchParams.set('q', q)
+  return apiFetch<SearchResponse>(url)
 }

@@ -56,3 +56,16 @@ export interface LlcsResponse {
   total: number
   items: Llc[]
 }
+
+export interface SearchResult {
+  id: number
+  entity_type: string
+  score: number
+  data: Record<string, unknown>
+}
+
+export interface SearchResponse {
+  query: string
+  normalized_query: string | null
+  results: Record<string, SearchResult[]>
+}

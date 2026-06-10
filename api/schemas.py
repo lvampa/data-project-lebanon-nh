@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 from pydantic import BaseModel
 
 
@@ -113,3 +113,16 @@ class LlcsResponse(BaseModel):
 
 class LlcStatusUpdate(BaseModel):
     lookup_status: Literal["pending", "in_progress", "complete", "error", "skipped"]
+
+
+class SearchResult(BaseModel):
+    id: int
+    entity_type: str
+    score: float
+    data: dict[str, Any]
+
+
+class SearchResponse(BaseModel):
+    query: str
+    normalized_query: str | None
+    results: dict[str, list[SearchResult]]

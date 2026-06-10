@@ -22,7 +22,7 @@ x-airflow-common:
     POSTGRES_DB: ${POSTGRES_DB:-app}
   volumes:
     &airflow-volumes
-    - ./scrapers/dags:/opt/airflow/dags
+    - ./dags:/opt/airflow/dags
     - ./scrapers:/opt/project/scrapers
     - ./shared:/opt/project/shared
     - airflow_logs:/opt/airflow/logs

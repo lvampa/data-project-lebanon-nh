@@ -8,7 +8,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "→ Generating report..."
 cd "$REPO_ROOT"
-uv run python scripts/generate/generate_web_data.py
+cargo run -p report-gen --release -- \
+  --output-dir "$REPO_ROOT/frontend/web/public/data"
 
 echo "→ Committing public/data/..."
 git add frontend/web/public/data/

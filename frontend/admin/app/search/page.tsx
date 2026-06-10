@@ -66,6 +66,7 @@ function ResultSection({ label, results }: { label: string; results: SearchResul
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
+  const [submittedQuery, setSubmittedQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [response, setResponse] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -73,12 +74,14 @@ export default function SearchPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!query.trim()) return
+    setSubmittedQuery(query.trim())
     setLoading(true)
     setError(null)
     try {
       const data = await fetchSearch(query.trim())
       setResponse(data)
-    } catch {
+    } catch (err) {
+      console.error(err)
       setError('Search failed. Is the API running?')
     } finally {
       setLoading(false)
@@ -101,6 +104,7 @@ export default function SearchPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search"
             placeholder="Search address, person, or keyword…"
             className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-[13px] placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
@@ -114,7 +118,7 @@ export default function SearchPage() {
         </button>
       </form>
 
-      {response?.normalized_query && response.normalized_query !== query && (
+      {response?.normalized_query && response.normalized_query !== submittedQuery && (
         <p className="mb-4 text-[12px] text-muted-foreground">
           Showing results for <span className="font-medium">{response.normalized_query}</span>
         </p>

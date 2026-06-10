@@ -172,7 +172,7 @@ def build_budget_capital_project_doc(row) -> dict:
 def sync_index(es: Elasticsearch, index: str, rows: list, build_fn) -> int:
     if not rows:
         return 0
-    actions = (
+    actions = [
         {
             "_op_type": "index",
             "_index": index,
@@ -180,9 +180,9 @@ def sync_index(es: Elasticsearch, index: str, rows: list, build_fn) -> int:
             "_source": build_fn(row),
         }
         for row in rows
-    )
+    ]
     bulk(es, actions)
-    return len(rows)
+    return len(actions)
 
 
 def main() -> None:

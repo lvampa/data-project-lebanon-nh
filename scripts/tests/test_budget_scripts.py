@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.download_budget_pdfs import extract_text, output_path
+from scripts.scrape.download_budget_pdfs import extract_text, output_path
 
 
 # --- output_path ---
@@ -45,7 +45,7 @@ def test_extract_text_joins_pages(tmp_path):
 
 from unittest.mock import MagicMock
 
-from scripts.import_budget_data import (
+from scripts.ingest.import_budget_data import (
     parse_budget_data,
     upsert_capital_projects,
     upsert_line_items,

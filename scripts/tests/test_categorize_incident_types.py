@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 # --- fetch_uncategorized ---
 
-from scripts.export_incident_types import fetch_uncategorized
+from scripts.export.export_incident_types import fetch_uncategorized
 
 
 def test_fetch_uncategorized_returns_list():
@@ -28,7 +28,7 @@ def test_fetch_uncategorized_returns_empty_when_no_rows():
     session.execute.return_value.scalars.return_value.all.return_value = []
     assert fetch_uncategorized(session) == []
 
-from scripts.import_incident_categories import parse_categories, upsert_categories
+from scripts.ingest.import_incident_categories import parse_categories, upsert_categories
 
 VALID_JSON = '[{"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}, {"incident_type": "MV Accident", "category": "Traffic", "subcategory": "Accident"}]'
 MISSING_SUBCATEGORY_JSON = '[{"incident_type": "FD Alarm", "category": "Fire"}]'

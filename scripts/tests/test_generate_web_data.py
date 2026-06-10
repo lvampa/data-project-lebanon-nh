@@ -1,7 +1,7 @@
 import pytest
 from decimal import Decimal
 
-from scripts.generate_web_data import (
+from scripts.generate.generate_web_data import (
     format_incidents,
     format_stats,
     format_addresses,

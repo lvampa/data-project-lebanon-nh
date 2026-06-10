@@ -1,5 +1,5 @@
 from datetime import datetime
-from scripts.scrape_civicclerk import parse_event, parse_file, extract_text_from_pdf
+from scripts.scrape.scrape_civicclerk import parse_event, parse_file, extract_text_from_pdf
 
 
 EVENT_JSON = {

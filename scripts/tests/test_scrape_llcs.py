@@ -1,5 +1,5 @@
 import pytest
-from scripts.scrape_llcs import parse_llc_detail
+from scripts.scrape.scrape_llcs import parse_llc_detail
 
 # Minimal fixture matching real NH SOS detail page structure
 DETAIL_HTML = """

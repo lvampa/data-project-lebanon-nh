@@ -113,7 +113,7 @@ pub async fn fetch_stats(pool: &PgPool) -> Result<Stats> {
 
     let by_weekday_rows = sqlx::query_as::<_, (f64, i64)>(
         r"
-        SELECT EXTRACT(DOW FROM reported_at) AS dow, COUNT(*) AS count
+        SELECT EXTRACT(DOW FROM reported_at)::FLOAT8 AS dow, COUNT(*) AS count
         FROM log_entries
         WHERE parse_error = false AND reported_at IS NOT NULL
         GROUP BY dow

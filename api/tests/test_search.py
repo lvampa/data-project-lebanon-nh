@@ -30,6 +30,14 @@ def clear_overrides():
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def reset_es_singleton():
+    import api.routers.search as search_mod
+    search_mod._es = None
+    yield
+    search_mod._es = None
+
+
 def test_search_returns_grouped_results():
     mock_db = MagicMock()
     mock_db.execute.return_value.scalar_one_or_none.return_value = None  # no normalization
@@ -43,8 +51,6 @@ def test_search_returns_grouped_results():
         es_instance = MagicMock()
         MockES.return_value = es_instance
         es_instance.msearch.return_value = es_response
-        import api.routers.search as search_mod
-        search_mod._es = None
         app.dependency_overrides[get_db] = lambda: mock_db
         client = TestClient(app)
         resp = client.get("/api/search?q=304+Hanover+St")
@@ -67,8 +73,6 @@ def test_search_returns_empty_when_no_hits():
         es_instance = MagicMock()
         MockES.return_value = es_instance
         es_instance.msearch.return_value = es_response
-        import api.routers.search as search_mod
-        search_mod._es = None
         app.dependency_overrides[get_db] = lambda: mock_db
         client = TestClient(app)
         resp = client.get("/api/search?q=nothing")
@@ -92,8 +96,6 @@ def test_search_uses_normalized_query_when_address_match():
         es_instance = MagicMock()
         MockES.return_value = es_instance
         es_instance.msearch.return_value = es_response
-        import api.routers.search as search_mod
-        search_mod._es = None
         app.dependency_overrides[get_db] = lambda: mock_db
         client = TestClient(app)
         resp = client.get("/api/search?q=304+Hanover+St")
@@ -113,8 +115,6 @@ def test_search_normalized_query_is_none_when_no_match():
         es_instance = MagicMock()
         MockES.return_value = es_instance
         es_instance.msearch.return_value = es_response
-        import api.routers.search as search_mod
-        search_mod._es = None
         app.dependency_overrides[get_db] = lambda: mock_db
         client = TestClient(app)
         resp = client.get("/api/search?q=unknown place")

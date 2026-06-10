@@ -53,10 +53,10 @@ def search(
     normalized = _normalize_query(q, db)
     search_query = normalized or q
 
-    body = []
+    searches = []
     for index in ES_INDICES:
-        body.append({"index": index})
-        body.append({
+        searches.append({"index": index})
+        searches.append({
             "query": {
                 "multi_match": {
                     "query": search_query,
@@ -75,7 +75,7 @@ def search(
             "size": limit,
         })
 
-    resp = es.msearch(body=body)
+    resp = es.msearch(searches=searches)
 
     results: dict[str, list[SearchResult]] = {idx: [] for idx in ES_INDICES}
     for index, response in zip(ES_INDICES, resp["responses"]):
@@ -84,7 +84,7 @@ def search(
                 SearchResult(
                     id=int(hit["_id"]),
                     entity_type=index,
-                    score=hit["_score"] or 0.0,
+                    score=hit["_score"] if hit["_score"] is not None else 0.0,
                     data=hit["_source"],
                 )
             )

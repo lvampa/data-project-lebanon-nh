@@ -1,0 +1,3 @@
+[workspace]
+members = ["tools/report-gen"]
+resolver = "2"

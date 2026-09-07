@@ -1,3 +1,5 @@
+import type { Incident } from '@project/ui/lib/types'
+
 export type { Incident, TypeStat, WeekdayStat } from '@project/ui/lib/types'
 
 export interface IncidentsResponse {

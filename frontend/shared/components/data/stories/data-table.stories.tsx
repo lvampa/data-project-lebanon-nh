@@ -1,14 +1,12 @@
 import React from 'react'
-import type { Meta, StoryObj } from '@storybook/react-vite'
-import { DataTable, type DataTableColumn } from './data-table'
-import { Sparkline } from './sparkline'
-import { Badge } from '../ui/badge'
+import type { Story, StoryDefault } from '@ladle/react'
+import { DataTable, type DataTableColumn } from '../data-table'
+import { Sparkline } from '../sparkline'
+import { Badge } from '../../ui/badge'
 
-const meta: Meta = {
+export default {
   title: 'Data/DataTable',
-  parameters: { layout: 'padded' },
-}
-export default meta
+} satisfies StoryDefault
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -138,63 +136,57 @@ const INDICATOR_COLUMNS: DataTableColumn<Indicator>[] = [
 /** Full indicators table — demonstrates all column features: sortable, numeric,
  *  sortBy extractor, accessor renderer, fixed widths, delta colors, sparklines,
  *  and status badges. */
-export const Indicators: StoryObj = {
-  render: () => (
-    <DataTable
-      columns={INDICATOR_COLUMNS}
-      rows={INDICATORS}
-      rowKey={(r) => r.code}
-      caption="Lebanon, NH · Municipal & regional indicators · Source: LDP v3.2"
-    />
-  ),
-}
+export const Indicators: Story = () => (
+  <DataTable
+    columns={INDICATOR_COLUMNS}
+    rows={INDICATORS}
+    rowKey={(r) => r.code}
+    caption="Lebanon, NH · Municipal & regional indicators · Source: LDP v3.2"
+  />
+)
 
-export const IndicatorsCompact: StoryObj = {
-  render: () => (
-    <DataTable
-      columns={INDICATOR_COLUMNS}
-      rows={INDICATORS}
-      rowKey={(r) => r.code}
-      density="compact"
-    />
-  ),
-}
+export const IndicatorsCompact: Story = () => (
+  <DataTable
+    columns={INDICATOR_COLUMNS}
+    rows={INDICATORS}
+    rowKey={(r) => r.code}
+    density="compact"
+  />
+)
 
 /** Each column prop demonstrated explicitly. */
-export const AllColumnOptions: StoryObj = {
-  render: () => {
-    type Row = { id: string; label: string; count: number; change: number; note: string | null }
-    const rows: Row[] = [
-      { id: 'A', label: 'Police',     count: 151,  change:  3.2,  note: 'Verified' },
-      { id: 'B', label: 'Fire',       count: 38,   change: -1.4,  note: 'Provisional' },
-      { id: 'C', label: 'Medical',    count: 214,  change:  8.7,  note: 'Verified' },
-      { id: 'D', label: 'Traffic',    count: 96,   change: -0.5,  note: null },
-    ]
-    const cols: DataTableColumn<Row>[] = [
-      // plain text, sortable
-      { id: 'id',     header: 'ID',     width: 60,  sortable: true },
-      // accessor — custom render
-      { id: 'label',  header: 'Category', sortable: true,
-        accessor: (r) => <span className="font-medium">{r.label}</span> },
-      // numeric — right-aligned mono tabular-nums
-      { id: 'count',  header: 'Count',  width: 80,  numeric: true, sortable: true },
-      // sortBy — sort by raw number even though display is formatted
-      { id: 'change', header: 'Change', width: 100, numeric: true, sortable: true,
-        sortBy: (r) => r.change,
-        accessor: (r) => <Delta value={r.change} /> },
-      // accessor + nullable
-      { id: 'note',   header: 'Status', width: 120,
-        accessor: (r) => r.note ? <StatusBadge status={r.note} /> : <span className="text-muted-foreground">—</span> },
-    ]
-    return (
-      <DataTable
-        columns={cols}
-        rows={rows}
-        rowKey={(r) => r.id}
-        caption="Incident categories · Lebanon, NH · YTD 2026"
-      />
-    )
-  },
+export const AllColumnOptions: Story = () => {
+  type Row = { id: string; label: string; count: number; change: number; note: string | null }
+  const rows: Row[] = [
+    { id: 'A', label: 'Police',     count: 151,  change:  3.2,  note: 'Verified' },
+    { id: 'B', label: 'Fire',       count: 38,   change: -1.4,  note: 'Provisional' },
+    { id: 'C', label: 'Medical',    count: 214,  change:  8.7,  note: 'Verified' },
+    { id: 'D', label: 'Traffic',    count: 96,   change: -0.5,  note: null },
+  ]
+  const cols: DataTableColumn<Row>[] = [
+    // plain text, sortable
+    { id: 'id',     header: 'ID',     width: 60,  sortable: true },
+    // accessor — custom render
+    { id: 'label',  header: 'Category', sortable: true,
+      accessor: (r) => <span className="font-medium">{r.label}</span> },
+    // numeric — right-aligned mono tabular-nums
+    { id: 'count',  header: 'Count',  width: 80,  numeric: true, sortable: true },
+    // sortBy — sort by raw number even though display is formatted
+    { id: 'change', header: 'Change', width: 100, numeric: true, sortable: true,
+      sortBy: (r) => r.change,
+      accessor: (r) => <Delta value={r.change} /> },
+    // accessor + nullable
+    { id: 'note',   header: 'Status', width: 120,
+      accessor: (r) => r.note ? <StatusBadge status={r.note} /> : <span className="text-muted-foreground">—</span> },
+  ]
+  return (
+    <DataTable
+      columns={cols}
+      rows={rows}
+      rowKey={(r) => r.id}
+      caption="Incident categories · Lebanon, NH · YTD 2026"
+    />
+  )
 }
 
 // ─── Existing basic stories ──────────────────────────────────────────────────
@@ -215,25 +207,15 @@ const INCIDENT_COLS = [
   { id: 'disposition',   header: 'Disposition' },
 ]
 
-export const Default: StoryObj = {
-  render: () => <DataTable columns={INCIDENT_COLS} rows={INCIDENTS} rowKey={(r) => r.case_number} />,
-}
-export const Compact: StoryObj = {
-  render: () => <DataTable columns={INCIDENT_COLS} rows={INCIDENTS} density="compact" rowKey={(r) => r.case_number} />,
-}
-export const Unborderd: StoryObj = {
-  render: () => <DataTable columns={INCIDENT_COLS} rows={INCIDENTS} bordered={false} rowKey={(r) => r.case_number} />,
-}
-export const Clickable: StoryObj = {
-  render: () => (
-    <DataTable
-      columns={INCIDENT_COLS}
-      rows={INCIDENTS}
-      rowKey={(r) => r.case_number}
-      onRowClick={(row) => alert(`Selected: ${row.case_number}`)}
-    />
-  ),
-}
-export const Empty: StoryObj = {
-  render: () => <DataTable columns={INCIDENT_COLS} rows={[]} empty="No incidents match the current filters." />,
-}
+export const Default: Story = () => <DataTable columns={INCIDENT_COLS} rows={INCIDENTS} rowKey={(r) => r.case_number} />
+export const Compact: Story = () => <DataTable columns={INCIDENT_COLS} rows={INCIDENTS} density="compact" rowKey={(r) => r.case_number} />
+export const Unborderd: Story = () => <DataTable columns={INCIDENT_COLS} rows={INCIDENTS} bordered={false} rowKey={(r) => r.case_number} />
+export const Clickable: Story = () => (
+  <DataTable
+    columns={INCIDENT_COLS}
+    rows={INCIDENTS}
+    rowKey={(r) => r.case_number}
+    onRowClick={(row) => alert(`Selected: ${row.case_number}`)}
+  />
+)
+export const Empty: Story = () => <DataTable columns={INCIDENT_COLS} rows={[]} empty="No incidents match the current filters." />

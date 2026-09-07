@@ -1,22 +1,28 @@
-import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Checkbox } from './checkbox'
+import type { ComponentProps } from 'react'
+import type { Story, StoryDefault } from '@ladle/react'
+import { Checkbox } from '../checkbox'
 
-const meta: Meta<typeof Checkbox> = {
-  component: Checkbox,
+export default {
   title: 'Forms/Checkbox',
-}
-export default meta
+} satisfies StoryDefault
 
-type Story = StoryObj<typeof Checkbox>
+type CheckboxProps = ComponentProps<typeof Checkbox>
 
-export const Default: Story = { args: { label: 'Show officer names' } }
-export const Checked: Story = { args: { label: 'Verified records only', defaultChecked: true } }
-export const Indeterminate: Story = { args: { label: 'Select all', indeterminate: true } }
-export const WithDescription: Story = {
-  args: {
-    label: 'Include historical data',
-    description: 'Load incidents older than 90 days',
-    defaultChecked: false,
-  },
+export const Default: Story<CheckboxProps> = (props) => <Checkbox {...props} />
+Default.args = { label: 'Show officer names' }
+
+export const Checked: Story<CheckboxProps> = (props) => <Checkbox {...props} />
+Checked.args = { label: 'Verified records only', defaultChecked: true }
+
+export const Indeterminate: Story<CheckboxProps> = (props) => <Checkbox {...props} />
+Indeterminate.args = { label: 'Select all', indeterminate: true }
+
+export const WithDescription: Story<CheckboxProps> = (props) => <Checkbox {...props} />
+WithDescription.args = {
+  label: 'Include historical data',
+  description: 'Load incidents older than 90 days',
+  defaultChecked: false,
 }
-export const Disabled: Story = { args: { label: 'Admin only', disabled: true, defaultChecked: true } }
+
+export const Disabled: Story<CheckboxProps> = (props) => <Checkbox {...props} />
+Disabled.args = { label: 'Admin only', disabled: true, defaultChecked: true }

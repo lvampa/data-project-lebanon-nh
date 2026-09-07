@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from '@storybook/react-vite'
-import { MapControls } from './MapControls'
+import type { ComponentProps } from 'react'
+import type { Story, StoryDefault } from '@ladle/react'
+import { MapControls } from '../MapControls'
 
-const meta: Meta<typeof MapControls> = {
-  component: MapControls,
+export default {
   title: 'Map/Controls',
   decorators: [
     (Story) => (
@@ -17,50 +17,45 @@ const meta: Meta<typeof MapControls> = {
       </div>
     ),
   ],
-}
-export default meta
+} satisfies StoryDefault
 
-type Story = StoryObj<typeof MapControls>
+type MapControlsProps = ComponentProps<typeof MapControls>
 
-export const Default: Story = {
-  args: {
-    onZoomIn: () => {},
-    onZoomOut: () => {},
-    onRecenter: () => {},
-    onLocate: () => {},
-    onFullscreen: () => {},
-  },
+export const Default: Story<MapControlsProps> = (props) => <MapControls {...props} />
+Default.args = {
+  onZoomIn: () => {},
+  onZoomOut: () => {},
+  onRecenter: () => {},
+  onLocate: () => {},
+  onFullscreen: () => {},
 }
 
-export const LocateActive: Story = {
-  args: {
-    onZoomIn: () => {},
-    onZoomOut: () => {},
-    onRecenter: () => {},
-    onLocate: () => {},
-    onFullscreen: () => {},
-    locateActive: true,
-  },
+export const LocateActive: Story<MapControlsProps> = (props) => <MapControls {...props} />
+LocateActive.args = {
+  onZoomIn: () => {},
+  onZoomOut: () => {},
+  onRecenter: () => {},
+  onLocate: () => {},
+  onFullscreen: () => {},
+  locateActive: true,
 }
 
-export const FullscreenActive: Story = {
-  args: {
-    onZoomIn: () => {},
-    onZoomOut: () => {},
-    onRecenter: () => {},
-    onLocate: () => {},
-    onFullscreen: () => {},
-    fullscreenActive: true,
-  },
+export const FullscreenActive: Story<MapControlsProps> = (props) => <MapControls {...props} />
+FullscreenActive.args = {
+  onZoomIn: () => {},
+  onZoomOut: () => {},
+  onRecenter: () => {},
+  onLocate: () => {},
+  onFullscreen: () => {},
+  fullscreenActive: true,
 }
 
-export const ZoomInDisabled: Story = {
-  args: {
-    onZoomIn: () => {},
-    onZoomOut: () => {},
-    onRecenter: () => {},
-    onLocate: () => {},
-    onFullscreen: () => {},
-    zoomInDisabled: true,
-  },
+export const ZoomInDisabled: Story<MapControlsProps> = (props) => <MapControls {...props} />
+ZoomInDisabled.args = {
+  onZoomIn: () => {},
+  onZoomOut: () => {},
+  onRecenter: () => {},
+  onLocate: () => {},
+  onFullscreen: () => {},
+  zoomInDisabled: true,
 }

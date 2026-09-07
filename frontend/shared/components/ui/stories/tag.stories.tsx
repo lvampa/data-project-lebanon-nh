@@ -1,23 +1,24 @@
-import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Tag } from './tag'
+import type { ComponentProps } from 'react'
+import type { Story, StoryDefault } from '@ladle/react'
+import { Tag } from '../tag'
 
-const meta: Meta<typeof Tag> = {
-  component: Tag,
+export default {
   title: 'Feedback/Tag',
-}
-export default meta
+} satisfies StoryDefault
 
-type Story = StoryObj<typeof Tag>
+type TagProps = ComponentProps<typeof Tag>
 
-export const Default: Story = { args: { children: 'Lebanon, NH' } }
-export const Removable: Story = { args: { children: 'Police', onRemove: () => {} } }
-export const AllVariants: Story = {
-  render: () => (
-    <div className="flex flex-wrap gap-2">
-      <Tag>Fire</Tag>
-      <Tag>Medical</Tag>
-      <Tag onRemove={() => {}}>Traffic</Tag>
-      <Tag onRemove={() => {}}>Police</Tag>
-    </div>
-  ),
-}
+export const Default: Story<TagProps> = (props) => <Tag {...props} />
+Default.args = { children: 'Lebanon, NH' }
+
+export const Removable: Story<TagProps> = (props) => <Tag {...props} />
+Removable.args = { children: 'Police', onRemove: () => {} }
+
+export const AllVariants: Story = () => (
+  <div className="flex flex-wrap gap-2">
+    <Tag>Fire</Tag>
+    <Tag>Medical</Tag>
+    <Tag onRemove={() => {}}>Traffic</Tag>
+    <Tag onRemove={() => {}}>Police</Tag>
+  </div>
+)

@@ -1,5 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/react-vite'
-import { Tabs } from './tabs'
+import type { ComponentProps } from 'react'
+import type { Story, StoryDefault } from '@ladle/react'
+import { Tabs } from '../tabs'
 
 const ITEMS = [
   { id: 'overview', label: 'Overview', count: 511 },
@@ -8,26 +9,27 @@ const ITEMS = [
   { id: 'police', label: 'Police', count: 151 },
 ]
 
-const meta: Meta<typeof Tabs> = {
-  component: Tabs,
+export default {
   title: 'Navigation/Tabs',
   argTypes: {
-    variant: { control: 'select', options: ['underline', 'pill'] },
+    variant: { control: { type: 'select' }, options: ['underline', 'pill'] },
   },
-}
-export default meta
+} satisfies StoryDefault<TabsProps>
 
-type Story = StoryObj<typeof Tabs>
+type TabsProps = ComponentProps<typeof Tabs>
 
-export const Underline: Story = { args: { items: ITEMS, defaultValue: 'overview', variant: 'underline' } }
-export const Pill: Story = { args: { items: ITEMS, defaultValue: 'overview', variant: 'pill' } }
-export const Simple: Story = {
-  args: {
-    items: [
-      { id: 'incidents', label: 'Incidents' },
-      { id: 'properties', label: 'Properties' },
-      { id: 'staff', label: 'City Staff' },
-    ],
-    defaultValue: 'incidents',
-  },
+export const Underline: Story<TabsProps> = (props) => <Tabs {...props} />
+Underline.args = { items: ITEMS, defaultValue: 'overview', variant: 'underline' }
+
+export const Pill: Story<TabsProps> = (props) => <Tabs {...props} />
+Pill.args = { items: ITEMS, defaultValue: 'overview', variant: 'pill' }
+
+export const Simple: Story<TabsProps> = (props) => <Tabs {...props} />
+Simple.args = {
+  items: [
+    { id: 'incidents', label: 'Incidents' },
+    { id: 'properties', label: 'Properties' },
+    { id: 'staff', label: 'City Staff' },
+  ],
+  defaultValue: 'incidents',
 }

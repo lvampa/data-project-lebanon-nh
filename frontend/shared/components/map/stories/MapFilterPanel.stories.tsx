@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from '@storybook/react-vite'
-import { MapFilterPanel } from './MapFilterPanel'
+import type { ComponentProps } from 'react'
+import type { Story, StoryDefault } from '@ladle/react'
+import { MapFilterPanel } from '../MapFilterPanel'
 
-const meta: Meta<typeof MapFilterPanel> = {
-  component: MapFilterPanel,
+export default {
   title: 'Map/Filter Panel',
   decorators: [
     (Story) => (
@@ -17,36 +17,32 @@ const meta: Meta<typeof MapFilterPanel> = {
       </div>
     ),
   ],
-}
-export default meta
+} satisfies StoryDefault
 
-type Story = StoryObj<typeof MapFilterPanel>
+type MapFilterPanelProps = ComponentProps<typeof MapFilterPanel>
 
-export const Expanded: Story = {
-  args: {
-    defaultCollapsed: false,
-    onReset: () => {},
-    onApply: () => {},
-  },
+export const Expanded: Story<MapFilterPanelProps> = (props) => <MapFilterPanel {...props} />
+Expanded.args = {
+  defaultCollapsed: false,
+  onReset: () => {},
+  onApply: () => {},
 }
 
-export const Collapsed: Story = {
-  args: {
-    defaultCollapsed: true,
-  },
+export const Collapsed: Story<MapFilterPanelProps> = (props) => <MapFilterPanel {...props} />
+Collapsed.args = {
+  defaultCollapsed: true,
 }
 
-export const AllEnabled: Story = {
-  args: {
-    defaultCollapsed: false,
-    categories: [
-      { label: 'Fire',    count: 38,  enabled: true, colorVar: '--chart-1' },
-      { label: 'Medical', count: 214, enabled: true, colorVar: '--chart-2' },
-      { label: 'Traffic', count: 96,  enabled: true, colorVar: '--chart-3' },
-      { label: 'Utility', count: 12,  enabled: true, colorVar: '--chart-4' },
-      { label: 'Police',  count: 151, enabled: true, colorVar: '--chart-5' },
-    ],
-    onReset: () => {},
-    onApply: () => {},
-  },
+export const AllEnabled: Story<MapFilterPanelProps> = (props) => <MapFilterPanel {...props} />
+AllEnabled.args = {
+  defaultCollapsed: false,
+  categories: [
+    { label: 'Fire',    count: 38,  enabled: true, colorVar: '--chart-1' },
+    { label: 'Medical', count: 214, enabled: true, colorVar: '--chart-2' },
+    { label: 'Traffic', count: 96,  enabled: true, colorVar: '--chart-3' },
+    { label: 'Utility', count: 12,  enabled: true, colorVar: '--chart-4' },
+    { label: 'Police',  count: 151, enabled: true, colorVar: '--chart-5' },
+  ],
+  onReset: () => {},
+  onApply: () => {},
 }

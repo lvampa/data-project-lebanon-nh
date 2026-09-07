@@ -19,6 +19,4 @@ class Officer(Base):
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     scraped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    __table_args__ = (
-        Index("idx_officers_division", "division"),
-    )
+    __table_args__ = (Index("idx_officers_division", "division"),)

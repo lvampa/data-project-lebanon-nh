@@ -1,13 +1,15 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
+
 from fastapi import APIRouter, Depends
+from postgres.models.address_normalization import AddressNormalization
+from postgres.models.log_entry import LogEntry
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
 from api.deps import get_db
 from api.geocoding import geocode_nominatim
 from api.schemas import AddressRecord, AddressResult, AddressUpdate
-from postgres.models.address_normalization import AddressNormalization
-from postgres.models.log_entry import LogEntry
 
 router = APIRouter()
 
@@ -60,7 +62,7 @@ def update_address(
         if lat is not None:
             geocoded_via = "nominatim"
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     existing = db.scalar(
         select(AddressNormalization).where(
             AddressNormalization.raw_address == raw_address

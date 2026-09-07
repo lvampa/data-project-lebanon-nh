@@ -1,6 +1,6 @@
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import patch
 
+import pytest
 from mongo.client import MongoDB
 
 

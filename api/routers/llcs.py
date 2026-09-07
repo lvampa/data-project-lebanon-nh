@@ -1,12 +1,12 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from postgres.models.llc import Llc as LlcModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
 from api.schemas import Llc, LlcsResponse, LlcStatusUpdate
-from postgres.models.llc import Llc as LlcModel
 
 router = APIRouter()
 

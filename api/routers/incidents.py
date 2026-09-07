@@ -1,11 +1,13 @@
 from datetime import date, timedelta
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query
+from postgres.models.log_entry import LogEntry
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+
 from api.deps import get_db
 from api.schemas import Incident, IncidentsResponse
-from postgres.models.log_entry import LogEntry
 
 router = APIRouter()
 

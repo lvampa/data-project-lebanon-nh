@@ -1,24 +1,22 @@
-from unittest.mock import MagicMock, patch
 from datetime import datetime
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from scripts.sync.sync_es import (
-    get_address_lookup,
-    build_property_doc,
-    build_incident_doc,
-    build_city_staff_doc,
-    build_officer_doc,
-    build_llc_doc,
-    build_planning_meeting_doc,
-    build_planning_document_doc,
-    build_budget_line_item_doc,
     build_budget_capital_project_doc,
+    build_budget_line_item_doc,
+    build_city_staff_doc,
+    build_incident_doc,
+    build_llc_doc,
+    build_officer_doc,
+    build_planning_document_doc,
+    build_planning_meeting_doc,
+    build_property_doc,
+    get_address_lookup,
     sync_index,
 )
 
-
 # --- get_address_lookup ---
+
 
 def test_get_address_lookup_returns_dict():
     session = MagicMock()
@@ -44,6 +42,7 @@ def test_get_address_lookup_empty():
 
 # --- build_property_doc ---
 
+
 def test_build_property_doc_uses_address_lookup():
     row = MagicMock()
     row.id = 1
@@ -55,7 +54,13 @@ def test_build_property_doc_uses_address_lookup():
     row.assessed_total = 450000
     row.year_built = 1985
 
-    lookup = {"304 HANOVER ST": {"normalized_address": "304 hanover st lebanon nh", "lat": 43.64, "lng": -72.25}}
+    lookup = {
+        "304 HANOVER ST": {
+            "normalized_address": "304 hanover st lebanon nh",
+            "lat": 43.64,
+            "lng": -72.25,
+        }
+    }
     doc = build_property_doc(row, lookup)
 
     assert doc["id"] == 1
@@ -86,6 +91,7 @@ def test_build_property_doc_fallback_when_no_lookup():
 
 # --- build_incident_doc ---
 
+
 def test_build_incident_doc_maps_fields():
     row = MagicMock()
     row.id = 10
@@ -108,6 +114,7 @@ def test_build_incident_doc_maps_fields():
 
 # --- build_city_staff_doc ---
 
+
 def test_build_city_staff_doc():
     row = MagicMock()
     row.id = 5
@@ -127,6 +134,7 @@ def test_build_city_staff_doc():
 
 # --- build_officer_doc ---
 
+
 def test_build_officer_doc():
     row = MagicMock()
     row.id = 7
@@ -142,6 +150,7 @@ def test_build_officer_doc():
 
 # --- build_llc_doc ---
 
+
 def test_build_llc_doc():
     row = MagicMock()
     row.id = 3
@@ -155,6 +164,7 @@ def test_build_llc_doc():
 
 
 # --- build_planning_meeting_doc ---
+
 
 def test_build_planning_meeting_doc_inherits_address_from_lookup():
     row = MagicMock()
@@ -175,6 +185,7 @@ def test_build_planning_meeting_doc_inherits_address_from_lookup():
 
 # --- build_planning_document_doc ---
 
+
 def test_build_planning_document_doc():
     row = MagicMock()
     row.id = 30
@@ -184,7 +195,13 @@ def test_build_planning_document_doc():
     row.file_type = "PDF"
     row.raw_text = "applicant requests variance at 304 hanover st"
 
-    meeting_lookup = {9001: {"normalized_address": "304 hanover st lebanon nh", "lat": 43.64, "lng": -72.25}}
+    meeting_lookup = {
+        9001: {
+            "normalized_address": "304 hanover st lebanon nh",
+            "lat": 43.64,
+            "lng": -72.25,
+        }
+    }
     doc = build_planning_document_doc(row, meeting_lookup)
 
     assert doc["entity_type"] == "planning_documents"
@@ -193,6 +210,7 @@ def test_build_planning_document_doc():
 
 
 # --- build_budget_line_item_doc ---
+
 
 def test_build_budget_line_item_doc():
     row = MagicMock()
@@ -211,6 +229,7 @@ def test_build_budget_line_item_doc():
 
 # --- build_budget_capital_project_doc ---
 
+
 def test_build_budget_capital_project_doc():
     row = MagicMock()
     row.id = 50
@@ -226,11 +245,14 @@ def test_build_budget_capital_project_doc():
 
 # --- sync_index ---
 
+
 def test_sync_index_calls_bulk():
     es = MagicMock()
 
     rows = [MagicMock(id=1), MagicMock(id=2)]
-    build_fn = lambda row: {"id": row.id, "entity_type": "test", "name": "foo"}
+
+    def build_fn(row):
+        return {"id": row.id, "entity_type": "test", "name": "foo"}
 
     with patch("scripts.sync.sync_es.bulk") as mock_bulk:
         mock_bulk.return_value = (2, [])

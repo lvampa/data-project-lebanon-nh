@@ -7,15 +7,15 @@ Run from repo root:
 Reads:  budget_documents rows where text_extracted = false
 Writes: scripts/data/budgets/{year}-{type}.txt
 """
+
 import urllib.request
 from pathlib import Path
 
 import logfire
 import pypdf
-from sqlalchemy import select
-
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
+from sqlalchemy import select
 
 DATA_DIR = Path(__file__).parent / "data" / "budgets"
 
@@ -38,9 +38,13 @@ def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     with SessionLocal() as session:
-        docs = session.execute(
-            select(BudgetDocument).where(BudgetDocument.text_extracted == False)  # noqa: E712
-        ).scalars().all()
+        docs = (
+            session.execute(
+                select(BudgetDocument).where(BudgetDocument.text_extracted == False)  # noqa: E712
+            )
+            .scalars()
+            .all()
+        )
 
         if not docs:
             logfire.info("all budget documents already extracted")

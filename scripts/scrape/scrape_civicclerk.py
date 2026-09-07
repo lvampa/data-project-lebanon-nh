@@ -5,11 +5,12 @@ Uses Playwright browser request context to bypass WAF that blocks plain HTTP cli
 The CivicClerk API (https://lebanonh.api.civicclerk.com/v1/) is public OData v4 but
 returns 404 to non-browser user-agents.
 """
-import io
+
 import argparse
 import asyncio
+import contextlib
+import io
 from datetime import UTC, datetime
-
 
 PORTAL_BASE = "https://lebanonh.portal.civicclerk.com"
 API_BASE = "https://lebanonh.api.civicclerk.com/v1"
@@ -20,10 +21,10 @@ def parse_event(data: dict, category_name: str) -> dict:
     raw_date = data.get("eventStartDate")
     meeting_date: datetime | None = None
     if raw_date:
-        try:
-            meeting_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).replace(tzinfo=None)
-        except ValueError:
-            pass
+        with contextlib.suppress(ValueError):
+            meeting_date = datetime.fromisoformat(
+                raw_date.replace("Z", "+00:00")
+            ).replace(tzinfo=None)
 
     status_obj = data.get("status") or {}
     event_id = data["id"]
@@ -33,7 +34,9 @@ def parse_event(data: dict, category_name: str) -> dict:
         "category": category_name,
         "meeting_date": meeting_date,
         "location": data.get("location"),
-        "status": status_obj.get("description") if isinstance(status_obj, dict) else None,
+        "status": status_obj.get("description")
+        if isinstance(status_obj, dict)
+        else None,
         "source_url": f"{PORTAL_BASE}/event/{event_id}",
     }
 
@@ -59,6 +62,7 @@ def extract_text_from_pdf(data: bytes) -> str | None:
         return None
     try:
         from pypdf import PdfReader
+
         reader = PdfReader(io.BytesIO(data))
         return "\n".join(page.extract_text() or "" for page in reader.pages) or None
     except Exception:
@@ -73,7 +77,9 @@ async def fetch_planning_category_id(request_ctx) -> tuple[int, str]:
         name = cat.get("name", "") or cat.get("title", "")
         if "planning" in name.lower():
             return cat["id"], name
-    raise RuntimeError(f"Planning Board category not found. Got: {[c.get('name') for c in categories]}")
+    raise RuntimeError(
+        f"Planning Board category not found. Got: {[c.get('name') for c in categories]}"
+    )
 
 
 async def fetch_events(request_ctx, group_id: int, limit: int) -> list[dict]:
@@ -104,13 +110,14 @@ async def fetch_events(request_ctx, group_id: int, limit: int) -> list[dict]:
 
 async def run(limit: int) -> None:
     from dotenv import load_dotenv
+
     load_dotenv()
 
-    from playwright.async_api import async_playwright
     import logfire
+    from playwright.async_api import async_playwright
     from postgres import SessionLocal
-    from postgres.models.planning_meeting import PlanningMeeting
     from postgres.models.planning_document import PlanningDocument
+    from postgres.models.planning_meeting import PlanningMeeting
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -144,7 +151,11 @@ async def run(limit: int) -> None:
                         .values(**meeting)
                         .on_conflict_do_update(
                             index_elements=["civicclerk_event_id"],
-                            set_={k: v for k, v in meeting.items() if k != "civicclerk_event_id"},
+                            set_={
+                                k: v
+                                for k, v in meeting.items()
+                                if k != "civicclerk_event_id"
+                            },
                         )
                     )
 
@@ -154,17 +165,27 @@ async def run(limit: int) -> None:
                         file_resp = await request_ctx.get(doc["download_url"])
                         raw_bytes = await file_resp.body()
                     except Exception as exc:
-                        logfire.warning("file download failed", file_id=doc["civicclerk_file_id"], error=str(exc))
+                        logfire.warning(
+                            "file download failed",
+                            file_id=doc["civicclerk_file_id"],
+                            error=str(exc),
+                        )
                         raw_bytes = b""
                     doc["raw_text"] = extract_text_from_pdf(raw_bytes)
                     doc["scraped_at"] = now
-                    with logfire.span("upsert document", file_id=doc["civicclerk_file_id"]):
+                    with logfire.span(
+                        "upsert document", file_id=doc["civicclerk_file_id"]
+                    ):
                         session.execute(
                             pg_insert(PlanningDocument)
                             .values(**doc)
                             .on_conflict_do_update(
                                 index_elements=["civicclerk_file_id"],
-                                set_={k: v for k, v in doc.items() if k != "civicclerk_file_id"},
+                                set_={
+                                    k: v
+                                    for k, v in doc.items()
+                                    if k != "civicclerk_file_id"
+                                },
                             )
                         )
 

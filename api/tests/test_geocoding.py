@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+
 from api.geocoding import geocode_nominatim
 
 

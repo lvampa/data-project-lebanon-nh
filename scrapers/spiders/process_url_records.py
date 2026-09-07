@@ -36,7 +36,9 @@ class ProcessUrlsSpider(scrapy.Spider):
         logfire.info("queued urls for processing", count=len(claimed), limit=self.limit)
         for doc in claimed:
             url_doc = UrlDocument(**doc)
-            yield Request(url_doc.canonical_url, cb_kwargs={"url_doc": url_doc}, dont_filter=True)
+            yield Request(
+                url_doc.canonical_url, cb_kwargs={"url_doc": url_doc}, dont_filter=True
+            )
 
     def parse(self, response: Response, url_doc: UrlDocument, **kwargs: Any) -> Any:
         if not response.body.startswith(b"%PDF"):

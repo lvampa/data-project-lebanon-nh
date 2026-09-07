@@ -1,29 +1,31 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
+
 import pytest
 from fastapi.testclient import TestClient
-from api.main import app
-from api.deps import get_db
 from postgres.models.log_entry import LogEntry
+
+from api.deps import get_db
+from api.main import app
 
 
 def _make_entry(**kwargs) -> LogEntry:
-    defaults = dict(
-        id=1,
-        source_url="https://example.com/a.pdf",
-        case_number="26-13339",
-        reported_at=datetime(2026, 5, 1, 1, 6),
-        call_source="Phone",
-        incident_type="Telephone Harassment",
-        disposition="Incident Report Taken",
-        raw_reason_action="Telephone Harassment Incident Report Taken",
-        location="TIMBERWOOD DR",
-        officer="Stephan Nix",
-        reference_number="26L-426-OF",
-        raw_text="26-13339 0106 ...",
-        parse_error=False,
-        scraped_at=datetime.now(timezone.utc),
-    )
+    defaults = {
+        "id": 1,
+        "source_url": "https://example.com/a.pdf",
+        "case_number": "26-13339",
+        "reported_at": datetime(2026, 5, 1, 1, 6),
+        "call_source": "Phone",
+        "incident_type": "Telephone Harassment",
+        "disposition": "Incident Report Taken",
+        "raw_reason_action": "Telephone Harassment Incident Report Taken",
+        "location": "TIMBERWOOD DR",
+        "officer": "Stephan Nix",
+        "reference_number": "26L-426-OF",
+        "raw_text": "26-13339 0106 ...",
+        "parse_error": False,
+        "scraped_at": datetime.now(UTC),
+    }
     defaults.update(kwargs)
     return LogEntry(**defaults)
 

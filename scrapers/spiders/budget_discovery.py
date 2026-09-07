@@ -3,9 +3,8 @@ from datetime import UTC, datetime
 
 import logfire
 import scrapy
-from scrapy.http import Request, Response
-
 from items.budget import BudgetDocumentItem
+from scrapy.http import Request, Response
 
 INDEX_URL = "https://www.lebanonnh.gov/852/Approved-City-Budgets"
 
@@ -36,7 +35,9 @@ class BudgetDiscoverySpider(scrapy.Spider):
 
     def parse(self, response: Response, **kwargs):
         """Index page — follow links to individual year budget pages."""
-        links = response.css("#main-content a[href*='Budget'], .field-items a[href*='Budget']")
+        links = response.css(
+            "#main-content a[href*='Budget'], .field-items a[href*='Budget']"
+        )
         logfire.info("budget index", links=len(links))
         seen = set()
         for link in links:
@@ -72,4 +73,6 @@ class BudgetDiscoverySpider(scrapy.Spider):
                 scraped_at=now,
             )
 
-        logfire.info("parsed budget year page", fiscal_year=fiscal_year, url=response.url)
+        logfire.info(
+            "parsed budget year page", fiscal_year=fiscal_year, url=response.url
+        )

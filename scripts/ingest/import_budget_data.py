@@ -9,16 +9,16 @@ Input: scripts/data/budget_data.json
 Format: array of year objects, each with 'line_items' and 'capital_projects' arrays
 Idempotent — uses ON CONFLICT DO UPDATE.
 """
+
 import json
 import re
 from pathlib import Path
 
 import logfire
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
 from postgres import SessionLocal
 from postgres.models.budget_capital_project import BudgetCapitalProject
 from postgres.models.budget_line_item import BudgetLineItem
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 DATA_DIR = Path(__file__).parent / "data"
 INPUT_FILE = DATA_DIR / "budget_data.json"
@@ -29,7 +29,9 @@ def parse_budget_data(text: str) -> list[dict]:
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Could not parse JSON: {e}\nInput (first 200 chars): {text[:200]}") from e
+        raise ValueError(
+            f"Could not parse JSON: {e}\nInput (first 200 chars): {text[:200]}"
+        ) from e
     if not isinstance(data, list):
         raise ValueError(f"Expected a JSON array, got {type(data).__name__}")
     return data
@@ -39,7 +41,9 @@ def validate_year_entry(entry: dict) -> None:
     if "fiscal_year" not in entry:
         raise ValueError(f"Entry missing 'fiscal_year': {entry}")
     if not isinstance(entry["fiscal_year"], int):
-        raise ValueError(f"fiscal_year must be an integer, got {entry['fiscal_year']!r}")
+        raise ValueError(
+            f"fiscal_year must be an integer, got {entry['fiscal_year']!r}"
+        )
 
 
 def upsert_line_items(session, fiscal_year: int, items: list[dict]) -> int:
@@ -120,7 +124,9 @@ def main() -> None:
             validate_year_entry(entry)
             fiscal_year = entry["fiscal_year"]
             with logfire.span("import budget year", fiscal_year=fiscal_year):
-                n_items = upsert_line_items(session, fiscal_year, entry.get("line_items", []))
+                n_items = upsert_line_items(
+                    session, fiscal_year, entry.get("line_items", [])
+                )
                 n_projects = upsert_capital_projects(
                     session, fiscal_year, entry.get("capital_projects", [])
                 )

@@ -1,31 +1,31 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
+from postgres.models.llc import Llc as LlcModel
 
 from api.deps import get_db
 from api.main import app
-from postgres.models.llc import Llc as LlcModel
 
 
 def _make_llc(**kwargs) -> LlcModel:
-    defaults = dict(
-        id=1,
-        name="TIMBERWOOD PROPERTIES LLC",
-        raw_owner_name="Timberwood Properties LLC",
-        lookup_status="pending",
-        nh_business_id=None,
-        business_status=None,
-        formation_date=None,
-        business_email=None,
-        phone=None,
-        registered_agent=None,
-        registered_agent_address=None,
-        principals=None,
-        last_looked_up_at=None,
-        error_message=None,
-        created_at=datetime.now(timezone.utc),
-    )
+    defaults = {
+        "id": 1,
+        "name": "TIMBERWOOD PROPERTIES LLC",
+        "raw_owner_name": "Timberwood Properties LLC",
+        "lookup_status": "pending",
+        "nh_business_id": None,
+        "business_status": None,
+        "formation_date": None,
+        "business_email": None,
+        "phone": None,
+        "registered_agent": None,
+        "registered_agent_address": None,
+        "principals": None,
+        "last_looked_up_at": None,
+        "error_message": None,
+        "created_at": datetime.now(UTC),
+    }
     defaults.update(kwargs)
     return LlcModel(**defaults)
 

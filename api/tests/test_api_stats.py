@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from fastapi.testclient import TestClient
-from api.main import app
+
 from api.deps import get_db
+from api.main import app
 
 
 @pytest.fixture(autouse=True)

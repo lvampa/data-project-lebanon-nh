@@ -19,6 +19,8 @@ class BudgetCapitalProject(Base):
     year_approved: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
 
     __table_args__ = (
-        UniqueConstraint("fiscal_year", "gl_number", name="uq_budget_capital_project_year_gl"),
+        UniqueConstraint(
+            "fiscal_year", "gl_number", name="uq_budget_capital_project_year_gl"
+        ),
         Index("idx_budget_capital_projects_year", "fiscal_year"),
     )

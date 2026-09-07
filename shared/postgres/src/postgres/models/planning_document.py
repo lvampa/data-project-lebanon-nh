@@ -11,7 +11,9 @@ class PlanningDocument(Base):
     __table_args__ = (Index("idx_planning_documents_event_id", "civicclerk_event_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    civicclerk_file_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    civicclerk_file_id: Mapped[int] = mapped_column(
+        Integer, unique=True, nullable=False
+    )
     civicclerk_event_id: Mapped[int] = mapped_column(Integer, nullable=False)
     file_name: Mapped[str | None] = mapped_column(Text)
     file_type: Mapped[str | None] = mapped_column(Text)

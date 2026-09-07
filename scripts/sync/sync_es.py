@@ -6,13 +6,12 @@ Run from repo root:
 
 Idempotent — uses document _id = Postgres id, so re-runs upsert in place.
 """
+
 import os
 
 import logfire
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
-from sqlalchemy import select
-
 from postgres import SessionLocal
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.budget_capital_project import BudgetCapitalProject
@@ -24,6 +23,7 @@ from postgres.models.officer import Officer
 from postgres.models.planning_document import PlanningDocument
 from postgres.models.planning_meeting import PlanningMeeting
 from postgres.models.property import Property
+from sqlalchemy import select
 
 ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 
@@ -40,7 +40,9 @@ def get_address_lookup(session) -> dict[str, dict]:
     }
 
 
-def _resolve_address(raw: str | None, lookup: dict) -> tuple[str | None, float | None, float | None]:
+def _resolve_address(
+    raw: str | None, lookup: dict
+) -> tuple[str | None, float | None, float | None]:
     if not raw:
         return None, None, None
     entry = lookup.get(raw)
@@ -196,18 +198,54 @@ def main() -> None:
         meeting_lookup: dict[int, dict] = {}
         for m in meetings:
             norm, lat, lng = _resolve_address(m.location, address_lookup)
-            meeting_lookup[m.civicclerk_event_id] = {"normalized_address": norm, "lat": lat, "lng": lng}
+            meeting_lookup[m.civicclerk_event_id] = {
+                "normalized_address": norm,
+                "lat": lat,
+                "lng": lng,
+            }
 
         syncs = [
-            ("properties",              session.execute(select(Property)).scalars().all(),              lambda r: build_property_doc(r, address_lookup)),
-            ("incidents",               session.execute(select(LogEntry)).scalars().all(),              lambda r: build_incident_doc(r, address_lookup)),
-            ("planning_meetings",       meetings,                                                        lambda r: build_planning_meeting_doc(r, address_lookup)),
-            ("planning_documents",      session.execute(select(PlanningDocument)).scalars().all(),      lambda r: build_planning_document_doc(r, meeting_lookup)),
-            ("city_staff",              session.execute(select(CityStaff)).scalars().all(),             build_city_staff_doc),
-            ("officers",                session.execute(select(Officer)).scalars().all(),               build_officer_doc),
-            ("llcs",                    session.execute(select(Llc)).scalars().all(),                   build_llc_doc),
-            ("budget_line_items",       session.execute(select(BudgetLineItem)).scalars().all(),        build_budget_line_item_doc),
-            ("budget_capital_projects", session.execute(select(BudgetCapitalProject)).scalars().all(),  build_budget_capital_project_doc),
+            (
+                "properties",
+                session.execute(select(Property)).scalars().all(),
+                lambda r: build_property_doc(r, address_lookup),
+            ),
+            (
+                "incidents",
+                session.execute(select(LogEntry)).scalars().all(),
+                lambda r: build_incident_doc(r, address_lookup),
+            ),
+            (
+                "planning_meetings",
+                meetings,
+                lambda r: build_planning_meeting_doc(r, address_lookup),
+            ),
+            (
+                "planning_documents",
+                session.execute(select(PlanningDocument)).scalars().all(),
+                lambda r: build_planning_document_doc(r, meeting_lookup),
+            ),
+            (
+                "city_staff",
+                session.execute(select(CityStaff)).scalars().all(),
+                build_city_staff_doc,
+            ),
+            (
+                "officers",
+                session.execute(select(Officer)).scalars().all(),
+                build_officer_doc,
+            ),
+            ("llcs", session.execute(select(Llc)).scalars().all(), build_llc_doc),
+            (
+                "budget_line_items",
+                session.execute(select(BudgetLineItem)).scalars().all(),
+                build_budget_line_item_doc,
+            ),
+            (
+                "budget_capital_projects",
+                session.execute(select(BudgetCapitalProject)).scalars().all(),
+                build_budget_capital_project_doc,
+            ),
         ]
 
         for index, rows, build_fn in syncs:

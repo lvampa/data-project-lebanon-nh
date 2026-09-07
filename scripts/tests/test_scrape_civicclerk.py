@@ -1,6 +1,10 @@
 from datetime import datetime
-from scripts.scrape.scrape_civicclerk import parse_event, parse_file, extract_text_from_pdf
 
+from scripts.scrape.scrape_civicclerk import (
+    extract_text_from_pdf,
+    parse_event,
+    parse_file,
+)
 
 EVENT_JSON = {
     "id": 2521,
@@ -48,7 +52,10 @@ def test_parse_file_maps_type_int_to_string():
     assert result["civicclerk_event_id"] == 2521
     assert result["file_name"] == "Agenda - March 5 2024.pdf"
     assert result["file_type"] == "Agenda"
-    assert result["download_url"] == "https://lebanonh.api.civicclerk.com/v1/Events/GetEventFileStream(fileId=8184,fileType=1,plainText=false)"
+    assert (
+        result["download_url"]
+        == "https://lebanonh.api.civicclerk.com/v1/Events/GetEventFileStream(fileId=8184,fileType=1,plainText=false)"
+    )
 
 
 def test_parse_file_uses_stream_url_when_present():

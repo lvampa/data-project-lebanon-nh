@@ -1,4 +1,3 @@
-import pytest
 from scripts.scrape.scrape_llcs import parse_llc_detail
 
 # Minimal fixture matching real NH SOS detail page structure
@@ -34,6 +33,7 @@ def test_parses_business_status():
 
 def test_parses_formation_date():
     from datetime import date
+
     result = parse_llc_detail(DETAIL_HTML, business_id="775794")
     assert result["formation_date"] == date(2017, 7, 28)
 

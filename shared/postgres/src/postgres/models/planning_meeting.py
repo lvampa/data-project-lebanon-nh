@@ -14,7 +14,9 @@ class PlanningMeeting(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    civicclerk_event_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    civicclerk_event_id: Mapped[int] = mapped_column(
+        Integer, unique=True, nullable=False
+    )
     title: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(Text)
     meeting_date: Mapped[datetime | None] = mapped_column(DateTime)

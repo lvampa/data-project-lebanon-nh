@@ -4,14 +4,16 @@ Revision ID: e5f6a7b8c9d0
 Revises: d4e5f6a7b8c9
 Create Date: 2026-05-25 00:00:00.000000
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
+
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = 'e5f6a7b8c9d0'
-down_revision: Union[str, Sequence[str], None] = 'd4e5f6a7b8c9'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "e5f6a7b8c9d0"
+down_revision: str | Sequence[str] | None = "d4e5f6a7b8c9"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -26,9 +28,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("raw_incident_type"),
     )
-    op.create_index("idx_incident_type_categories_category", "incident_type_categories", ["category"])
+    op.create_index(
+        "idx_incident_type_categories_category",
+        "incident_type_categories",
+        ["category"],
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("idx_incident_type_categories_category", table_name="incident_type_categories")
+    op.drop_index(
+        "idx_incident_type_categories_category", table_name="incident_type_categories"
+    )
     op.drop_table("incident_type_categories")

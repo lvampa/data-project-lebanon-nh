@@ -1,6 +1,8 @@
 from datetime import datetime
+
 from sqlalchemy import DateTime, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
 from postgres.base import Base
 
 
@@ -14,6 +16,4 @@ class IncidentTypeCategory(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    __table_args__ = (
-        Index("idx_incident_type_categories_category", "category"),
-    )
+    __table_args__ = (Index("idx_incident_type_categories_category", "category"),)

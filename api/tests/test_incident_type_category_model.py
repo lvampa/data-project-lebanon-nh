@@ -1,8 +1,10 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from postgres.models.incident_type_category import IncidentTypeCategory
 
+
 def test_incident_type_category_fields():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cat = IncidentTypeCategory(
         raw_incident_type="Telephone Harassment",
         category="Disturbance",

@@ -1,6 +1,8 @@
 from datetime import datetime
+
 from sqlalchemy import DateTime, Float, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
 from postgres.base import Base
 
 

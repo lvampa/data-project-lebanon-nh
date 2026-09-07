@@ -14,7 +14,9 @@ class Llc(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     raw_owner_name: Mapped[str | None] = mapped_column(Text)
-    lookup_status: Mapped[str] = mapped_column(Text, nullable=False, default="pending", server_default="pending")
+    lookup_status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="pending", server_default="pending"
+    )
     nh_business_id: Mapped[str | None] = mapped_column(Text)
     business_status: Mapped[str | None] = mapped_column(Text)
     formation_date: Mapped[date | None] = mapped_column(Date)

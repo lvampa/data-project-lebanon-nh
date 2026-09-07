@@ -1,13 +1,12 @@
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import logfire
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
 from postgres import SessionLocal
 from postgres.models.incident_type_category import IncidentTypeCategory
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 DATA_DIR = Path(__file__).parent / "data"
 INPUT_FILE = DATA_DIR / "incident_categories.json"
@@ -20,7 +19,9 @@ def parse_categories(text: str) -> list[dict]:
     try:
         rows = json.loads(cleaned)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Could not parse JSON: {e}\nInput (first 200 chars): {text[:200]}") from e
+        raise ValueError(
+            f"Could not parse JSON: {e}\nInput (first 200 chars): {text[:200]}"
+        ) from e
     if not isinstance(rows, list):
         raise ValueError(f"Expected a JSON array, got {type(rows).__name__}")
     result = []
@@ -32,32 +33,38 @@ def parse_categories(text: str) -> list[dict]:
             )
         if "incident_type" not in row:
             raise ValueError(f"Row missing 'incident_type': {row}")
-        result.append({
-            "incident_type": row["incident_type"],
-            "category": category,
-            "subcategory": row.get("subcategory") or None,
-        })
+        result.append(
+            {
+                "incident_type": row["incident_type"],
+                "category": category,
+                "subcategory": row.get("subcategory") or None,
+            }
+        )
     return result
 
 
 def upsert_categories(session, rows: list[dict]) -> None:
     if not rows:
         return
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     for row in rows:
-        stmt = pg_insert(IncidentTypeCategory).values(
-            raw_incident_type=row["incident_type"],
-            category=row["category"],
-            subcategory=row["subcategory"],
-            created_at=now,
-            updated_at=now,
-        ).on_conflict_do_update(
-            index_elements=["raw_incident_type"],
-            set_={
-                "category": row["category"],
-                "subcategory": row["subcategory"],
-                "updated_at": now,
-            },
+        stmt = (
+            pg_insert(IncidentTypeCategory)
+            .values(
+                raw_incident_type=row["incident_type"],
+                category=row["category"],
+                subcategory=row["subcategory"],
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=["raw_incident_type"],
+                set_={
+                    "category": row["category"],
+                    "subcategory": row["subcategory"],
+                    "updated_at": now,
+                },
+            )
         )
         session.execute(stmt)
     session.commit()
@@ -71,10 +78,12 @@ def main() -> None:
         )
     text = INPUT_FILE.read_text(encoding="utf-8")
     rows = parse_categories(text)
-    with SessionLocal() as session:
-        with logfire.span("import incident categories", count=len(rows)):
-            upsert_categories(session, rows)
-            logfire.info("upserted {count} categories", count=len(rows))
+    with (
+        SessionLocal() as session,
+        logfire.span("import incident categories", count=len(rows)),
+    ):
+        upsert_categories(session, rows)
+        logfire.info("upserted {count} categories", count=len(rows))
 
 
 if __name__ == "__main__":

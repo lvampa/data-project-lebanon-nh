@@ -21,7 +21,9 @@ class BudgetLineItem(Base):
     year_approved: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
 
     __table_args__ = (
-        UniqueConstraint("fiscal_year", "gl_number", name="uq_budget_line_item_year_gl"),
+        UniqueConstraint(
+            "fiscal_year", "gl_number", name="uq_budget_line_item_year_gl"
+        ),
         Index("idx_budget_line_items_year_dept", "fiscal_year", "department"),
         Index("idx_budget_line_items_year_fund", "fiscal_year", "fund_code"),
     )

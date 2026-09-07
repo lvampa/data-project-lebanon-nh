@@ -2,7 +2,6 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
-
 from items.budget import BudgetDocumentItem
 from pipelines import BudgetDocumentPipeline
 
@@ -23,6 +22,7 @@ def pipeline():
 
 def test_ignores_non_budget_items(pipeline):
     from items.officer import OfficerItem
+
     other = OfficerItem(
         name="Jane Doe",
         source_url="http://x",

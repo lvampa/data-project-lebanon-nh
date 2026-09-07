@@ -4,8 +4,9 @@ Revision ID: i9j0k1l2m3n4
 Revises: h8i9j0k1l2m3
 Create Date: 2026-06-07
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "i9j0k1l2m3n4"

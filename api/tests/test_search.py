@@ -10,17 +10,24 @@ from api.main import app
 def _make_es_response(hits_per_index: dict[str, list[dict]]) -> dict:
     """Build a fake msearch response with the given hits per index name."""
     from api.routers.search import ES_INDICES
+
     responses = []
     for index in ES_INDICES:
         hits = hits_per_index.get(index, [])
-        responses.append({
-            "hits": {
-                "hits": [
-                    {"_id": str(h["id"]), "_score": h.get("score", 1.0), "_source": h}
-                    for h in hits
-                ]
+        responses.append(
+            {
+                "hits": {
+                    "hits": [
+                        {
+                            "_id": str(h["id"]),
+                            "_score": h.get("score", 1.0),
+                            "_source": h,
+                        }
+                        for h in hits
+                    ]
+                }
             }
-        })
+        )
     return {"responses": responses}
 
 
@@ -33,6 +40,7 @@ def clear_overrides():
 @pytest.fixture(autouse=True)
 def reset_es_singleton():
     import api.routers.search as search_mod
+
     search_mod._es = None
     yield
     search_mod._es = None
@@ -40,12 +48,30 @@ def reset_es_singleton():
 
 def test_search_returns_grouped_results():
     mock_db = MagicMock()
-    mock_db.execute.return_value.scalar_one_or_none.return_value = None  # no normalization
+    mock_db.execute.return_value.scalar_one_or_none.return_value = (
+        None  # no normalization
+    )
 
-    es_response = _make_es_response({
-        "properties": [{"id": 1, "entity_type": "properties", "location": "304 HANOVER ST", "owner": "SMITH"}],
-        "incidents": [{"id": 10, "entity_type": "incidents", "location": "304 HANOVER ST", "incident_type": "Theft"}],
-    })
+    es_response = _make_es_response(
+        {
+            "properties": [
+                {
+                    "id": 1,
+                    "entity_type": "properties",
+                    "location": "304 HANOVER ST",
+                    "owner": "SMITH",
+                }
+            ],
+            "incidents": [
+                {
+                    "id": 10,
+                    "entity_type": "incidents",
+                    "location": "304 HANOVER ST",
+                    "incident_type": "Theft",
+                }
+            ],
+        }
+    )
 
     with patch("api.routers.search.Elasticsearch") as MockES:
         es_instance = MagicMock()
@@ -85,6 +111,7 @@ def test_search_returns_empty_when_no_hits():
 
 def test_search_uses_normalized_query_when_address_match():
     from postgres.models.address_normalization import AddressNormalization
+
     mock_db = MagicMock()
     norm_row = MagicMock(spec=AddressNormalization)
     norm_row.normalized_address = "304 hanover st lebanon nh"

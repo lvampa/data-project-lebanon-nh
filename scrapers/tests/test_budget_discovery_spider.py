@@ -1,7 +1,6 @@
 import pytest
-from scrapy.http import HtmlResponse
-
 from items.budget import BudgetDocumentItem
+from scrapy.http import HtmlResponse
 from spiders.budget_discovery import BudgetDiscoverySpider
 
 INDEX_HTML = b"""

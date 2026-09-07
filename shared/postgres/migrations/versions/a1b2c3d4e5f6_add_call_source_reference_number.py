@@ -5,20 +5,23 @@ Revises: f025cbf058b6
 Create Date: 2026-05-25 00:00:00.000000
 
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = 'a1b2c3d4e5f6'
-down_revision: Union[str, Sequence[str], None] = 'f025cbf058b6'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "a1b2c3d4e5f6"
+down_revision: str | Sequence[str] | None = "f025cbf058b6"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
     op.add_column("log_entries", sa.Column("call_source", sa.Text(), nullable=True))
-    op.add_column("log_entries", sa.Column("reference_number", sa.Text(), nullable=True))
+    op.add_column(
+        "log_entries", sa.Column("reference_number", sa.Text(), nullable=True)
+    )
     op.create_index("idx_log_entries_call_source", "log_entries", ["call_source"])
     op.create_index("idx_log_entries_disposition", "log_entries", ["disposition"])
 

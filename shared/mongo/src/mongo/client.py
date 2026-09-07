@@ -3,6 +3,7 @@ import os
 from pymongo import MongoClient
 from pymongo.collection import Collection
 
+
 class MongoDB:
     def __init__(self) -> None:
         self._client: MongoClient | None = None

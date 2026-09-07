@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import contextlib
 import random
 from datetime import UTC, datetime
 
@@ -22,10 +23,8 @@ def parse_llc_detail(html: str, business_id: str | None) -> dict:
     raw_date = find_labeled_value("Business Creation Date:")
     formation_date = None
     if raw_date:
-        try:
+        with contextlib.suppress(ValueError):
             formation_date = datetime.strptime(raw_date, "%m/%d/%Y").date()
-        except ValueError:
-            pass
 
     principals = []
     for row in soup.select("table tbody tr"):
@@ -35,7 +34,9 @@ def parse_llc_detail(html: str, business_id: str | None) -> dict:
             address = cells[1].get_text(strip=True)
             if " / " in name_title:
                 name, title = name_title.split(" / ", 1)
-                principals.append({"name": name.strip(), "title": title.strip(), "address": address})
+                principals.append(
+                    {"name": name.strip(), "title": title.strip(), "address": address}
+                )
 
     agent_div = soup.find(id="registered-agent")
     registered_agent = None
@@ -46,7 +47,9 @@ def parse_llc_detail(html: str, business_id: str | None) -> dict:
             if text.startswith("Name:"):
                 registered_agent = text.removeprefix("Name:").strip()
             elif text.startswith("Registered Office Address:"):
-                registered_agent_address = text.removeprefix("Registered Office Address:").strip()
+                registered_agent_address = text.removeprefix(
+                    "Registered Office Address:"
+                ).strip()
 
     return {
         "nh_business_id": business_id or None,
@@ -81,13 +84,16 @@ async def scrape_llc(page, name: str) -> tuple[str | None, dict | None]:
 
     html = await page.content()
     if not business_id:
-        business_id = page.url.split("businessID=")[-1] if "businessID=" in page.url else None
+        business_id = (
+            page.url.split("businessID=")[-1] if "businessID=" in page.url else None
+        )
 
     return business_id, parse_llc_detail(html, business_id)
 
 
 async def run(limit: int) -> None:
     from dotenv import load_dotenv
+
     load_dotenv()
 
     from playwright.async_api import async_playwright

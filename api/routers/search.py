@@ -3,12 +3,12 @@ from typing import Annotated
 
 from elasticsearch import Elasticsearch
 from fastapi import APIRouter, Depends, Query
+from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
 from api.schemas import SearchResponse, SearchResult
-from postgres.models.address_normalization import AddressNormalization
 
 router = APIRouter()
 
@@ -38,7 +38,9 @@ def _get_es() -> Elasticsearch:
 
 def _normalize_query(q: str, db: Session) -> str | None:
     row = db.execute(
-        select(AddressNormalization).where(AddressNormalization.raw_address == q.upper())
+        select(AddressNormalization).where(
+            AddressNormalization.raw_address == q.upper()
+        )
     ).scalar_one_or_none()
     return row.normalized_address if row else None
 
@@ -56,29 +58,31 @@ def search(
     searches = []
     for index in ES_INDICES:
         searches.append({"index": index})
-        searches.append({
-            "query": {
-                "multi_match": {
-                    "query": search_query,
-                    "fields": [
-                        "normalized_address^3",
-                        "location^2",
-                        "owner^2",
-                        "name^2",
-                        "file_name^2",
-                        "project_name^2",
-                        "*",
-                    ],
-                    "fuzziness": "AUTO",
-                }
-            },
-            "size": limit,
-        })
+        searches.append(
+            {
+                "query": {
+                    "multi_match": {
+                        "query": search_query,
+                        "fields": [
+                            "normalized_address^3",
+                            "location^2",
+                            "owner^2",
+                            "name^2",
+                            "file_name^2",
+                            "project_name^2",
+                            "*",
+                        ],
+                        "fuzziness": "AUTO",
+                    }
+                },
+                "size": limit,
+            }
+        )
 
     resp = es.msearch(searches=searches)
 
     results: dict[str, list[SearchResult]] = {idx: [] for idx in ES_INDICES}
-    for index, response in zip(ES_INDICES, resp["responses"]):
+    for index, response in zip(ES_INDICES, resp["responses"], strict=True):
         for hit in response["hits"]["hits"]:
             results[index].append(
                 SearchResult(

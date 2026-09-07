@@ -3,7 +3,15 @@ from dotenv import load_dotenv
 load_dotenv()  # must run before postgres client initializes
 
 from fastapi import FastAPI  # noqa: E402
-from api.routers import incidents, stats, addresses, categories, llcs, search  # noqa: E402
+
+from api.routers import (  # noqa: E402
+    addresses,
+    categories,
+    incidents,
+    llcs,
+    search,
+    stats,
+)
 
 app = FastAPI(title="Lebanon PD Log — Internal API")
 

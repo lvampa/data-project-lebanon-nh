@@ -1,16 +1,17 @@
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 
 # --- fetch_uncategorized ---
-
 from scripts.export.export_incident_types import fetch_uncategorized
 
 
 def test_fetch_uncategorized_returns_list():
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = [
-        "FD Alarm", "Telephone Harassment", "MV Accident"
+        "FD Alarm",
+        "Telephone Harassment",
+        "MV Accident",
     ]
     result = fetch_uncategorized(session)
     assert result == ["FD Alarm", "Telephone Harassment", "MV Accident"]
@@ -28,20 +29,31 @@ def test_fetch_uncategorized_returns_empty_when_no_rows():
     session.execute.return_value.scalars.return_value.all.return_value = []
     assert fetch_uncategorized(session) == []
 
-from scripts.ingest.import_incident_categories import parse_categories, upsert_categories
+
+from scripts.ingest.import_incident_categories import (
+    parse_categories,
+    upsert_categories,
+)
 
 VALID_JSON = '[{"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}, {"incident_type": "MV Accident", "category": "Traffic", "subcategory": "Accident"}]'
 MISSING_SUBCATEGORY_JSON = '[{"incident_type": "FD Alarm", "category": "Fire"}]'
-INVALID_CATEGORY_JSON = '[{"incident_type": "FD Alarm", "category": "Unknown", "subcategory": "Whatever"}]'
+INVALID_CATEGORY_JSON = (
+    '[{"incident_type": "FD Alarm", "category": "Unknown", "subcategory": "Whatever"}]'
+)
 MARKDOWN_FENCED_JSON = '```json\n[{"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm"}]\n```'
 
 
 # --- parse_categories ---
 
+
 def test_parse_valid_json():
     rows = parse_categories(VALID_JSON)
     assert len(rows) == 2
-    assert rows[0] == {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}
+    assert rows[0] == {
+        "incident_type": "FD Alarm",
+        "category": "Fire",
+        "subcategory": "Alarm Activation",
+    }
     assert rows[1]["category"] == "Traffic"
 
 
@@ -67,11 +79,20 @@ def test_parse_empty_list():
 
 # --- upsert_categories ---
 
+
 def test_upsert_executes_for_each_row():
     session = MagicMock()
     rows = [
-        {"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"},
-        {"incident_type": "MV Accident", "category": "Traffic", "subcategory": "Accident"},
+        {
+            "incident_type": "FD Alarm",
+            "category": "Fire",
+            "subcategory": "Alarm Activation",
+        },
+        {
+            "incident_type": "MV Accident",
+            "category": "Traffic",
+            "subcategory": "Accident",
+        },
     ]
     upsert_categories(session, rows)
     assert session.execute.call_count == 2

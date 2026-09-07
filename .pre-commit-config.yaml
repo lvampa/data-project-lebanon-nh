@@ -18,6 +18,6 @@ repos:
       - id: pytest
         name: pytest
         language: system
-        entry: uv run pytest scrapers/tests/ --ignore=scrapers/tests/test_officer_roster_spider.py -q
+        entry: uv run pytest --ignore=scrapers/tests/test_officer_roster_spider.py -q
         pass_filenames: false
         stages: [pre-push]

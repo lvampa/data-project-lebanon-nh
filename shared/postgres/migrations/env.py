@@ -1,9 +1,9 @@
 from logging.config import fileConfig
 
+import postgres.models  # noqa: F401 — registers models with Base.metadata
 from alembic import context
 from postgres.base import Base
 from postgres.client import engine
-import postgres.models  # noqa: F401 — registers models with Base.metadata
 
 config = context.config
 

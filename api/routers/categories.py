@@ -1,12 +1,14 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
-from api.deps import get_db
-from api.schemas import CategoryRecord, CategoryResult, CategoryUpdate
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from api.deps import get_db
+from api.schemas import CategoryRecord, CategoryResult, CategoryUpdate
 
 router = APIRouter()
 
@@ -50,7 +52,7 @@ def update_category(
     body: CategoryUpdate,
     db: Annotated[Session, Depends(get_db)],
 ) -> CategoryResult:
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     existing = db.scalar(
         select(IncidentTypeCategory).where(
             IncidentTypeCategory.raw_incident_type == raw_incident_type

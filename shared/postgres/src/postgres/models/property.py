@@ -11,7 +11,9 @@ class Property(Base):
     __tablename__ = "properties"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    parcel_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)  # VGSI map/lot/sub
+    parcel_id: Mapped[str] = mapped_column(
+        Text, nullable=False, unique=True
+    )  # VGSI map/lot/sub
     location: Mapped[str | None] = mapped_column(Text)  # street address
     owner: Mapped[str | None] = mapped_column(Text)
     owner_address: Mapped[str | None] = mapped_column(Text)

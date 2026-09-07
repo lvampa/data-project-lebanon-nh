@@ -4,6 +4,7 @@ Revision ID: k1l2m3n4o5p6
 Revises: j0k1l2m3n4o5
 Create Date: 2026-06-08
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -28,7 +29,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("civicclerk_event_id"),
     )
-    op.create_index("idx_planning_meetings_meeting_date", "planning_meetings", ["meeting_date"])
+    op.create_index(
+        "idx_planning_meetings_meeting_date", "planning_meetings", ["meeting_date"]
+    )
     op.create_index("idx_planning_meetings_category", "planning_meetings", ["category"])
 
     op.create_table(

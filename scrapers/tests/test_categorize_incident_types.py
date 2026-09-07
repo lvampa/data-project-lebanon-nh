@@ -2,7 +2,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from scripts.categorize_incident_types import (
+from maintenance.categorize_incident_types import (
     fetch_uncategorized,
     parse_claude_response,
     upsert_categories,
@@ -143,7 +143,7 @@ import json
 
 
 def test_dump_uncategorized_prints_json(capsys):
-    from scripts.categorize_incident_types import dump_uncategorized
+    from maintenance.categorize_incident_types import dump_uncategorized
 
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = [
@@ -157,7 +157,7 @@ def test_dump_uncategorized_prints_json(capsys):
 
 
 def test_dump_uncategorized_empty(capsys):
-    from scripts.categorize_incident_types import dump_uncategorized
+    from maintenance.categorize_incident_types import dump_uncategorized
 
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = []
@@ -172,7 +172,7 @@ def test_dump_uncategorized_empty(capsys):
 def test_import_from_stdin_upserts(monkeypatch):
     import io
 
-    from scripts.categorize_incident_types import import_from_stdin
+    from maintenance.categorize_incident_types import import_from_stdin
 
     categories = [
         {
@@ -192,7 +192,7 @@ def test_import_from_stdin_upserts(monkeypatch):
 
 
 def test_run_via_cli_calls_subprocess():
-    from scripts.categorize_incident_types import run_via_cli
+    from maintenance.categorize_incident_types import run_via_cli
 
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = ["FD Alarm"]
@@ -211,7 +211,7 @@ def test_run_via_cli_calls_subprocess():
 
 
 def test_run_via_cli_noop_when_nothing_to_categorize():
-    from scripts.categorize_incident_types import run_via_cli
+    from maintenance.categorize_incident_types import run_via_cli
 
     session = MagicMock()
     session.execute.return_value.scalars.return_value.all.return_value = []

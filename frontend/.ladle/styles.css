@@ -1,7 +1,0 @@
-/* Ladle's Vite root sits inside node_modules, so Tailwind's automatic source
-   detection never sees the workspace. Point it at the three story roots. */
-@import '../web/app/globals.css';
-
-@source '../shared';
-@source '../web';
-@source '../admin';

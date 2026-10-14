@@ -11,10 +11,8 @@ const SECTION_LINKS = [
 ]
 
 export function Nav() {
-  return <NavBar pathname={usePathname()} />
-}
+  const pathname = usePathname()
 
-export function NavBar({ pathname }: { pathname: string }) {
   return (
     <header className="border-b bg-background sticky top-0 z-40">
       <nav

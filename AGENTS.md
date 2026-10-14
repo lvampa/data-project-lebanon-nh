@@ -132,7 +132,6 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 ## 7. Frontend
 
 - Check `frontend/shared` for an existing component before adding a new one. Reuse it or extend it rather than adding a near-duplicate.
-- When you add a new shared component, add a matching Ladle story alongside it.
 
 ---
 

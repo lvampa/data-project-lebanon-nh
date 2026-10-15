@@ -126,7 +126,7 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 - Use `uv` instead of `pip` for all Python package management (`uv add`, `uv run`, `uv sync`)
 - Use `docker compose` (not `docker-compose`) for Airflow, Mongo, Postgres
 - Use `wrangler pages deploy` (via `bash scripts/deploy.sh`) for Cloudflare Pages deployment
-- Use `npm run` for Next.js frontend commands in `web/`
+- Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
 
 ## 7. Frontend

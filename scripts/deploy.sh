@@ -6,7 +6,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "→ Building web..."
 cd "$REPO_ROOT/frontend/web"
-npm run build
+bun run build
 
 echo "→ Deploying to Cloudflare Pages..."
 cd "$REPO_ROOT"

@@ -31,12 +31,15 @@ function makeIncidents(count: number, overrides?: Partial<Incident>): Incident[]
   )
 }
 
-// Grab the mocked useSearchParams so tests can override it
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation'
+
+function mockSearchParams(query = '') {
+  vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams(query) as ReadonlyURLSearchParams)
+}
 
 describe('IncidentsTable', () => {
   it('renders incident rows from the passed array', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     const incidents = [
       makeIncident({ case_number: '2024-001', incident_type: 'THEFT', officer: 'Smith' }),
       makeIncident({ case_number: '2024-002', incident_type: 'ASSAULT', officer: 'Jones' }),
@@ -49,7 +52,7 @@ describe('IncidentsTable', () => {
   })
 
   it('filters by incident_type from search params (case-insensitive)', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('incident_type=theft'))
+    mockSearchParams('incident_type=theft')
     const incidents = [
       makeIncident({ case_number: '2024-001', incident_type: 'THEFT' }),
       makeIncident({ case_number: '2024-002', incident_type: 'ASSAULT' }),
@@ -60,7 +63,7 @@ describe('IncidentsTable', () => {
   })
 
   it('filters by officer from search params (case-insensitive)', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('officer=smith'))
+    mockSearchParams('officer=smith')
     const incidents = [
       makeIncident({ case_number: '2024-001', officer: 'Smith' }),
       makeIncident({ case_number: '2024-002', officer: 'Jones' }),
@@ -71,7 +74,7 @@ describe('IncidentsTable', () => {
   })
 
   it('shows correct result count in the "N incidents" line', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('incident_type=theft'))
+    mockSearchParams('incident_type=theft')
     const incidents = [
       makeIncident({ incident_type: 'THEFT' }),
       makeIncident({ case_number: '2024-002', incident_type: 'ASSAULT' }),
@@ -82,27 +85,27 @@ describe('IncidentsTable', () => {
   })
 
   it('does not show pagination when all results fit on one page (≤50)', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     render(<IncidentsTable incidents={makeIncidents(50)} />)
     expect(screen.queryByText(/Prev/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Next/)).not.toBeInTheDocument()
   })
 
   it('shows pagination when results exceed one page (>50 items)', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     render(<IncidentsTable incidents={makeIncidents(51)} />)
     expect(screen.getByText(/Next/)).toBeInTheDocument()
     expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument()
   })
 
   it('page resets to 1 when filter changes', async () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     const incidents = makeIncidents(101)
     const { rerender } = render(<IncidentsTable incidents={incidents} />)
     fireEvent.click(screen.getByText(/Next/))
     expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument()
 
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('incident_type=theft'))
+    mockSearchParams('incident_type=theft')
     await act(async () => {
       rerender(<IncidentsTable incidents={incidents} />)
     })

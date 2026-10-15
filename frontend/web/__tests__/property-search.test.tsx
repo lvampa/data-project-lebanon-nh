@@ -34,17 +34,21 @@ function makeProperties(count: number, overrides?: Partial<PropertyRecord>): Pro
   )
 }
 
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, type ReadonlyURLSearchParams } from 'next/navigation'
+
+function mockSearchParams(query = '') {
+  vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams(query) as ReadonlyURLSearchParams)
+}
 
 describe('PropertySearch', () => {
   it('renders the search input', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     render(<PropertySearch properties={[]} />)
     expect(screen.getByPlaceholderText('Search by address or owner…')).toBeInTheDocument()
   })
 
   it('renders all properties when no filter is active', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     const properties = [
       makeProperty({ parcel_id: 'NH-001', location: '1 Main St', owner: 'Alice' }),
       makeProperty({ parcel_id: 'NH-002', location: '2 Elm St', owner: 'Bob' }),
@@ -55,7 +59,7 @@ describe('PropertySearch', () => {
   })
 
   it('filters properties by location (case-insensitive, partial match)', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('q=main'))
+    mockSearchParams('q=main')
     const properties = [
       makeProperty({ parcel_id: 'NH-001', location: '1 Main St', owner: 'Alice' }),
       makeProperty({ parcel_id: 'NH-002', location: '2 Elm St', owner: 'Bob' }),
@@ -66,7 +70,7 @@ describe('PropertySearch', () => {
   })
 
   it('filters properties by owner (case-insensitive, partial match)', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('q=alice'))
+    mockSearchParams('q=alice')
     const properties = [
       makeProperty({ parcel_id: 'NH-001', location: '1 Main St', owner: 'Alice Johnson' }),
       makeProperty({ parcel_id: 'NH-002', location: '2 Elm St', owner: 'Bob Smith' }),
@@ -77,7 +81,7 @@ describe('PropertySearch', () => {
   })
 
   it('shows correct result count', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('q=main'))
+    mockSearchParams('q=main')
     const properties = [
       makeProperty({ parcel_id: 'NH-001', location: '1 Main St' }),
       makeProperty({ parcel_id: 'NH-002', location: '2 Elm St' }),
@@ -88,27 +92,27 @@ describe('PropertySearch', () => {
   })
 
   it('does not show pagination when results fit on one page (≤50)', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     render(<PropertySearch properties={makeProperties(50)} />)
     expect(screen.queryByText(/Prev/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Next/)).not.toBeInTheDocument()
   })
 
   it('shows pagination when results exceed 50', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     render(<PropertySearch properties={makeProperties(51)} />)
     expect(screen.getByText(/Next/)).toBeInTheDocument()
     expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument()
   })
 
   it('page resets to 1 when the query changes in the URL', () => {
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    mockSearchParams()
     const properties = makeProperties(101)
     const { rerender } = render(<PropertySearch properties={properties} />)
     fireEvent.click(screen.getByText(/Next/))
     expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument()
 
-    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('q=main'))
+    mockSearchParams('q=main')
     rerender(<PropertySearch properties={properties} />)
 
     expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument()

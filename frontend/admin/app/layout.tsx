@@ -1,14 +1,21 @@
 import type { Metadata } from 'next'
-import { Inter, Source_Serif_4 } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import { Sidebar } from '@/components/sidebar'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
+const inter = localFont({
+  src: './fonts/inter-latin-wght-normal.woff2',
+  weight: '100 900',
+  variable: '--font-sans',
+})
 
-const sourceSerif = Source_Serif_4({
-  subsets: ['latin'],
-  weight: ['400', '500'],
-  style: ['normal', 'italic'],
+const sourceSerif = localFont({
+  src: [
+    { path: './fonts/source-serif-4-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/source-serif-4-latin-400-italic.woff2', weight: '400', style: 'italic' },
+    { path: './fonts/source-serif-4-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/source-serif-4-latin-500-italic.woff2', weight: '500', style: 'italic' },
+  ],
   variable: '--font-display',
 })
 

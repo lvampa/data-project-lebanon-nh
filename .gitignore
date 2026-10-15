@@ -18,7 +18,6 @@ downloads/
 eggs/
 .eggs/
 lib/
-!web/lib/
 !frontend/web/lib/
 !frontend/admin/lib/
 !frontend/shared/lib/
@@ -213,9 +212,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Generated report data
-public/data/*.json
-
 # Incident type export data
 scripts/data/incident_types.txt
 scripts/data/incident_categories.json
@@ -224,3 +220,6 @@ scripts/data/incident_categories.json
 scripts/data/budgets/*.pdf
 scripts/data/budgets/*.txt
 scripts/data/budget_data.json
+
+# Local scratch files, not for commit
+tmp/

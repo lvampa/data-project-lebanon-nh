@@ -71,11 +71,13 @@ scrapers/spiders/         Scrapy spiders
 scrapers/items/           Scrapy Item definitions
 scrapers/models/          Pydantic validation models (spider → pipeline boundary)
 scrapers/pipelines.py     Items → MongoDB / PostgreSQL
-scrapers/dags/            Airflow DAGs (orchestration)
+dags/                     Airflow DAGs (orchestration)
 shared/mongo/             MongoDB client (workspace package)
 shared/postgres/          SQLAlchemy models + Alembic migrations (workspace package)
 api/                      FastAPI (geocoding)
-web/                      Next.js frontend (static, generated JSON)
+frontend/web/             Next.js frontend (static, generated JSON)
+frontend/admin/           Next.js admin app
+frontend/shared/          Shared UI components (@project/ui)
 scripts/                  generate_report.sh, deploy.sh
 ```
 
@@ -98,9 +100,9 @@ scripts/                  generate_report.sh, deploy.sh
 
 ```bash
 # Start infrastructure
-docker compose up -d                          # from scrapers/
+docker compose up -d                          # from repo root
 
-# Run spiders
+# Run spiders (from scrapers/, where scrapy.cfg lives)
 uv run scrapy crawl build_daily_urls
 uv run scrapy crawl process_urls -a limit=10
 

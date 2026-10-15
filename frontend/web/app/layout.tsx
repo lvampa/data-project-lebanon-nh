@@ -1,20 +1,36 @@
-import type { Metadata } from 'next'
-import { Inter, Source_Serif_4 } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
 import './globals.css'
-import { Nav } from '@/components/nav'
+import { SiteHeader } from '@project/ui/components/site/site-header'
+import { SiteFooter } from '@project/ui/components/site/site-footer'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
+const plexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-sans',
+})
 
-const sourceSerif = Source_Serif_4({
+const plexMono = IBM_Plex_Mono({
   subsets: ['latin'],
   weight: ['400', '500'],
-  style: ['normal', 'italic'],
-  variable: '--font-display',
+  variable: '--font-mono',
 })
 
 export const metadata: Metadata = {
-  title: 'Lebanon NH Civic Data',
+  title: 'Lebanon Data Project',
   description: 'Police incidents, properties, and city staff for Lebanon, NH',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: '48x48' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/site.webmanifest',
+}
+
+export const viewport: Viewport = {
+  themeColor: '#14233c',
 }
 
 export default function RootLayout({
@@ -24,9 +40,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${sourceSerif.variable} ${inter.className}`}>
-        <Nav />
-        <main className="max-w-7xl mx-auto px-4 py-6">{children}</main>
+      <body
+        className={`${plexSans.variable} ${plexMono.variable} ${plexSans.className} flex min-h-dvh flex-col`}
+      >
+        <SiteHeader />
+        <main className="max-w-7xl w-full mx-auto px-4 py-6 flex-1">{children}</main>
+        <SiteFooter />
       </body>
     </html>
   )

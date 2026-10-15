@@ -3,3 +3,6 @@
 @import "shadcn/tailwind.css";
 
 @import "@project/ui/globals.css";
+
+/* Tailwind only scans this app by default; shared components live outside it. */
+@source "../../shared";

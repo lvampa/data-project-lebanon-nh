@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { PropertySearch } from '@/components/property-search'
 import type { PropertyRecord } from '@/lib/types'
 
@@ -99,5 +99,18 @@ describe('PropertySearch', () => {
     render(<PropertySearch properties={makeProperties(51)} />)
     expect(screen.getByText(/Next/)).toBeInTheDocument()
     expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument()
+  })
+
+  it('page resets to 1 when the query changes in the URL', () => {
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
+    const properties = makeProperties(101)
+    const { rerender } = render(<PropertySearch properties={properties} />)
+    fireEvent.click(screen.getByText(/Next/))
+    expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument()
+
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('q=main'))
+    rerender(<PropertySearch properties={properties} />)
+
+    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument()
   })
 })

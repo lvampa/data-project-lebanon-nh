@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Button } from '@project/ui/components/ui/button'
 import { Input } from '@project/ui/components/ui/input'
@@ -16,13 +16,11 @@ export function PropertySearch({ properties }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const [page, setPage] = useState(1)
-
   const q = searchParams.get('q') ?? ''
 
-  useEffect(() => {
-    setPage(1)
-  }, [q])
+  const [pageForQuery, setPageForQuery] = useState({ q, page: 1 })
+  const page = pageForQuery.q === q ? pageForQuery.page : 1
+  const setPage = (page: number) => setPageForQuery({ q, page })
 
   const filtered = useMemo(() => {
     if (!q) return properties
@@ -42,7 +40,6 @@ export function PropertySearch({ properties }: Props) {
     if (value) params.set('q', value)
     else params.delete('q')
     router.replace(`${pathname}?${params.toString()}`)
-    setPage(1)
   }
 
   return (
@@ -55,7 +52,7 @@ export function PropertySearch({ properties }: Props) {
           onChange={e => updateQ(e.target.value)}
         />
         {q && (
-          <Button variant="ghost" onClick={() => { router.replace(pathname); setPage(1) }}>
+          <Button variant="ghost" onClick={() => router.replace(pathname)}>
             Clear
           </Button>
         )}

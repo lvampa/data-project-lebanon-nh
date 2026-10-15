@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -16,14 +16,14 @@ interface Props {
 }
 
 export function IncidentsTable({ incidents }: Props) {
-  const [page, setPage] = useState(1)
   const searchParams = useSearchParams()
   const incidentType = searchParams.get('incident_type')
   const officer = searchParams.get('officer')
 
-  useEffect(() => {
-    setPage(1)
-  }, [incidentType, officer])
+  const filterKey = `${incidentType}|${officer}`
+  const [pageForFilter, setPageForFilter] = useState({ filterKey, page: 1 })
+  const page = pageForFilter.filterKey === filterKey ? pageForFilter.page : 1
+  const setPage = (page: number) => setPageForFilter({ filterKey, page })
 
   const filtered = useMemo(() => {
     return incidents.filter(r => {

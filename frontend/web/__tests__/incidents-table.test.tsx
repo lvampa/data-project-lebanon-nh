@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 import { IncidentsTable } from '@/components/incidents-table'
 import type { Incident } from '@/lib/types'
 
@@ -96,22 +96,17 @@ describe('IncidentsTable', () => {
   })
 
   it('page resets to 1 when filter changes', async () => {
-    // Start with 51 incidents and no filter → page 1 of 2
     vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams())
-    const incidents = makeIncidents(51)
+    const incidents = makeIncidents(101)
     const { rerender } = render(<IncidentsTable incidents={incidents} />)
-    expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument()
+    fireEvent.click(screen.getByText(/Next/))
+    expect(screen.getByText(/Page 2 of 3/)).toBeInTheDocument()
 
-    // Change filter so only 1 result remains → totalPages = 1 → pagination hidden
-    vi.mocked(useSearchParams).mockReturnValue(
-      new URLSearchParams(`incident_type=${incidents[0].incident_type}&officer=unique-xyz`),
-    )
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams('incident_type=theft'))
     await act(async () => {
       rerender(<IncidentsTable incidents={incidents} />)
     })
 
-    // With 0 matching results the count shows 0 and no pagination
-    expect(screen.getByText('0 incidents')).toBeInTheDocument()
-    expect(screen.queryByText(/Page/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Page 1 of 3/)).toBeInTheDocument()
   })
 })

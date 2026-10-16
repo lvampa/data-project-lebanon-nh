@@ -58,15 +58,29 @@ export function SiteHeader() {
           (hidden && !menuOpen ? "-translate-y-full" : "translate-y-0")
         }
       >
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-8 px-5 md:h-[76px] md:px-8">
-          <div className="md:hidden">
-            <Brand compact />
-          </div>
-          <div className="hidden md:block">
-            <Brand />
-          </div>
+        <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-5 md:hidden">
+          <button
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            aria-controls="site-menu"
+            onClick={() => setMenuOpen(true)}
+            className="-ml-2 inline-flex size-11 items-center justify-center justify-self-start rounded-full text-foreground hover:bg-accent hover:text-primary"
+          >
+            <Menu className="size-[22px]" />
+          </button>
+          <Link href="/" aria-label="Lebanon Data Project home" className="text-foreground">
+            <LogoMark size={36} strokeWidth={6} />
+          </Link>
+          <Link href={SUPPORT_HREF} className={supportClass + " h-9 justify-self-end px-3.5 text-sm"}>
+            Support
+          </Link>
+        </div>
 
-          <nav aria-label="Main" className="hidden items-center gap-1 md:flex">
+        <div className="mx-auto hidden h-[76px] max-w-7xl items-center gap-8 px-8 md:flex">
+          <Brand />
+
+          <nav aria-label="Main" className="flex items-center gap-1">
             {NAV_ITEMS.map((item) => {
               const active = isActive(pathname, item.href)
               return (
@@ -93,22 +107,9 @@ export function SiteHeader() {
 
           <div className="flex-1" />
 
-          <Link href={SUPPORT_HREF} className={supportClass + " hidden h-10 px-5 text-[15px] md:inline-flex"}>
+          <Link href={SUPPORT_HREF} className={supportClass + " h-10 px-5 text-[15px]"}>
             Support
           </Link>
-          <Link href={SUPPORT_HREF} className={supportClass + " h-9 px-3.5 text-sm md:hidden"}>
-            Support
-          </Link>
-          <button
-            type="button"
-            aria-label="Open menu"
-            aria-expanded={menuOpen}
-            aria-controls="site-menu"
-            onClick={() => setMenuOpen(true)}
-            className="-mr-2 inline-flex size-11 items-center justify-center rounded-full text-foreground hover:bg-accent hover:text-primary md:hidden"
-          >
-            <Menu className="size-[22px]" />
-          </button>
         </div>
       </header>
 
@@ -121,16 +122,15 @@ export function SiteHeader() {
           className="fixed inset-0 z-50 flex flex-col bg-background md:hidden"
         >
           <div className="flex h-16 items-center gap-2.5 px-5">
-            <Brand compact />
-            <div className="flex-1" />
             <button
               type="button"
               aria-label="Close menu"
               onClick={() => setMenuOpen(false)}
-              className="-mr-2 inline-flex size-11 items-center justify-center rounded-full text-foreground hover:bg-accent"
+              className="-ml-2 inline-flex size-11 items-center justify-center rounded-full text-foreground hover:bg-accent"
             >
               <X className="size-[22px]" />
             </button>
+            <Brand compact />
           </div>
           <nav aria-label="Main" className="flex flex-col pt-2">
             {NAV_ITEMS.map((item) => {

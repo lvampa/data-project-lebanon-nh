@@ -22,8 +22,7 @@ export function IncidentsFilters() {
     [router, pathname, searchParams],
   )
 
-  const hasFilters =
-    searchParams.has('incident_type') || searchParams.has('officer')
+  const hasFilters = searchParams.has('incident_type') || searchParams.has('officer')
 
   return (
     <div className="flex gap-2 mb-4 flex-wrap">
@@ -31,20 +30,18 @@ export function IncidentsFilters() {
         placeholder="Incident type…"
         defaultValue={searchParams.get('incident_type') ?? ''}
         className="w-48"
-        onBlur={e => updateFilter('incident_type', e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter')
-            updateFilter('incident_type', (e.target as HTMLInputElement).value)
+        onBlur={(e) => updateFilter('incident_type', e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') updateFilter('incident_type', (e.target as HTMLInputElement).value)
         }}
       />
       <Input
         placeholder="Officer…"
         defaultValue={searchParams.get('officer') ?? ''}
         className="w-36"
-        onBlur={e => updateFilter('officer', e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter')
-            updateFilter('officer', (e.target as HTMLInputElement).value)
+        onBlur={(e) => updateFilter('officer', e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') updateFilter('officer', (e.target as HTMLInputElement).value)
         }}
       />
       {hasFilters && (

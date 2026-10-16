@@ -12,9 +12,7 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('readDataFile', () => {
   it('reads and parses JSON from public/data/', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValueOnce(
-      JSON.stringify({ total: 42 }),
-    )
+    vi.mocked(fs.readFileSync).mockReturnValueOnce(JSON.stringify({ total: 42 }))
     const { readDataFile } = await import('@/lib/data')
     const result = readDataFile<{ total: number }>('stats.json')
     expect(result.total).toBe(42)

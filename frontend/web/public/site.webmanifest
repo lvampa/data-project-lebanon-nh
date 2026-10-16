@@ -1,11 +1,11 @@
 {
-  "name": "Lebanon Data Project",
-  "short_name": "Lebanon Data",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ],
-  "theme_color": "#14233c",
-  "background_color": "#ffffff",
-  "display": "standalone"
+    "name": "Lebanon Data Project",
+    "short_name": "Lebanon Data",
+    "icons": [
+        { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    ],
+    "theme_color": "#14233c",
+    "background_color": "#ffffff",
+    "display": "standalone"
 }

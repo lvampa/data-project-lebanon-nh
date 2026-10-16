@@ -81,7 +81,9 @@ export function Switch({
       </button>
       {(label || description) && (
         <span className="flex flex-col gap-0.5 pt-px">
-          {label && <span className="text-[13px] font-medium leading-tight text-foreground">{label}</span>}
+          {label && (
+            <span className="text-[13px] font-medium leading-tight text-foreground">{label}</span>
+          )}
           {description && <span className="text-xs text-muted-foreground">{description}</span>}
         </span>
       )}

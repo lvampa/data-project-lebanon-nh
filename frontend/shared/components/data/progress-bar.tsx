@@ -17,7 +17,7 @@ const fills: Record<Variant, string> = {
   primary: 'bg-primary',
   success: 'bg-[oklch(0.620_0.150_155)]',
   warning: 'bg-[oklch(0.769_0.188_70.08)]',
-  danger:  'bg-destructive',
+  danger: 'bg-destructive',
   neutral: 'bg-muted-foreground',
 }
 
@@ -49,7 +49,10 @@ export function ProgressBar({
         aria-valuemin={0}
         aria-valuemax={max}
         aria-valuenow={value}
-        className={cn('w-full overflow-hidden rounded-full bg-muted', size === 'sm' ? 'h-1' : 'h-2')}
+        className={cn(
+          'w-full overflow-hidden rounded-full bg-muted',
+          size === 'sm' ? 'h-1' : 'h-2',
+        )}
       >
         <div
           className={cn('h-full rounded-full transition-[width] duration-200', fills[variant])}

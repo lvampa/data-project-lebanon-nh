@@ -27,16 +27,22 @@ export function MapLoadingState({ progress = '3 of 12 quadrants · ~2 s' }: MapL
       {/* Skeleton card placeholders */}
       <div
         style={{
-          position: 'absolute', top: 16, left: 16,
-          width: 180, height: 36,
+          position: 'absolute',
+          top: 16,
+          left: 16,
+          width: 180,
+          height: 36,
           borderRadius: 'var(--radius)',
           background: 'color-mix(in oklch, var(--foreground) 10%, transparent)',
         }}
       />
       <div
         style={{
-          position: 'absolute', top: 16, right: 16,
-          width: 180, height: 120,
+          position: 'absolute',
+          top: 16,
+          right: 16,
+          width: 180,
+          height: 120,
           borderRadius: 'var(--radius)',
           background: 'color-mix(in oklch, var(--foreground) 10%, transparent)',
         }}
@@ -46,7 +52,8 @@ export function MapLoadingState({ progress = '3 of 12 quadrants · ~2 s' }: MapL
       <div
         style={{
           position: 'absolute',
-          left: '50%', top: '50%',
+          left: '50%',
+          top: '50%',
           transform: 'translate(-50%, -50%)',
           background: 'var(--popover)',
           color: 'var(--popover-foreground)',

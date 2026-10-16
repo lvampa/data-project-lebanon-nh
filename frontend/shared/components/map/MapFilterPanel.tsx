@@ -9,11 +9,11 @@ export interface FilterCategory {
 }
 
 const DEFAULT_CATEGORIES: FilterCategory[] = [
-  { label: 'Fire',    count: 38,  enabled: true,  colorVar: '--chart-1' },
-  { label: 'Medical', count: 214, enabled: true,  colorVar: '--chart-2' },
-  { label: 'Traffic', count: 96,  enabled: true,  colorVar: '--chart-3' },
-  { label: 'Utility', count: 12,  enabled: false, colorVar: '--chart-4' },
-  { label: 'Police',  count: 151, enabled: false, colorVar: '--chart-5' },
+  { label: 'Fire', count: 38, enabled: true, colorVar: '--chart-1' },
+  { label: 'Medical', count: 214, enabled: true, colorVar: '--chart-2' },
+  { label: 'Traffic', count: 96, enabled: true, colorVar: '--chart-3' },
+  { label: 'Utility', count: 12, enabled: false, colorVar: '--chart-4' },
+  { label: 'Police', count: 151, enabled: false, colorVar: '--chart-5' },
 ]
 
 interface MapFilterPanelProps {
@@ -146,22 +146,60 @@ export function MapFilterPanel({
 
           {/* Categories */}
           <div style={{ padding: '8px 12px 12px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 10, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 0 2px' }}>
+            <div
+              style={{
+                fontSize: 10,
+                color: 'var(--muted-foreground)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                padding: '4px 0 2px',
+              }}
+            >
               Categories
             </div>
             {categories.map((cat, i) => (
-              <div key={cat.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
+              <div
+                key={cat.label}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '6px 0',
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 999, background: `var(${cat.colorVar})`, boxShadow: '0 0 0 1.5px var(--background)', flexShrink: 0 }} />
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 999,
+                      background: `var(${cat.colorVar})`,
+                      boxShadow: '0 0 0 1.5px var(--background)',
+                      flexShrink: 0,
+                    }}
+                  />
                   <span style={{ fontSize: 12, color: 'var(--foreground)' }}>{cat.label}</span>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-foreground)' }}>{cat.colorVar}</code>
+                  <code
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      color: 'var(--muted-foreground)',
+                    }}
+                  >
+                    {cat.colorVar}
+                  </code>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 11, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>{cat.count}</span>
-                  <Switch
-                    on={cat.enabled}
-                    onChange={(v) => onCategoryToggle?.(i, v)}
-                  />
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--muted-foreground)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {cat.count}
+                  </span>
+                  <Switch on={cat.enabled} onChange={(v) => onCategoryToggle?.(i, v)} />
                 </div>
               </div>
             ))}
@@ -169,16 +207,56 @@ export function MapFilterPanel({
 
           {/* Date range */}
           <div style={{ padding: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-              <span style={{ fontSize: 10, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Date range</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted-foreground)' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                marginBottom: 6,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  color: 'var(--muted-foreground)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                Date range
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  color: 'var(--muted-foreground)',
+                }}
+              >
                 {dateFrom.slice(0, 4)} — {dateTo.slice(0, 4)}
               </span>
             </div>
 
             {/* Range track (visual only) */}
-            <div style={{ position: 'relative', height: 6, background: 'var(--muted)', borderRadius: 999, margin: '8px 6px' }}>
-              <div style={{ position: 'absolute', left: '22%', right: '12%', top: 0, bottom: 0, background: 'var(--primary)', borderRadius: 999 }} />
+            <div
+              style={{
+                position: 'relative',
+                height: 6,
+                background: 'var(--muted)',
+                borderRadius: 999,
+                margin: '8px 6px',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '22%',
+                  right: '12%',
+                  top: 0,
+                  bottom: 0,
+                  background: 'var(--primary)',
+                  borderRadius: 999,
+                }}
+              />
               {[22, 88].map((pct) => (
                 <div
                   key={pct}
@@ -197,7 +275,15 @@ export function MapFilterPanel({
               ))}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 6, marginTop: 12, alignItems: 'center' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto 1fr',
+                gap: 6,
+                marginTop: 12,
+                alignItems: 'center',
+              }}
+            >
               <DateInput value={dateFrom} />
               <span style={{ color: 'var(--muted-foreground)', fontSize: 11 }}>—</span>
               <DateInput value={dateTo} />
@@ -217,13 +303,33 @@ export function MapFilterPanel({
           >
             <button
               onClick={onReset}
-              style={{ height: 28, padding: '0 10px', borderRadius: 'calc(var(--radius) - 4px)', border: '1px solid transparent', background: 'transparent', color: 'var(--foreground)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
+              style={{
+                height: 28,
+                padding: '0 10px',
+                borderRadius: 'calc(var(--radius) - 4px)',
+                border: '1px solid transparent',
+                background: 'transparent',
+                color: 'var(--foreground)',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
             >
               Reset
             </button>
             <button
               onClick={onApply}
-              style={{ height: 28, padding: '0 10px', borderRadius: 'calc(var(--radius) - 4px)', border: 'none', background: 'var(--primary)', color: 'var(--primary-foreground)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
+              style={{
+                height: 28,
+                padding: '0 10px',
+                borderRadius: 'calc(var(--radius) - 4px)',
+                border: 'none',
+                background: 'var(--primary)',
+                color: 'var(--primary-foreground)',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
             >
               Apply
             </button>
@@ -287,9 +393,17 @@ function DateInput({ value }: { value: string }) {
     >
       <input
         defaultValue={value}
-        style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', color: 'var(--foreground)', fontSize: 'inherit', fontFamily: 'inherit' }}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          border: 'none',
+          outline: 'none',
+          background: 'transparent',
+          color: 'var(--foreground)',
+          fontSize: 'inherit',
+          fontFamily: 'inherit',
+        }}
       />
     </div>
   )
 }
-

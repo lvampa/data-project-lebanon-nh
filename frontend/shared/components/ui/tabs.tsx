@@ -40,7 +40,8 @@ export function Tabs({
       className={cn(
         'inline-flex',
         variant === 'underline' && 'gap-1 border-b border-border',
-        variant === 'pill' && 'gap-1 rounded-[calc(var(--radius)-2px)] border border-border bg-muted p-[3px]',
+        variant === 'pill' &&
+          'gap-1 rounded-[calc(var(--radius)-2px)] border border-border bg-muted p-[3px]',
         className,
       )}
     >

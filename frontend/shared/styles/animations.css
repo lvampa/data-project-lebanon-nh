@@ -1,0 +1,46 @@
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none !important;
+  }
+}
+
+/* Opera House loader (components/site/opera-house-loader.tsx) */
+@layer components {
+  .ldp-seg {
+    stroke-dasharray: 1 1.1;
+    stroke-dashoffset: 1.02;
+    animation: ldp-draw 4s cubic-bezier(0.45, 0.05, 0.35, 1) infinite both;
+  }
+}
+@keyframes ldp-draw {
+  0% {
+    stroke-dashoffset: 1.02;
+  }
+  22% {
+    stroke-dashoffset: 0;
+  }
+  68% {
+    stroke-dashoffset: 0;
+  }
+  88% {
+    stroke-dashoffset: -1.02;
+  }
+  100% {
+    stroke-dashoffset: -1.02;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ldp-seg {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

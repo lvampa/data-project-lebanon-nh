@@ -27,15 +27,13 @@ describe('formatWeekdayData', () => {
       { day: 'Mon', count: 15 },
     ]
     const result = formatWeekdayData(input)
-    expect(result.map(r => r.day)).toEqual([
-      'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat',
-    ])
+    expect(result.map((r) => r.day)).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
   })
 
   it('fills missing days with count 0', () => {
     const result = formatWeekdayData([{ day: 'Wed', count: 8 }])
     expect(result).toHaveLength(7)
-    expect(result.find(r => r.day === 'Sun')?.count).toBe(0)
-    expect(result.find(r => r.day === 'Wed')?.count).toBe(8)
+    expect(result.find((r) => r.day === 'Sun')?.count).toBe(0)
+    expect(result.find((r) => r.day === 'Wed')?.count).toBe(8)
   })
 })

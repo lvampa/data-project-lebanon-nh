@@ -39,18 +39,14 @@ export const viewport: Viewport = {
   themeColor: '#14233c',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body
-        className={`${plexSans.variable} ${plexMono.variable} ${plexSans.className} flex min-h-dvh flex-col`}
+        className={`${plexSans.variable} ${plexMono.variable} ${plexSans.className} flex min-h-dvh flex-col overflow-x-clip`}
       >
         <SiteHeader />
-        <main className="max-w-7xl w-full mx-auto px-4 py-6 flex-1">{children}</main>
+        <main className="max-w-7xl w-full mx-auto px-5 py-6 flex-1 md:px-8">{children}</main>
         <SiteFooter />
       </body>
     </html>

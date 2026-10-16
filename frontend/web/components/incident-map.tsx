@@ -18,7 +18,8 @@ export function IncidentMap({ addresses }: Props) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? 'https://tiles.openfreemap.org/styles/liberty',
+      style:
+        process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? 'https://tiles.openfreemap.org/styles/liberty',
       center: LEBANON_CENTER,
       zoom: LEBANON_ZOOM,
     })
@@ -26,7 +27,7 @@ export function IncidentMap({ addresses }: Props) {
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
 
     map.on('load', () => {
-      addresses.forEach(addr => {
+      addresses.forEach((addr) => {
         const { lngLat, label } = addressToMarker(addr)
         new maplibregl.Marker({ color: '#3b82f6' })
           .setLngLat(lngLat)

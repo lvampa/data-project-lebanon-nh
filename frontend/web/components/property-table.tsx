@@ -1,7 +1,11 @@
 import Link from 'next/link'
 import {
-  Table, TableBody, TableCell, TableHead,
-  TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@project/ui/components/ui/table'
 import { Badge } from '@project/ui/components/ui/badge'
 import type { PropertyRecord } from '@/lib/types'
@@ -25,13 +29,15 @@ export function PropertyTable({ properties }: Props) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {properties.map(p => (
+        {properties.map((p) => (
           <TableRow key={p.parcel_id}>
             <TableCell className="font-medium text-sm">{p.location ?? '—'}</TableCell>
             <TableCell className="text-sm">{p.owner ?? '—'}</TableCell>
             <TableCell className="text-xs">
               {p.land_use && (
-                <Badge variant="outline" className="text-xs">{p.land_use}</Badge>
+                <Badge variant="outline" className="text-xs">
+                  {p.land_use}
+                </Badge>
               )}
             </TableCell>
             <TableCell className="text-sm tabular-nums">

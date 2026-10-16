@@ -34,7 +34,10 @@ function colorFor(name: string) {
 export function Avatar({ src, name = '?', size = 32, bg, className }: AvatarProps) {
   return (
     <span
-      className={cn('inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden font-medium text-white', className)}
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center rounded-full overflow-hidden font-medium text-white',
+        className,
+      )}
       style={{
         width: size,
         height: size,

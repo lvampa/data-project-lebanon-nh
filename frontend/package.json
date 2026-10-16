@@ -3,7 +3,23 @@
   "private": true,
   "packageManager": "bun@1.4.3",
   "scripts": {
-    "check": "bun run --filter '*' typecheck && bun run --filter web lint && bun run --filter web test"
+    "lint": "eslint .",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "bun run --filter '*' typecheck && bun run lint && bun run format:check && bun run test"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^6.0.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.7",
+    "eslint-plugin-better-tailwindcss": "^4.9.1",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
+    "vitest": "^4.1.8"
   },
   "workspaces": {
     "packages": [
@@ -13,6 +29,7 @@
     ],
     "catalog": {
       "@base-ui/react": "^1.9.0",
+      "@playwright/test": "^1.64.1",
       "@tailwindcss/postcss": "^4.3.3",
       "@types/node": "^20.19.43",
       "@types/react": "^19.3.0",

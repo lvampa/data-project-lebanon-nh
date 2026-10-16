@@ -12,10 +12,10 @@ interface TooltipProps {
 }
 
 const positionClasses: Record<TooltipSide, string> = {
-  top:    'bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2',
+  top: 'bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2',
   bottom: 'top-[calc(100%+6px)] left-1/2 -translate-x-1/2',
-  left:   'right-[calc(100%+6px)] top-1/2 -translate-y-1/2',
-  right:  'left-[calc(100%+6px)] top-1/2 -translate-y-1/2',
+  left: 'right-[calc(100%+6px)] top-1/2 -translate-y-1/2',
+  right: 'left-[calc(100%+6px)] top-1/2 -translate-y-1/2',
 }
 
 export function Tooltip({ content, side = 'top', children, className }: TooltipProps) {

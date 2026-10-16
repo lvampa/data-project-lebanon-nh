@@ -6,9 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -29,20 +29,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@tailwindcss/postcss": "catalog:",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^14.6.1",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@vitejs/plugin-react": "^6.0.2",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.7",
-    "jsdom": "^29.1.1",
-    "prettier": "^3.8.3",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "^4.1.8"
+    "typescript": "catalog:"
   }
 }

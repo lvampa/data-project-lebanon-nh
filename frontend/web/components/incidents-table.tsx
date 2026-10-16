@@ -3,11 +3,15 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
-  Table, TableBody, TableCell, TableHead,
-  TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@project/ui/components/ui/table'
 import { Badge } from '@project/ui/components/ui/badge'
-import { Pagination } from '@/components/pagination'
+import { Pagination } from '@project/ui/components/data/pagination'
 import type { Incident } from '@/lib/types'
 import { PER_PAGE } from '@project/ui/lib/constants'
 
@@ -26,17 +30,13 @@ export function IncidentsTable({ incidents }: Props) {
   const setPage = (page: number) => setPageForFilter({ filterKey, page })
 
   const filtered = useMemo(() => {
-    return incidents.filter(r => {
+    return incidents.filter((r) => {
       if (
         incidentType &&
         !(r.incident_type ?? '').toLowerCase().includes(incidentType.toLowerCase())
       )
         return false
-      if (
-        officer &&
-        !(r.officer ?? '').toLowerCase().includes(officer.toLowerCase())
-      )
-        return false
+      if (officer && !(r.officer ?? '').toLowerCase().includes(officer.toLowerCase())) return false
       return true
     })
   }, [incidents, incidentType, officer])
@@ -72,7 +72,7 @@ export function IncidentsTable({ incidents }: Props) {
                     {row.case_number ?? '—'}
                   </Link>
                 ) : (
-                  row.case_number ?? '—'
+                  (row.case_number ?? '—')
                 )}
               </TableCell>
               <TableCell>

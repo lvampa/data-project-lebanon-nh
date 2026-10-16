@@ -72,8 +72,12 @@ export function IncidentPopup({
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 999, background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>{title}</span>
+              <span
+                style={{ width: 8, height: 8, borderRadius: 999, background: color, flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>
+                {title}
+              </span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>{incidentId}</div>
           </div>
@@ -112,7 +116,9 @@ export function IncidentPopup({
         >
           {fields.map((f, i) => (
             <React.Fragment key={i}>
-              <div style={{ color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>{f.label}</div>
+              <div style={{ color: 'var(--muted-foreground)', whiteSpace: 'nowrap' }}>
+                {f.label}
+              </div>
               <div>{f.value}</div>
             </React.Fragment>
           ))}
@@ -206,4 +212,3 @@ export function IncidentPopup({
     </div>
   )
 }
-

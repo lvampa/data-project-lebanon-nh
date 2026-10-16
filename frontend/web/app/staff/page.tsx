@@ -4,7 +4,7 @@ import type { StaffMember } from '@/lib/types'
 
 export default function StaffPage() {
   const staff = readDataFile<StaffMember[]>('staff.json')
-  const departments = [...new Set(staff.map(s => s.department))].sort()
+  const departments = [...new Set(staff.map((s) => s.department))].sort()
 
   return (
     <div>

@@ -1,9 +1,5 @@
 'use client'
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@project/ui/components/ui/chart'
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@project/ui/components/ui/chart'
 import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts'
 
 interface Props {

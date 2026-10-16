@@ -25,7 +25,8 @@ const iconSizes: Record<Size, string> = {
 }
 
 const variants: Record<Variant, string> = {
-  ghost:   'bg-transparent border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+  ghost:
+    'bg-transparent border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
   outline: 'bg-transparent border-border text-foreground hover:bg-muted',
   primary: 'bg-primary border-transparent text-primary-foreground hover:bg-primary/80',
 }

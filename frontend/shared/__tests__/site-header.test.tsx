@@ -49,8 +49,13 @@ describe('SiteHeader', () => {
     mockedUsePathname.mockReturnValue('/government/budgets')
     render(<SiteHeader />)
     const nav = desktopNav()
-    expect(within(nav).getByRole('link', { name: 'Government' })).toHaveAttribute('aria-current', 'page')
-    expect(within(nav).getByRole('link', { name: 'Properties' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('link', { name: 'Government' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(within(nav).getByRole('link', { name: 'Properties' })).not.toHaveAttribute(
+      'aria-current',
+    )
   })
 
   it('opens the phone menu and closes it with Escape', async () => {
@@ -59,7 +64,10 @@ describe('SiteHeader', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open menu' }))
     const menu = screen.getByRole('dialog', { name: 'Menu' })
-    expect(within(menu).getByRole('link', { name: 'Support the project' })).toHaveAttribute('href', '/support')
+    expect(within(menu).getByRole('link', { name: 'Support the project' })).toHaveAttribute(
+      'href',
+      '/support',
+    )
     expect(document.body.style.overflow).toBe('hidden')
 
     await user.keyboard('{Escape}')

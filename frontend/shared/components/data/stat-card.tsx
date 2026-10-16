@@ -31,10 +31,7 @@ export function StatCard({
 
   return (
     <div
-      className={cn(
-        'flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4',
-        className,
-      )}
+      className={cn('flex flex-col gap-1.5 rounded-lg border border-border bg-card p-4', className)}
     >
       <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
@@ -47,9 +44,7 @@ export function StatCard({
         >
           {value}
         </span>
-        {unit && (
-          <span className="text-sm text-muted-foreground">{unit}</span>
-        )}
+        {unit && <span className="text-sm text-muted-foreground">{unit}</span>}
       </div>
 
       <div className="mt-0.5 flex items-center justify-between gap-2">
@@ -79,9 +74,7 @@ export function StatCard({
         )}
       </div>
 
-      {footnote && (
-        <div className="mt-1 text-[11px] text-muted-foreground">{footnote}</div>
-      )}
+      {footnote && <div className="mt-1 text-[11px] text-muted-foreground">{footnote}</div>}
     </div>
   )
 }

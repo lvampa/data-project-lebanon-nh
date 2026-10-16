@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
+import { useEffect, useState } from 'react'
 
 // Hides once the page has scrolled `distance` px down since the last upward scroll; any upward
 // scroll shows it again. Distance, not time, so a wheel, a trackpad and a phone all feel the same.
@@ -28,11 +28,11 @@ export function useHideOnScroll(distance = 150, topOffset = 80) {
       lastY = y
     }
 
-    window.addEventListener("scroll", onScroll, { passive: true })
-    window.visualViewport?.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.visualViewport?.addEventListener('scroll', onScroll, { passive: true })
     return () => {
-      window.removeEventListener("scroll", onScroll)
-      window.visualViewport?.removeEventListener("scroll", onScroll)
+      window.removeEventListener('scroll', onScroll)
+      window.visualViewport?.removeEventListener('scroll', onScroll)
     }
   }, [distance, topOffset])
 

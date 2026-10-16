@@ -1,8 +1,8 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
 
 // Matches the dev script, so an admin dev server you already have running is reused.
-const PORT = 3001;
-const baseURL = `http://localhost:${PORT}`;
+const PORT = 3001
+const baseURL = `http://localhost:${PORT}`
 
 export default defineConfig({
   testDir: 'e2e',
@@ -30,4 +30,4 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },
-});
+})

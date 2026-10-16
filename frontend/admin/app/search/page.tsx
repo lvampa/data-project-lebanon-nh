@@ -38,9 +38,7 @@ function ResultCard({ result }: { result: SearchResult }) {
   return (
     <div className="rounded-md border border-border bg-card px-4 py-3">
       <div className="text-[13px] font-medium text-foreground">{primary}</div>
-      {secondary && (
-        <div className="mt-0.5 text-[12px] text-muted-foreground">{secondary}</div>
-      )}
+      {secondary && <div className="mt-0.5 text-[12px] text-muted-foreground">{secondary}</div>}
       <div className="mt-1 text-[11px] text-muted-foreground/60">
         score {result.score.toFixed(2)}
       </div>
@@ -124,22 +122,18 @@ export default function SearchPage() {
         </p>
       )}
 
-      {error && (
-        <p className="mb-4 text-[13px] text-destructive">{error}</p>
-      )}
+      {error && <p className="mb-4 text-[13px] text-destructive">{error}</p>}
 
       {response && !hasResults && (
-        <p className="text-[13px] text-muted-foreground">No results found for &ldquo;{response.query}&rdquo;.</p>
+        <p className="text-[13px] text-muted-foreground">
+          No results found for &ldquo;{response.query}&rdquo;.
+        </p>
       )}
 
       {response && hasResults && (
         <div className="flex flex-col gap-6">
           {Object.entries(ENTITY_LABELS).map(([key, label]) => (
-            <ResultSection
-              key={key}
-              label={label}
-              results={response.results[key] ?? []}
-            />
+            <ResultSection key={key} label={label} results={response.results[key] ?? []} />
           ))}
         </div>
       )}

@@ -11,7 +11,9 @@ const STATUS_BADGE: Record<string, string> = {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_BADGE[status] ?? 'bg-gray-100'}`}>
+    <span
+      className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_BADGE[status] ?? 'bg-gray-100'}`}
+    >
       {status}
     </span>
   )
@@ -49,16 +51,16 @@ export default async function LlcsPage() {
                     >
                       {llc.name}
                     </a>
-                  ) : llc.name}
+                  ) : (
+                    llc.name
+                  )}
                 </td>
                 <td className="py-2 pr-4">
                   <StatusBadge status={llc.lookup_status} />
                 </td>
-                <td className="py-2 pr-4 text-muted-foreground">
-                  {llc.business_status ?? '—'}
-                </td>
+                <td className="py-2 pr-4 text-muted-foreground">{llc.business_status ?? '—'}</td>
                 <td className="py-2 pr-4">
-                  {llc.principals?.map(p => (
+                  {llc.principals?.map((p) => (
                     <div key={p.name} className="text-xs">
                       <span className="font-medium">{p.name}</span>
                       <span className="text-muted-foreground"> / {p.title}</span>

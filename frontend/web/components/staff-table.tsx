@@ -1,6 +1,10 @@
 import {
-  Table, TableBody, TableCell, TableHead,
-  TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@project/ui/components/ui/table'
 import { Badge } from '@project/ui/components/ui/badge'
 import type { StaffMember } from '@/lib/types'
@@ -28,12 +32,10 @@ export function StaffTable({ staff }: Props) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {staff.map(person => (
+        {staff.map((person) => (
           <TableRow key={person.id}>
             <TableCell className="font-medium">{person.name}</TableCell>
-            <TableCell className="text-sm text-muted-foreground">
-              {person.title ?? '—'}
-            </TableCell>
+            <TableCell className="text-sm text-muted-foreground">{person.title ?? '—'}</TableCell>
             <TableCell>
               <Badge variant={DEPT_VARIANT[person.department] ?? 'outline'}>
                 {person.department}
@@ -42,10 +44,7 @@ export function StaffTable({ staff }: Props) {
             <TableCell className="text-sm">{person.division ?? '—'}</TableCell>
             <TableCell className="text-sm">
               {person.email ? (
-                <a
-                  href={`mailto:${person.email}`}
-                  className="text-blue-600 hover:underline"
-                >
+                <a href={`mailto:${person.email}`} className="text-blue-600 hover:underline">
                   {person.email}
                 </a>
               ) : (

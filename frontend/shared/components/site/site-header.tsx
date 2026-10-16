@@ -1,23 +1,29 @@
-"use client"
+'use client'
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
-import { Menu, X } from "lucide-react"
-import { LogoMark } from "./logo-mark"
-import { NAV_ITEMS, SUPPORT_HREF, isActive } from "./nav-items"
-import { useHideOnScroll } from "./use-hide-on-scroll"
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { Menu, X } from 'lucide-react'
+import { LogoMark } from './logo-mark'
+import { NAV_ITEMS, SUPPORT_HREF, isActive } from './nav-items'
+import { useHideOnScroll } from './use-hide-on-scroll'
 
 const supportClass =
-  "inline-flex items-center justify-center rounded-full bg-highlight text-highlight-foreground font-semibold " +
-  "transition-colors hover:bg-highlight/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+  'inline-flex items-center justify-center rounded-full bg-highlight text-highlight-foreground font-semibold ' +
+  'transition-colors hover:bg-highlight/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" aria-label="Lebanon Data Project home" className="flex items-center gap-3 text-foreground">
+    <Link
+      href="/"
+      aria-label="Lebanon Data Project home"
+      className="flex items-center gap-3 text-foreground"
+    >
       <LogoMark size={compact ? 36 : 44} strokeWidth={compact ? 6 : 5.2} />
       <span className="flex flex-col">
-        <span className={compact ? "text-base font-semibold" : "text-lg leading-[22px] font-semibold"}>
+        <span
+          className={compact ? 'text-base font-semibold' : 'text-lg leading-[22px] font-semibold'}
+        >
           Lebanon Data Project
         </span>
         {!compact && (
@@ -31,7 +37,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
 }
 
 export function SiteHeader() {
-  const pathname = usePathname() ?? "/"
+  const pathname = usePathname() ?? '/'
   const hidden = useHideOnScroll()
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [menuPath, setMenuPath] = useState<string | null>(null)
@@ -40,12 +46,12 @@ export function SiteHeader() {
 
   useEffect(() => {
     if (!menuOpen) return
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuPath(null)
-    document.addEventListener("keydown", onKey)
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuPath(null)
+    document.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
+    document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener("keydown", onKey)
+      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
     }
   }, [menuOpen])
@@ -54,8 +60,8 @@ export function SiteHeader() {
     <>
       <header
         className={
-          "sticky top-0 z-40 bg-background motion-safe:transition-transform motion-safe:duration-300 " +
-          (hidden && !menuOpen ? "-translate-y-full" : "translate-y-0")
+          'sticky top-0 z-40 bg-background motion-safe:transition-transform motion-safe:duration-300 ' +
+          (hidden && !menuOpen ? '-translate-y-full' : 'translate-y-0')
         }
       >
         <div className="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-5 md:hidden">
@@ -72,7 +78,10 @@ export function SiteHeader() {
           <Link href="/" aria-label="Lebanon Data Project home" className="text-foreground">
             <LogoMark size={36} strokeWidth={6} />
           </Link>
-          <Link href={SUPPORT_HREF} className={supportClass + " h-9 justify-self-end px-3.5 text-sm"}>
+          <Link
+            href={SUPPORT_HREF}
+            className={supportClass + ' h-9 justify-self-end px-3.5 text-sm'}
+          >
             Support
           </Link>
         </div>
@@ -87,16 +96,16 @@ export function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={active ? 'page' : undefined}
                   data-label={item.label}
                   className={
                     // after: reserves bold width so links don't shift when one becomes active
-                    "inline-flex h-11 flex-col items-center justify-center px-3 text-[15px] transition-colors " +
-                    "after:invisible after:h-0 after:overflow-hidden after:font-bold after:content-[attr(data-label)] " +
-                    "rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
+                    'inline-flex h-11 flex-col items-center justify-center px-3 text-[15px] transition-colors ' +
+                    'after:invisible after:h-0 after:overflow-hidden after:font-bold after:content-[attr(data-label)] ' +
+                    'rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
                     (active
-                      ? "font-bold text-foreground underline decoration-2 underline-offset-8"
-                      : "font-medium text-foreground hover:text-primary")
+                      ? 'font-bold text-foreground underline decoration-2 underline-offset-8'
+                      : 'font-medium text-foreground hover:text-primary')
                   }
                 >
                   {item.label}
@@ -107,7 +116,7 @@ export function SiteHeader() {
 
           <div className="flex-1" />
 
-          <Link href={SUPPORT_HREF} className={supportClass + " h-10 px-5 text-[15px]"}>
+          <Link href={SUPPORT_HREF} className={supportClass + ' h-10 px-5 text-[15px]'}>
             Support
           </Link>
         </div>
@@ -139,10 +148,12 @@ export function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={active ? 'page' : undefined}
                   className={
-                    "flex h-13 items-center px-5 text-lg " +
-                    (active ? "font-bold underline decoration-2 underline-offset-8" : "font-medium hover:text-primary")
+                    'flex h-13 items-center px-5 text-lg ' +
+                    (active
+                      ? 'font-bold underline decoration-2 underline-offset-8'
+                      : 'font-medium hover:text-primary')
                   }
                 >
                   {item.label}
@@ -151,7 +162,7 @@ export function SiteHeader() {
             })}
           </nav>
           <div className="p-5">
-            <Link href={SUPPORT_HREF} className={supportClass + " h-12 w-full text-base"}>
+            <Link href={SUPPORT_HREF} className={supportClass + ' h-12 w-full text-base'}>
               Support the project
             </Link>
           </div>

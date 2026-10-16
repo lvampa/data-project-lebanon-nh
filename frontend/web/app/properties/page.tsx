@@ -10,8 +10,7 @@ export default function PropertiesPage() {
     <div>
       <h1 className="text-2xl font-bold mb-2">Properties</h1>
       <p className="text-sm text-muted-foreground mb-4">
-        {properties.length.toLocaleString()} parcels · search by address or
-        owner
+        {properties.length.toLocaleString()} parcels · search by address or owner
       </p>
       <Suspense>
         <PropertySearch properties={properties} />

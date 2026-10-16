@@ -104,7 +104,12 @@ export function DataTable<T extends Record<string, unknown>>({
                   <span className="inline-flex items-center gap-1">
                     <span>{col.header}</span>
                     {col.sortable && (
-                      <span className={cn('text-[9px]', isActive ? 'text-foreground' : 'text-muted-foreground/50')}>
+                      <span
+                        className={cn(
+                          'text-[9px]',
+                          isActive ? 'text-foreground' : 'text-muted-foreground/50',
+                        )}
+                      >
                         {isActive ? (sort?.dir === 'asc' ? '▲' : '▼') : '▴▾'}
                       </span>
                     )}
@@ -147,11 +152,13 @@ export function DataTable<T extends Record<string, unknown>>({
                         !col.align && (isNumeric ? 'text-right font-mono tabular-nums' : ''),
                       )}
                     >
-                      {col.accessor
-                        ? col.accessor(row)
-                        : row[col.id] != null
-                          ? (row[col.id] as React.ReactNode)
-                          : <span className="text-muted-foreground">—</span>}
+                      {col.accessor ? (
+                        col.accessor(row)
+                      ) : row[col.id] != null ? (
+                        (row[col.id] as React.ReactNode)
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                   )
                 })}

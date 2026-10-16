@@ -21,7 +21,8 @@ export function MapErrorState({
       {/* Hatched background — map failed, no surface to show */}
       <div
         style={{
-          position: 'absolute', inset: 0,
+          position: 'absolute',
+          inset: 0,
           background:
             'repeating-linear-gradient(135deg, transparent 0 11px, color-mix(in oklch, var(--foreground) 4%, transparent) 11px 12px)',
         }}
@@ -30,7 +31,8 @@ export function MapErrorState({
       <div
         style={{
           position: 'absolute',
-          left: '50%', top: '50%',
+          left: '50%',
+          top: '50%',
           transform: 'translate(-50%, -50%)',
           background: 'var(--popover)',
           color: 'var(--popover-foreground)',
@@ -44,10 +46,12 @@ export function MapErrorState({
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <div
             style={{
-              width: 32, height: 32,
+              width: 32,
+              height: 32,
               borderRadius: 999,
               flexShrink: 0,
-              display: 'grid', placeItems: 'center',
+              display: 'grid',
+              placeItems: 'center',
               background: 'color-mix(in oklch, var(--destructive) 14%, transparent)',
               color: 'var(--destructive)',
             }}
@@ -56,14 +60,34 @@ export function MapErrorState({
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{title}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted-foreground)', lineHeight: 1.5, marginBottom: 10 }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--muted-foreground)',
+                lineHeight: 1.5,
+                marginBottom: 10,
+              }}
+            >
               {message}
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {onRetry && (
                 <button
                   onClick={onRetry}
-                  style={{ height: 28, padding: '0 10px', borderRadius: 'calc(var(--radius) - 4px)', border: '1px solid var(--border)', background: 'transparent', color: 'var(--foreground)', fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  style={{
+                    height: 28,
+                    padding: '0 10px',
+                    borderRadius: 'calc(var(--radius) - 4px)',
+                    border: '1px solid var(--border)',
+                    background: 'transparent',
+                    color: 'var(--foreground)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
                 >
                   <RefreshCw size={12} /> Retry
                 </button>
@@ -71,7 +95,17 @@ export function MapErrorState({
               {onViewList && (
                 <button
                   onClick={onViewList}
-                  style={{ height: 28, padding: '0 10px', borderRadius: 'calc(var(--radius) - 4px)', border: '1px solid transparent', background: 'transparent', color: 'var(--foreground)', fontSize: 12, fontWeight: 500, cursor: 'pointer' }}
+                  style={{
+                    height: 28,
+                    padding: '0 10px',
+                    borderRadius: 'calc(var(--radius) - 4px)',
+                    border: '1px solid transparent',
+                    background: 'transparent',
+                    color: 'var(--foreground)',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                  }}
                 >
                   View list instead
                 </button>
@@ -100,4 +134,3 @@ export function MapErrorState({
     </div>
   )
 }
-

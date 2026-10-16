@@ -24,19 +24,15 @@ export const metadata: Metadata = {
   description: 'Internal admin dashboard',
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${sourceSerif.variable} ${inter.className} flex h-screen overflow-hidden bg-background`}>
+      <body
+        className={`${inter.variable} ${sourceSerif.variable} ${inter.className} flex h-screen overflow-hidden bg-background`}
+      >
         <Sidebar />
         <main className="flex flex-1 flex-col min-w-0 overflow-auto">
-          <div className="flex-1 px-6 py-6">
-            {children}
-          </div>
+          <div className="flex-1 px-6 py-6">{children}</div>
         </main>
       </body>
     </html>

@@ -26,7 +26,7 @@ export function PropertySearch({ properties }: Props) {
     if (!q) return properties
     const lower = q.toLowerCase()
     return properties.filter(
-      p =>
+      (p) =>
         (p.location ?? '').toLowerCase().includes(lower) ||
         (p.owner ?? '').toLowerCase().includes(lower),
     )
@@ -49,7 +49,7 @@ export function PropertySearch({ properties }: Props) {
           placeholder="Search by address or owner…"
           value={q}
           className="max-w-sm"
-          onChange={e => updateQ(e.target.value)}
+          onChange={(e) => updateQ(e.target.value)}
         />
         {q && (
           <Button variant="ghost" onClick={() => router.replace(pathname)}>

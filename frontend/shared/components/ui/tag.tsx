@@ -19,7 +19,11 @@ export function Tag({ children, onRemove, icon, className }: TagProps) {
         className,
       )}
     >
-      {icon && <span className="inline-flex items-center text-muted-foreground [&_svg]:size-3">{icon}</span>}
+      {icon && (
+        <span className="inline-flex items-center text-muted-foreground [&_svg]:size-3">
+          {icon}
+        </span>
+      )}
       <span>{children}</span>
       {onRemove && (
         <button

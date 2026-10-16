@@ -1,14 +1,14 @@
-import { configDefaults, defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
-import path from 'path';
+import { configDefaults, defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
-      '@project/ui': path.resolve(__dirname, '../shared')
-    }
+      '@project/ui': path.resolve(__dirname, '../shared'),
+    },
   },
   test: {
     environment: 'jsdom',
@@ -16,4 +16,4 @@ export default defineConfig({
     globals: true,
     exclude: [...configDefaults.exclude, 'e2e/**'],
   },
-});
+})

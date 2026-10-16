@@ -8,17 +8,17 @@ const SECTIONS = [
   {
     heading: 'Operations',
     items: [
-      { href: '/search',    label: 'Search',    icon: Search    },
+      { href: '/search', label: 'Search', icon: Search },
       { href: '/incidents', label: 'Incidents', icon: Activity },
-      { href: '/stats',     label: 'Stats',     icon: BarChart2 },
+      { href: '/stats', label: 'Stats', icon: BarChart2 },
     ],
   },
   {
     heading: 'Data',
     items: [
-      { href: '/addresses',  label: 'Addresses',  icon: MapPin     },
-      { href: '/categories', label: 'Categories', icon: Tag        },
-      { href: '/llcs',       label: 'LLCs',       icon: Building2  },
+      { href: '/addresses', label: 'Addresses', icon: MapPin },
+      { href: '/categories', label: 'Categories', icon: Tag },
+      { href: '/llcs', label: 'LLCs', icon: Building2 },
     ],
   },
 ]
@@ -28,7 +28,6 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col gap-4 border-r border-border bg-card px-3 py-4 sticky top-0">
-
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-2 pb-3 border-b border-border">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground text-background text-xs font-bold select-none">
@@ -84,7 +83,6 @@ export function Sidebar() {
           v3.2 · Lebanon, NH Data Project
         </div>
       </div>
-
     </aside>
   )
 }

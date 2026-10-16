@@ -52,9 +52,7 @@ export async function fetchCategories(): Promise<CategoryRecord[]> {
   return apiFetch(`${API_BASE}/api/categories`)
 }
 
-export async function fetchLlcs(params?: {
-  lookup_status?: string
-}): Promise<LlcsResponse> {
+export async function fetchLlcs(params?: { lookup_status?: string }): Promise<LlcsResponse> {
   const url = new URL(`${API_BASE}/api/llcs`)
   if (params?.lookup_status) url.searchParams.set('lookup_status', params.lookup_status)
   return apiFetch(url)

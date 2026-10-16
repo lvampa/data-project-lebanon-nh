@@ -1,38 +1,14 @@
-import { readDataFile } from '@/lib/data'
-import { formatTypeData, formatWeekdayData } from '@/lib/chart-utils'
-import { StatsCards } from '@/components/stats-cards'
-import { IncidentTypeChart } from '@/components/incident-type-chart'
-import { WeekdayChart } from '@/components/weekday-chart'
-import { Card, CardContent, CardHeader, CardTitle } from '@project/ui/components/ui/card'
-import type { StatsData } from '@/lib/types'
+import { HeroCarousel } from '@/components/home/hero-carousel'
+import { Featured } from '@/components/home/featured'
+import { AboutData } from '@/components/home/about-data'
+import { ABOUT_DATA, FEATURED_ITEMS, HERO_SLIDES } from '@/lib/home-content'
 
-export default function DashboardPage() {
-  const stats = readDataFile<StatsData>('stats.json')
-  const typeData = formatTypeData(stats.by_type, 15)
-  const weekdayData = formatWeekdayData(stats.by_weekday)
-
+export default function HomePage() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Lebanon NH Police Incidents</h1>
-      <StatsCards total={stats.total} generatedAt={stats.generated_at} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Top Incident Types</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <IncidentTypeChart data={typeData} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">By Day of Week</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <WeekdayChart data={weekdayData} />
-          </CardContent>
-        </Card>
-      </div>
+    <div className="flex flex-col gap-16 pb-10 md:gap-24 md:pb-20">
+      <HeroCarousel slides={HERO_SLIDES} />
+      <Featured items={FEATURED_ITEMS} />
+      <AboutData {...ABOUT_DATA} />
     </div>
   )
 }

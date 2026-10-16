@@ -13,7 +13,7 @@ export function AboutData({ title, body, links, facts }: Props) {
       aria-labelledby="about-data-heading"
       className="relative left-1/2 w-screen -translate-x-1/2 bg-primary text-primary-foreground"
     >
-      <div className="mx-auto flex max-w-7xl flex-col gap-12 px-4 py-16 md:gap-16 md:py-24">
+      <div className="mx-auto flex max-w-7xl flex-col gap-12 px-5 py-16 md:gap-16 md:px-8 md:py-24">
         <div className="flex max-w-3xl flex-col gap-6">
           <h2
             id="about-data-heading"

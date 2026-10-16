@@ -50,7 +50,7 @@ export default function RootLayout({
         className={`${plexSans.variable} ${plexMono.variable} ${plexSans.className} flex min-h-dvh flex-col overflow-x-clip`}
       >
         <SiteHeader />
-        <main className="max-w-7xl w-full mx-auto px-4 py-6 flex-1">{children}</main>
+        <main className="max-w-7xl w-full mx-auto px-5 py-6 flex-1 md:px-8">{children}</main>
         <SiteFooter />
       </body>
     </html>

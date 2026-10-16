@@ -2,8 +2,6 @@
 import React, { useState, useMemo } from 'react'
 import { cn } from '../../lib/utils'
 
-type SortDir = 'asc' | 'desc' | null
-
 export interface DataTableColumn<T> {
   id: string
   header: string

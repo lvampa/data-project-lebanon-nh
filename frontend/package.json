@@ -3,7 +3,13 @@
   "private": true,
   "packageManager": "bun@1.4.3",
   "scripts": {
-    "check": "bun run --filter '*' typecheck && bun run --filter web lint && bun run --filter web test"
+    "lint": "eslint .",
+    "check": "bun run --filter '*' typecheck && bun run lint && bun run --filter web test"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "16.2.7",
+    "eslint-plugin-better-tailwindcss": "^4.9.1"
   },
   "workspaces": {
     "packages": [

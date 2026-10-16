@@ -32,7 +32,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
 
 export function SiteHeader() {
   const pathname = usePathname() ?? "/"
-  const hidden = useHideOnScroll(1000)
+  const hidden = useHideOnScroll()
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [menuPath, setMenuPath] = useState<string | null>(null)
   const menuOpen = menuPath === pathname

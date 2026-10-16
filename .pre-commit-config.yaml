@@ -21,3 +21,11 @@ repos:
         entry: uv run pytest --ignore=scrapers/tests/test_officer_roster_spider.py -q
         pass_filenames: false
         stages: [pre-push]
+
+      - id: frontend-check
+        name: frontend typecheck, lint, test
+        language: system
+        entry: bun run --cwd frontend check
+        files: ^frontend/
+        pass_filenames: false
+        stages: [pre-push]

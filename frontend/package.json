@@ -2,6 +2,9 @@
   "name": "frontend",
   "private": true,
   "packageManager": "bun@1.4.3",
+  "scripts": {
+    "check": "bun run --filter '*' typecheck && bun run --filter web lint && bun run --filter web test"
+  },
   "workspaces": {
     "packages": [
       "web",

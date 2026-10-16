@@ -117,7 +117,7 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 ### Testing Conventions
 
 - Tests live in `scrapers/tests/`
-- Spider tests use `scrapy.http.HtmlResponse` / `TextResponse` to build fake responses — no live HTTP
+- Spider tests use `scrapy.http.HtmlResponse` / `TextResponse` to build fake responses, with no live HTTP
 - Pipeline tests use real SQLAlchemy sessions against a test DB, not mocks
 - One test file per spider/pipeline/model
 
@@ -137,6 +137,75 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 - Read `docs/frontend/brand.md` before changing styles, the header, the footer, or charts.
 - Use the tokens in `frontend/shared/styles/` (`text-display-*`, `eyebrow`, color names) instead of arbitrary values like `text-[34px]`.
 - Run `bun run check` from `frontend/` before pushing; the pre-push hook runs it too.
+
+## 8. Specs and plans
+
+Specs are for project features and are tracked in the repo.
+Implementation plans are for you, and are not.
+
+- Write the spec before coding the feature.
+- Save implementation plans to `.claude/plans/YYYY-MM-DD-<name>.md`, which is not tracked.
+- Delete a plan once it is implemented, after updating the feature's spec to match what was built.
+
+### Spec layout
+
+Each feature gets `docs/specs/<feature-name>/` with a short kebab-case name and three files, written and reviewed in order:
+
+1. `requirements.md`: what the feature must do and why.
+2. `design.md`: how it will be built.
+3. `tasks.md`: the design broken into steps that can be checked off.
+
+Each file starts with the title and a status block, kept the same across the three files:
+
+```markdown
+# City budgets: requirements
+
+**Status:** Draft | Approved | In progress | Done
+**Created:** 2026-06-07
+**Updated:** 2026-10-16
+```
+
+### requirements.md
+
+Sections: Introduction, Glossary (if needed), Requirements, Out of scope.
+Each requirement has a user story and numbered acceptance criteria in EARS form:
+
+```markdown
+### Requirement 1: Discover budget PDFs
+
+**User story:** As an operator, I want new budget PDFs found automatically, so that the data stays current without manual checks.
+
+#### Acceptance criteria
+
+1. WHEN the discovery job runs, THE spider SHALL record every Budget Book and Line Items PDF linked from the index page.
+2. IF a PDF for a fiscal year and document type is already recorded, THEN THE pipeline SHALL update its URL instead of adding a duplicate.
+```
+
+- EARS patterns: `THE <component> SHALL ...`, `WHEN <trigger>, ...`, `WHILE <state>, ...`, `IF <condition>, THEN ...`, `WHERE <feature is present>, ...`.
+- One behavior per criterion, testable, with numbers instead of adjectives.
+- Name the component, not "the system".
+- Cover failure and empty cases.
+- Number criteria `<requirement>.<criterion>`, like `2.3`, so design and tasks can cite them.
+- Requirements describe observable behavior; implementation choices go in the design.
+
+### design.md
+
+Sections, skipping any that do not apply: Overview (with the requirements it covers), Architecture, Components and interfaces, Data models, Error handling, Testing strategy, Decisions (with rejected alternatives and why), Open questions.
+Show code only for interfaces, schemas, and formats.
+
+### tasks.md
+
+```markdown
+- [ ] 1. Add budget tables
+  - Add the three ORM models and one Alembic migration.
+  - Test that the migration runs up and down.
+  - _Requirements: 3.1, 3.2_
+```
+
+- Each task can be reviewed and tested on its own, and builds on the ones before it.
+- Each task cites the requirements it satisfies.
+- Tests belong to the task that adds the behavior.
+- Check tasks off as they land, and update the design when the build diverges.
 
 ---
 

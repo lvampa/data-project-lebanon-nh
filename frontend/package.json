@@ -4,12 +4,20 @@
   "packageManager": "bun@1.4.3",
   "scripts": {
     "lint": "eslint .",
-    "check": "bun run --filter '*' typecheck && bun run lint && bun run --filter web test"
+    "test": "vitest run",
+    "check": "bun run --filter '*' typecheck && bun run lint && bun run test"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitejs/plugin-react": "^6.0.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
-    "eslint-plugin-better-tailwindcss": "^4.9.1"
+    "eslint-plugin-better-tailwindcss": "^4.9.1",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
+    "vitest": "^4.1.8"
   },
   "workspaces": {
     "packages": [

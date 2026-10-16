@@ -22,6 +22,28 @@ function Column({ title, items }: { title: string; items: NavItem[] }) {
 export function SiteFooter() {
   return (
     <footer className="bg-brand text-brand-foreground">
+      <section
+        aria-labelledby="footer-callout-heading"
+        className="mx-auto flex max-w-7xl flex-col items-start gap-8 px-5 py-16 md:px-8 md:py-24"
+      >
+        <LogoMark size={48} strokeWidth={5.2} />
+        {/* Placeholder copy until the mission statement is written. */}
+        <h2
+          id="footer-callout-heading"
+          className="max-w-[1062px] text-pretty text-[26px] font-semibold leading-[1.2] tracking-[-0.01em] md:text-[40px]"
+        >
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod tempor incididunt.
+        </h2>
+        <Link
+          href="/about"
+          className="inline-flex h-[54px] items-center rounded-full bg-highlight px-7 font-medium text-highlight-foreground transition-colors hover:bg-highlight/85 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-foreground/60"
+        >
+          Learn more about us
+        </Link>
+      </section>
+      <div className="mx-auto max-w-7xl px-5 md:px-8">
+        <div className="border-t border-brand-foreground/15" />
+      </div>
       <div className="mx-auto flex max-w-7xl flex-col gap-10 px-5 pt-10 pb-8 md:px-8 md:pt-14 md:pb-10">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-[1.4fr_1fr_1fr] md:gap-12">
           <div className="col-span-2 flex flex-col gap-3.5 md:col-span-1">

@@ -28,6 +28,12 @@ describe('SiteFooter', () => {
     ])
   })
 
+  it('opens with a call-out that links to About the data', () => {
+    render(<SiteFooter />)
+    const callout = screen.getByRole('region', { name: /Lorem ipsum/ })
+    expect(within(callout).getByRole('link', { name: 'Learn more about us' })).toHaveAttribute('href', '/about')
+  })
+
   it('shows the current year', () => {
     render(<SiteFooter />)
     expect(screen.getByText(`© ${new Date().getFullYear()} Lebanon Data Project`)).toBeInTheDocument()

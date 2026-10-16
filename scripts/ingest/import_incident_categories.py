@@ -8,7 +8,7 @@ from postgres import SessionLocal
 from postgres.models.incident_type_category import IncidentTypeCategory
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).parents[1] / "data"
 INPUT_FILE = DATA_DIR / "incident_categories.json"
 
 VALID_CATEGORIES = {"Fire", "EMS", "Police", "Traffic", "Administrative"}

@@ -3,7 +3,7 @@ Import structured budget data from scripts/data/budget_data.json
 (produced by a Claude Code agent) into Postgres.
 
 Run from repo root:
-    uv run python scripts/import_budget_data.py
+    uv run python scripts/ingest/import_budget_data.py
 
 Input: scripts/data/budget_data.json
 Format: array of year objects, each with 'line_items' and 'capital_projects' arrays
@@ -20,7 +20,7 @@ from postgres.models.budget_capital_project import BudgetCapitalProject
 from postgres.models.budget_line_item import BudgetLineItem
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).parents[1] / "data"
 INPUT_FILE = DATA_DIR / "budget_data.json"
 
 

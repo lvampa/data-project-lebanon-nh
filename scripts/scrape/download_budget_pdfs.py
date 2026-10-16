@@ -2,7 +2,7 @@
 Download budget PDFs and extract text for the Claude Code agent handoff.
 
 Run from repo root:
-    uv run python scripts/download_budget_pdfs.py
+    uv run python scripts/scrape/download_budget_pdfs.py
 
 Reads:  budget_documents rows where text_extracted = false
 Writes: scripts/data/budgets/{year}-{type}.txt
@@ -17,7 +17,7 @@ from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from sqlalchemy import select
 
-DATA_DIR = Path(__file__).parent / "data" / "budgets"
+DATA_DIR = Path(__file__).parents[1] / "data" / "budgets"
 
 
 def output_path(fiscal_year: int, document_type: str) -> Path:

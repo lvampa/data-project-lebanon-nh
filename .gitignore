@@ -223,3 +223,6 @@ scripts/data/budget_data.json
 
 # Local scratch files, not for commit
 tmp/
+
+# Claude Code worktrees
+.claude/worktrees/

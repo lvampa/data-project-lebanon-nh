@@ -4,14 +4,14 @@ repos:
       - id: ruff-check
         name: ruff check
         language: system
-        entry: uv run ruff check --fix
+        entry: uv run ruff check
         types: [python]
         stages: [pre-push]
 
       - id: ruff-format
         name: ruff format
         language: system
-        entry: uv run ruff format
+        entry: uv run ruff format --check
         types: [python]
         stages: [pre-push]
 
@@ -19,13 +19,31 @@ repos:
         name: pytest
         language: system
         entry: uv run pytest --ignore=scrapers/tests/test_officer_roster_spider.py -q
+        types: [python]
         pass_filenames: false
         stages: [pre-push]
 
-      - id: frontend-check
-        name: frontend typecheck, lint, test
+      # Lint only the pushed files. CI runs the full lint, which catches cross-file breaks
+      # like a token change in a stylesheet. ESLint runs from frontend/, where its config lives.
+      - id: frontend-lint
+        name: frontend lint (pushed files)
         language: system
-        entry: bun run --cwd frontend check
+        entry: bash -c 'cd frontend && bun x eslint --no-warn-ignored "${@#frontend/}"' --
+        files: ^frontend/.*\.(ts|tsx|js|jsx|mjs|cjs)$
+        stages: [pre-push]
+
+      - id: frontend-format
+        name: frontend format (pushed files)
+        language: system
+        entry: bash -c 'cd frontend && bun x prettier --check --ignore-unknown "${@#frontend/}"' --
+        files: ^frontend/
+        stages: [pre-push]
+
+      # Typecheck and tests stay whole-project: a change in shared/ can break files that weren't touched.
+      - id: frontend-typecheck-test
+        name: frontend typecheck, test
+        language: system
+        entry: bash -c "cd frontend && bun run --filter '*' typecheck && bun run test"
         files: ^frontend/
         pass_filenames: false
         stages: [pre-push]

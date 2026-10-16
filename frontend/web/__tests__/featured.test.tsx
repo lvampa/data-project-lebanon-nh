@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import { Vote } from 'lucide-react'
-import { Featured, type FeaturedItem } from '@/components/home/featured'
+import { Featured, type FeaturedItem } from '@/components/home'
 
 const items: FeaturedItem[] = [
   {

@@ -1,6 +1,10 @@
 'use client'
-import { useEffect, useState, useSyncExternalStore, type FocusEvent } from 'react'
+import { useEffect, useState, type FocusEvent } from 'react'
 import Link from 'next/link'
+import { buttonVariants } from '@project/ui/components/ui/button'
+import { cn } from '@project/ui/lib/utils'
+import { usePrefersReducedMotion } from '@/lib/use-prefers-reduced-motion'
+import { IconButton } from '@project/ui/components/ui/icon-button'
 import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 
 export interface HeroSlide {
@@ -45,7 +49,7 @@ export function HeroCarousel({ slides, interval = 7000 }: Props) {
     <section
       aria-roledescription="carousel"
       aria-label="Highlights"
-      className="relative flex flex-col justify-between gap-10 rounded-3xl bg-muted px-6 py-10 md:min-h-[440px] md:px-14 md:py-16"
+      className="relative flex flex-col justify-between gap-10 rounded-3xl bg-muted px-6 py-10 md:min-h-110 md:px-14 md:py-16"
       onMouseEnter={() => setIsInteracting(true)}
       onMouseLeave={() => setIsInteracting(false)}
       onFocus={() => setIsInteracting(true)}
@@ -61,18 +65,14 @@ export function HeroCarousel({ slides, interval = 7000 }: Props) {
           aria-label={`${index + 1} of ${slides.length}`}
           className="flex max-w-4xl flex-col gap-5 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500"
         >
-          <p className="font-mono text-xs uppercase tracking-[0.08em] text-highlight">
-            {slide.eyebrow}
-          </p>
-          <h2 className="text-[34px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground md:text-[64px] md:leading-[1.1]">
-            {slide.title}
-          </h2>
-          <p className="max-w-2xl text-base leading-[26px] text-muted-foreground md:text-lg md:leading-7">
+          <p className="eyebrow">{slide.eyebrow}</p>
+          <h2 className="text-display-1 text-foreground">{slide.title}</h2>
+          <p className="max-w-2xl text-base leading-6.5 text-muted-foreground md:text-lg md:leading-7">
             {slide.body}
           </p>
           <Link
             href={slide.cta.href}
-            className="mt-2 inline-flex h-[54px] w-fit items-center gap-2 rounded-full bg-primary px-7 font-medium text-primary-foreground transition-colors hover:bg-primary/85 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={cn(buttonVariants({ size: 'pill' }), 'mt-2 w-fit')}
           >
             {slide.cta.label}
             <ArrowRight aria-hidden className="size-4" />
@@ -84,61 +84,34 @@ export function HeroCarousel({ slides, interval = 7000 }: Props) {
         <span className="mr-auto font-mono text-sm tabular-nums text-muted-foreground md:mr-2">
           {String(index + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
         </span>
-        <ControlButton
+        <IconButton
+          variant="outline"
+          size="xl"
+          className="rounded-full bg-background hover:bg-accent"
           label={isPlaying ? 'Pause rotation' : 'Start rotation'}
           onClick={() => setPreference(isPlaying ? 'paused' : 'playing')}
         >
-          {isPlaying ? (
-            <Pause aria-hidden className="size-5" />
-          ) : (
-            <Play aria-hidden className="size-5" />
-          )}
-        </ControlButton>
-        <ControlButton label="Previous slide" onClick={showPrevious}>
-          <ChevronLeft aria-hidden className="size-5" />
-        </ControlButton>
-        <ControlButton label="Next slide" onClick={showNext}>
-          <ChevronRight aria-hidden className="size-5" />
-        </ControlButton>
+          {isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}
+        </IconButton>
+        <IconButton
+          variant="outline"
+          size="xl"
+          className="rounded-full bg-background hover:bg-accent"
+          label="Previous slide"
+          onClick={showPrevious}
+        >
+          <ChevronLeft aria-hidden />
+        </IconButton>
+        <IconButton
+          variant="outline"
+          size="xl"
+          className="rounded-full bg-background hover:bg-accent"
+          label="Next slide"
+          onClick={showNext}
+        >
+          <ChevronRight aria-hidden />
+        </IconButton>
       </div>
     </section>
   )
-}
-
-function ControlButton({
-  label,
-  onClick,
-  children,
-}: {
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className="flex size-[50px] items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-    >
-      {children}
-    </button>
-  )
-}
-
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
-
-function usePrefersReducedMotion() {
-  return useSyncExternalStore(subscribeToReducedMotion, readReducedMotion, () => false)
-}
-
-function subscribeToReducedMotion(onChange: () => void) {
-  if (typeof window.matchMedia !== 'function') return () => {}
-  const query = window.matchMedia(REDUCED_MOTION_QUERY)
-  query.addEventListener('change', onChange)
-  return () => query.removeEventListener('change', onChange)
-}
-
-function readReducedMotion() {
-  return typeof window.matchMedia === 'function' && window.matchMedia(REDUCED_MOTION_QUERY).matches
 }

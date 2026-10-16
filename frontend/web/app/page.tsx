@@ -1,6 +1,4 @@
-import { HeroCarousel } from '@/components/home/hero-carousel'
-import { Featured } from '@/components/home/featured'
-import { AboutData } from '@/components/home/about-data'
+import { HeroCarousel, Featured, AboutData } from '@/components/home'
 import { ABOUT_DATA, FEATURED_ITEMS, HERO_SLIDES } from '@/lib/home-content'
 
 export default function HomePage() {

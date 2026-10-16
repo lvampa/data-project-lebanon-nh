@@ -1,6 +1,5 @@
 import { House, ShieldCheck, Vote } from 'lucide-react'
-import type { HeroSlide } from '@/components/home/hero-carousel'
-import type { FeaturedItem } from '@/components/home/featured'
+import { type HeroSlide, type FeaturedItem } from '@/components/home'
 
 // Placeholder copy until the real homepage text is written.
 

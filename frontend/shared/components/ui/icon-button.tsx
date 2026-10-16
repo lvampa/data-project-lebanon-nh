@@ -2,7 +2,7 @@ import React from 'react'
 import { cn } from '../../lib/utils'
 
 type Variant = 'ghost' | 'outline' | 'primary'
-type Size = 'sm' | 'md' | 'lg'
+type Size = 'sm' | 'md' | 'lg' | 'xl'
 
 interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
@@ -14,12 +14,14 @@ const dims: Record<Size, string> = {
   sm: 'size-7',
   md: 'size-8',
   lg: 'size-10',
+  xl: 'size-12.5',
 }
 
 const iconSizes: Record<Size, string> = {
   sm: '[&_svg]:size-3.5',
   md: '[&_svg]:size-4',
   lg: '[&_svg]:size-[18px]',
+  xl: '[&_svg]:size-5',
 }
 
 const variants: Record<Variant, string> = {

@@ -1,5 +1,7 @@
 import Link from "next/link"
 import { LogoMark } from "./logo-mark"
+import { buttonVariants } from "../ui/button"
+import { cn } from "../../lib/utils"
 import { ABOUT_ITEMS, NAV_ITEMS, type NavItem } from "./nav-items"
 
 function Column({ title, items }: { title: string; items: NavItem[] }) {
@@ -30,13 +32,13 @@ export function SiteFooter() {
         {/* Placeholder copy until the mission statement is written. */}
         <h2
           id="footer-callout-heading"
-          className="max-w-[1062px] text-pretty text-[26px] font-semibold leading-[1.2] tracking-[-0.01em] md:text-[40px]"
+          className="max-w-5xl text-pretty text-display-2"
         >
           Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do eiusmod tempor incididunt.
         </h2>
         <Link
           href="/about"
-          className="inline-flex h-[54px] items-center rounded-full bg-highlight px-7 font-medium text-highlight-foreground transition-colors hover:bg-highlight/85 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-brand-foreground/60"
+          className={cn(buttonVariants({ variant: "highlight", size: "pill" }))}
         >
           Learn more about us
         </Link>

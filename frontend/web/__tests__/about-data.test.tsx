@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
-import { AboutData } from '@/components/home/about-data'
+import { AboutData } from '@/components/home'
 
 const props = {
   title: 'We read the PDFs',

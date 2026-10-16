@@ -12,10 +12,10 @@ describe('SiteFooter', () => {
   it('repeats the topics under Explore', () => {
     render(<SiteFooter />)
     expect(column('Explore').map((link) => link.textContent)).toEqual([
+      'Voter Info',
       'Public safety',
       'Properties',
       'Government',
-      'Voter info',
     ])
   })
 

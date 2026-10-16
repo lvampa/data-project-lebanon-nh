@@ -2,10 +2,10 @@ export type NavItem = { label: string; href: string }
 
 // Four topics, no dropdowns. Government holds budgets and meetings.
 export const NAV_ITEMS: NavItem[] = [
+  { label: "Voter Info", href: "/elections" },
   { label: "Public safety", href: "/public-safety" },
   { label: "Properties", href: "/properties" },
   { label: "Government", href: "/government" },
-  { label: "Voter info", href: "/elections" },
 ]
 
 export const ABOUT_ITEMS: NavItem[] = [

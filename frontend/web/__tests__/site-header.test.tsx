@@ -31,10 +31,10 @@ describe('SiteHeader', () => {
     render(<SiteHeader />)
     const links = within(desktopNav()).getAllByRole('link')
     expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['Voter Info', '/elections'],
       ['Public safety', '/public-safety'],
       ['Properties', '/properties'],
       ['Government', '/government'],
-      ['Voter info', '/elections'],
     ])
   })
 

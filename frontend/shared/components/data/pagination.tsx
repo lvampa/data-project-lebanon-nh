@@ -1,5 +1,5 @@
 'use client'
-import { Button } from '@project/ui/components/ui/button'
+import { Button } from '../ui/button'
 
 interface Props {
   page: number

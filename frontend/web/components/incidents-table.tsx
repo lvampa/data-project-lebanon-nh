@@ -7,7 +7,7 @@ import {
   TableHeader, TableRow,
 } from '@project/ui/components/ui/table'
 import { Badge } from '@project/ui/components/ui/badge'
-import { Pagination } from '@/components/pagination'
+import { Pagination } from '@project/ui/components/data/pagination'
 import type { Incident } from '@/lib/types'
 import { PER_PAGE } from '@project/ui/lib/constants'
 

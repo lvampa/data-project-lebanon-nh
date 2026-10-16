@@ -3,7 +3,7 @@ import { useEffect, useState, type FocusEvent } from 'react'
 import Link from 'next/link'
 import { buttonVariants } from '@project/ui/components/ui/button'
 import { cn } from '@project/ui/lib/utils'
-import { usePrefersReducedMotion } from '@/lib/use-prefers-reduced-motion'
+import { usePrefersReducedMotion } from '@project/ui/lib/use-prefers-reduced-motion'
 import { IconButton } from '@project/ui/components/ui/icon-button'
 import { ArrowRight, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react'
 

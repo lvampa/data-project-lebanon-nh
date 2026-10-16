@@ -134,7 +134,7 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 ## 7. Frontend
 
 - Check `frontend/shared` for an existing component before adding a new one. Reuse it or extend it rather than adding a near-duplicate.
-- Read `docs/brand.md` before changing styles, the header, the footer, or charts.
+- Read `docs/frontend/brand.md` before changing styles, the header, the footer, or charts.
 - Use the tokens in `frontend/shared/styles/` (`text-display-*`, `eyebrow`, color names) instead of arbitrary values like `text-[34px]`.
 - Run `bun run check` from `frontend/` before pushing; the pre-push hook runs it too.
 

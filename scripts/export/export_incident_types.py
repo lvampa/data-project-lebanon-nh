@@ -6,7 +6,7 @@ from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import select
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).parents[1] / "data"
 OUTPUT_FILE = DATA_DIR / "incident_types.txt"
 
 

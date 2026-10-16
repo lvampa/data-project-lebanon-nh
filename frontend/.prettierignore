@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+build
+bun.lock
+*.tsbuildinfo
+next-env.d.ts
+test-results
+playwright-report
+blob-report
+playwright/.cache
+web/public/data

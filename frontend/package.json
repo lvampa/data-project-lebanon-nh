@@ -5,7 +5,9 @@
   "scripts": {
     "lint": "eslint .",
     "test": "vitest run",
-    "check": "bun run --filter '*' typecheck && bun run lint && bun run test"
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "bun run --filter '*' typecheck && bun run lint && bun run format:check && bun run test"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

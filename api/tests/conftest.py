@@ -6,6 +6,13 @@ from fastapi.testclient import TestClient
 from api.deps import get_db
 from api.main import app
 
+ADMIN_TOKEN = "test-token"
+
+
+@pytest.fixture(autouse=True)
+def admin_token(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_TOKEN", ADMIN_TOKEN)
+
 
 @pytest.fixture
 def mock_db():
@@ -15,5 +22,5 @@ def mock_db():
 @pytest.fixture
 def client(mock_db):
     app.dependency_overrides[get_db] = lambda: mock_db
-    yield TestClient(app)
+    yield TestClient(app, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"})
     app.dependency_overrides.clear()

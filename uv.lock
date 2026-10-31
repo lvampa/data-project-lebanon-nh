@@ -13,6 +13,7 @@ members = [
     "mongo",
     "postgres",
     "scrapers",
+    "scripts",
 ]
 
 [manifest.dependency-groups]
@@ -1998,6 +1999,47 @@ sdist = { url = "https://files.pythonhosted.org/packages/cd/a0/f710c21e87d64686f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/c9/7cc7631ca85c08b7e1162e1e08ecb0c139f8f640cc403257ac500a8e50fe/scrapy-2.16.0-py3-none-any.whl", hash = "sha256:fcb83db5500743503b1fea4d55c81aac056b15481d0aad46b6f929d324d9bcf5", size = 344254, upload-time = "2026-05-19T12:29:17.206Z" },
 ]
+
+[[package]]
+name = "scripts"
+version = "0.1.0"
+source = { editable = "scripts" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "elasticsearch" },
+    { name = "httpx" },
+    { name = "logfire" },
+    { name = "playwright" },
+    { name = "playwright-stealth" },
+    { name = "postgres" },
+    { name = "pydantic" },
+    { name = "pypdf" },
+    { name = "python-dotenv" },
+    { name = "sqlalchemy" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.15.0" },
+    { name = "elasticsearch", specifier = ">=8.13,<9" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "logfire", specifier = ">=4.31.0" },
+    { name = "playwright", specifier = ">=1.60.0" },
+    { name = "playwright-stealth", specifier = ">=2.0.3" },
+    { name = "postgres", editable = "shared/postgres" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "pypdf", specifier = ">=6.9.1" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "sqlalchemy", specifier = ">=2.0.50" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.0.2" }]
 
 [[package]]
 name = "sentry-sdk"

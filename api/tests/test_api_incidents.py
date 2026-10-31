@@ -1,6 +1,9 @@
 from datetime import UTC, datetime
 
+import pytest
 from postgres.models.log_entry import LogEntry
+
+from api.tests.sql import compile_pg
 
 
 def _make_entry(**kwargs) -> LogEntry:
@@ -58,3 +61,27 @@ def test_incidents_pagination_defaults(mock_db, client):
     data = resp.json()
     assert data["page"] == 1
     assert data["per_page"] == 50
+
+
+@pytest.mark.parametrize("query", ["page=0", "page=-1", "per_page=0", "per_page=201"])
+def test_incidents_rejects_out_of_range_paging(mock_db, client, query):
+    resp = client.get(f"/api/incidents?{query}")
+
+    assert resp.status_code == 422
+    mock_db.scalars.assert_not_called()
+
+
+def test_incidents_order_is_stable_across_pages(mock_db, client):
+    mock_db.scalar.return_value = 0
+    mock_db.scalars.return_value.all.return_value = []
+
+    resp = client.get("/api/incidents?page=3&per_page=20")
+
+    assert resp.status_code == 200
+    compiled = compile_pg(mock_db.scalars.call_args.args[0])
+    assert (
+        "ORDER BY log_entries.reported_at DESC NULLS LAST, log_entries.id DESC"
+        in str(compiled)
+    )
+    assert compiled.params["param_1"] == 20
+    assert compiled.params["param_2"] == 40

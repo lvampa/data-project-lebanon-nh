@@ -20,8 +20,8 @@ def list_incidents(
     incident_type: str | None = None,
     disposition: str | None = None,
     officer: str | None = None,
-    page: int = 1,
-    per_page: int = Query(default=50, le=200),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=200),
 ) -> IncidentsResponse:
     stmt = select(LogEntry).where(LogEntry.parse_error == False)  # noqa: E712
     if date_from:
@@ -37,7 +37,7 @@ def list_incidents(
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.scalars(
-        stmt.order_by(LogEntry.reported_at.desc())
+        stmt.order_by(LogEntry.reported_at.desc().nulls_last(), LogEntry.id.desc())
         .offset((page - 1) * per_page)
         .limit(per_page)
     ).all()

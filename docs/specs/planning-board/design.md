@@ -86,7 +86,7 @@ publishedFiles    array of:
 
 ### Airflow DAG
 
-Lives in `dags/scrape/civicclerk_planning.py`.
+Lives in `dags/specs.py` as the `civicclerk_planning` spec.
 
 | Setting | Value |
 |---|---|

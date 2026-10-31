@@ -4,13 +4,6 @@ import pytest
 from mongo.client import MongoDB
 
 
-@pytest.fixture(autouse=True)
-def reset_client():
-    MongoDB._client = None
-    yield
-    MongoDB._client = None
-
-
 @pytest.fixture
 def db():
     return MongoDB()

@@ -7,22 +7,26 @@
 ## Overview
 
 A single Rust binary, `report-gen`, connects to PostgreSQL, runs five read-only queries, and writes one JSON file per query into the output directory.
-`scripts/generate_report.sh` runs it in release mode and commits the result, so CI can deploy static data without database access.
+`scripts/generate_report.sh` runs it in release mode, and `scripts/deploy.sh` runs that script before building and deploying the site.
+The output is gitignored, since it carries names and owner addresses.
 It replaced `scrapers/scripts/generate_report.py` and `scripts/generate/generate_web_data.py`, which were deleted on 2026-09-07.
 This covers requirements 1 through 9.
 
 ## Architecture
 
 ```
-scripts/generate_report.sh
-  └─ cargo run -p report-gen --release -- --output-dir <repo>/frontend/web/public/data
-       main.rs   parse args, load .env, connect pool
-         ├─ db::fetch_stats       → output::write_json("stats.json")
-         ├─ db::fetch_incidents   → output::write_json("incidents.json")
-         ├─ db::fetch_addresses   → output::write_json("addresses.json")
-         ├─ db::fetch_staff       → output::write_json("staff.json")
-         └─ db::fetch_properties  → output::write_json("properties.json")
-  └─ git add frontend/web/public/data/ && git commit (only if changed)
+scripts/deploy.sh
+  ├─ scripts/generate_report.sh
+  │    ├─ load .env, derive DATABASE_URL from POSTGRES_* if unset
+  │    └─ cargo run -p report-gen --release -- --output-dir <repo>/frontend/web/public/data
+  │         main.rs   parse args, load .env, connect pool
+  │           ├─ db::fetch_stats       → output::write_json("stats.json")
+  │           ├─ db::fetch_incidents   → output::write_json("incidents.json")
+  │           ├─ db::fetch_addresses   → output::write_json("addresses.json")
+  │           ├─ db::fetch_staff       → output::write_json("staff.json")
+  │           └─ db::fetch_properties  → output::write_json("properties.json")
+  ├─ bun run build            (frontend/web)
+  └─ wrangler pages deploy    (frontend/web/out)
 ```
 
 Each query runs and its file is written before the next query starts.
@@ -95,7 +99,16 @@ Creates `dir` and its parents, serializes `data` with `serde_json::to_string_pre
 
 Runs with `set -e`.
 Resolves `REPO_ROOT` from the script's own location and `cd`s there, so `.env` and the workspace are found.
-Runs the binary, stages `frontend/web/public/data/`, and commits only if `git diff --cached --quiet` reports changes.
+Loads `.env` if it exists, so a `DATABASE_URL` set there wins.
+If `DATABASE_URL` is still unset, builds `postgresql://user:password@host:port/db` from `POSTGRES_*`, with the same defaults as `shared/postgres`, and percent-encodes the user and password.
+Then runs the binary.
+It does not touch git.
+
+### Deploy script (`scripts/deploy.sh`)
+
+Runs with `set -e`.
+Runs the publish script, then `bun run build` in `frontend/web`, then `wrangler pages deploy`.
+`frontend/web/public/data/` is gitignored, so a fresh clone has no data files until the publish script runs, and `next build` fails without them.
 
 ## Data models
 
@@ -197,17 +210,16 @@ Fields typed `String` or `f64` are never `null`, and the frontend types in `fron
 | Connection fails | Exits 1 with the `sqlx` error; nothing written. |
 | A query fails | Exits 1 with the `sqlx` error; files from earlier steps stay on disk. |
 | A file write fails | Exits 1 with the I/O error; files from earlier steps stay on disk. |
-| Report generator exits non-zero | `set -e` stops the publish script before `git add`. |
-| No data changes | The publish script prints `(no changes)` and exits 0. |
+| Report generator exits non-zero | `set -e` stops the publish script, and the deploy script before it builds. |
 
 Writes are not atomic.
-A run that fails partway can leave a mix of new and old files in the output directory, but the publish script never commits that state.
+A run that fails partway can leave a mix of new and old files in the output directory, but the deploy script stops before building from that state.
 
 ## Testing strategy
 
 - **Unit:** `output.rs` has two tests, using `tempfile`: one checks the written content round-trips, one checks that missing nested directories are created.
 - **Lint gate:** `main.rs` sets `#![deny(clippy::all, clippy::pedantic)]`, and `cargo clippy -p report-gen -- -D warnings` and `cargo fmt --check` must pass.
-- **Smoke test:** Run `cargo run -p report-gen -- --output-dir <tmp>` against the local database, check the five files and their top-level keys, then run the publish script.
+- **Smoke test:** Run `cargo run -p report-gen -- --output-dir <tmp>` against the local database, check the five files and their top-level keys, then run the deploy script.
 - **Not tested:** The SQL queries and the type mapping have no automated tests, because they need a live Postgres with the schema.
   A type mismatch shows up only at run time, as it did with `EXTRACT(DOW)`.
 
@@ -222,7 +234,7 @@ A run that fails partway can leave a mix of new and old files in the output dire
   Runtime queries build anywhere, at the cost of catching type mismatches only when run.
 - **Write each file right after its query.**
   It is simple and keeps memory low.
-  Rejected: fetch everything first, then write all files, which would avoid partial output but was not worth it since the publish script does not commit failed runs.
+  Rejected: fetch everything first, then write all files, which would avoid partial output but was not worth it since the deploy script does not build from failed runs.
 - **Divergence: five files, not two.**
   The plan's goal and Task 1 skeleton described `summary.json` and `incidents.json`, from `fetch_summary` and `fetch_incidents`.
   Before the db module was written, the target moved to match `scripts/generate/generate_web_data.py`, so the built tool writes `stats.json`, `incidents.json`, `addresses.json`, `staff.json`, and `properties.json`.
@@ -244,13 +256,10 @@ A run that fails partway can leave a mix of new and old files in the output dire
   `stats.total` counts the same rows, so no extra query is needed.
 - **Addresses count only valid log entries.**
   `fetch_addresses` filters `parse_error = false` like every other query, and uses an inner join since it already required a match.
+- **Generated data is not committed.**
+  The publish script used to commit the JSON for a CI deploy, but there is no CI, and the files carry names and owner addresses.
+  The deploy script now regenerates the data right before it builds.
+  Rejected: keeping empty placeholder files in git, which would let a build without the exporter ship empty pages.
 - **Divergence: stdout for `stats.json` prints before the write.**
   The plan printed after writing the summary; the built code prints the line, then writes.
   A failed write therefore follows a success line for that file.
-
-## Open questions
-
-- `generated_at` changes on every run, so after any successful run `stats.json` differs and the publish script's `(no changes)` path never triggers.
-  Should the timestamp move out of the diffed data, or should the script ignore it?
-- The committed `stats.json` is still a placeholder (`total` 0, empty `generated_at`) from 2026-06-07.
-  The publish script has not been run against real data and committed since the Rust tool landed.

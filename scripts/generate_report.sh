@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Generate public/data JSON locally and commit it so CI can deploy without
-# needing database access.
+# Export Postgres data to frontend/web/public/data for the static build.
+# The output is gitignored; scripts/deploy.sh runs this before building.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -36,10 +36,3 @@ fi
 echo "→ Generating report..."
 cargo run -p report-gen --release -- \
   --output-dir "$REPO_ROOT/frontend/web/public/data"
-
-echo "→ Committing public/data/..."
-git add frontend/web/public/data/
-git diff --cached --quiet && echo "  (no changes)" && exit 0
-git commit -m "chore: update public data $(date -u +%Y-%m-%d)"
-
-echo "✓ Done. Push to trigger CI deploy."

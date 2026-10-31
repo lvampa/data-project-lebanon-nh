@@ -1,12 +1,6 @@
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
 
-import pytest
-from fastapi.testclient import TestClient
 from postgres.models.log_entry import LogEntry
-
-from api.deps import get_db
-from api.main import app
 
 
 def _make_entry(**kwargs) -> LogEntry:
@@ -30,24 +24,11 @@ def _make_entry(**kwargs) -> LogEntry:
     return LogEntry(**defaults)
 
 
-def _client_with_mock_db(mock_db):
-    app.dependency_overrides[get_db] = lambda: mock_db
-    return TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def clear_overrides():
-    yield
-    app.dependency_overrides.clear()
-
-
-def test_incidents_returns_list():
-    mock_db = MagicMock()
+def test_incidents_returns_list(mock_db, client):
     entry = _make_entry()
     mock_db.scalar.return_value = 1
     mock_db.scalars.return_value.all.return_value = [entry]
 
-    client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents")
 
     assert resp.status_code == 200
@@ -57,24 +38,20 @@ def test_incidents_returns_list():
     assert data["items"][0]["incident_type"] == "Telephone Harassment"
 
 
-def test_incidents_filters_by_incident_type():
-    mock_db = MagicMock()
+def test_incidents_filters_by_incident_type(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []
 
-    client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents?incident_type=Harassment")
 
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
 
 
-def test_incidents_pagination_defaults():
-    mock_db = MagicMock()
+def test_incidents_pagination_defaults(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []
 
-    client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents")
 
     assert resp.status_code == 200

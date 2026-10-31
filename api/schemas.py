@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class Incident(BaseModel):
-    case_number: str
+    case_number: str | None
     reported_at: datetime | None
     call_source: str | None
     incident_type: str | None
@@ -13,7 +13,7 @@ class Incident(BaseModel):
     location: str | None
     officer: str | None
     reference_number: str | None
-    source_url: str | None
+    source_url: str
 
     model_config = {"from_attributes": True}
 

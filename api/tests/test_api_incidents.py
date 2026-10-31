@@ -41,6 +41,16 @@ def test_incidents_returns_list(mock_db, client):
     assert data["items"][0]["incident_type"] == "Telephone Harassment"
 
 
+def test_incidents_serializes_null_case_number(mock_db, client):
+    mock_db.scalar.return_value = 1
+    mock_db.scalars.return_value.all.return_value = [_make_entry(case_number=None)]
+
+    resp = client.get("/api/incidents")
+
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["case_number"] is None
+
+
 def test_incidents_filters_by_incident_type(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []

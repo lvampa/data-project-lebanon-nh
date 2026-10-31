@@ -121,7 +121,8 @@ class ProcessUrlsSpider(scrapy.Spider):
             self._mark_error(url_doc, f"PDF processing failed: {exc!r}")
             return
 
-        now = datetime.now(UTC)
+        # log_entries.scraped_at is a naive column that holds UTC, like the other writers.
+        now = datetime.now(UTC).replace(tzinfo=None)
 
         if not entries:
             logfire.warning("no entries parsed from pdf", url=source_url)

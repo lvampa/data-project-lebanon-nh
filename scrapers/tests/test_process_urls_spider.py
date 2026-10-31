@@ -54,6 +54,8 @@ def test_parse_yields_police_log_items(mock_db, mock_pdf_reader):
     assert entries[0]["parse_error"] is False
     # raw_text is the per-entry block, not the full PDF text
     assert entries[0]["raw_text"].startswith("26-13339")
+    # log_entries.scraped_at is a naive UTC column, like every other writer uses.
+    assert entries[0]["scraped_at"].tzinfo is None
 
 
 @patch("spiders.process_url_records.PdfReader")

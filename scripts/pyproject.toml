@@ -32,6 +32,7 @@ packages = [
     "scripts",
     "scripts.export",
     "scripts.ingest",
+    "scripts.models",
     "scripts.scrape",
     "scripts.sync",
 ]

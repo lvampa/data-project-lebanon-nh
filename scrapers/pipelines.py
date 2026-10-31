@@ -13,16 +13,16 @@ from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
-from mongo import db, init_indexes
+from mongo import db
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
 from postgres.models.llc import Llc, PropertyLlc
 from postgres.models.log_entry import LogEntry
 from postgres.models.officer import Officer
+from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
-from pymongo import UpdateOne
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -34,49 +34,33 @@ _LLC_PATTERN = re.compile(
 
 class UrlRecordPipeline:
     def open_spider(self, spider) -> None:
-        self._ops: list[UpdateOne] = []
-        self._count: int = 0
+        self._records: list[UrlRecord] = []
 
     def process_item(self, item, spider):
         if not isinstance(item, UrlRecordItem):
             return item
 
-        record = UrlRecord.model_validate(dict(item))
-
-        self._count += 1
-        self._ops.append(
-            UpdateOne(
-                {"canonical_url": record.canonical_url},
-                {
-                    "$setOnInsert": {
-                        "canonical_url": record.canonical_url,
-                        "archive_url": record.archive_url,
-                        "log_date": record.log_date,
-                        "state": record.state,
-                        "created_at": record.created_at,
-                    }
-                },
-                upsert=True,
-            )
-        )
+        self._records.append(UrlRecord.model_validate(dict(item)))
         return item
 
     def close_spider(self, spider) -> None:
-        if not self._ops:
+        # Every spider runs this pipeline, so only open a session when there are URLs.
+        if not self._records:
             return
 
-        # The upsert relies on the unique canonical_url index. Every spider runs
-        # this pipeline, so only touch Mongo when there are URLs to write.
-        init_indexes(db)
-        with logfire.span(
-            "bulk upsert url records", found=self._count, count=len(self._ops)
+        statement = (
+            pg_insert(PdfUrl)
+            .values([record.model_dump() for record in self._records])
+            .on_conflict_do_nothing(index_elements=["canonical_url"])
+        )
+        with (
+            logfire.span("insert pdf urls", found=len(self._records)),
+            SessionLocal() as session,
         ):
-            result = db.get_collection("urls").bulk_write(self._ops, ordered=False)
+            result = session.execute(statement)
+            session.commit()
             logfire.info(
-                "url records flushed",
-                found=self._count,
-                inserted=result.upserted_count,
-                matched=result.matched_count,
+                "pdf urls flushed", found=len(self._records), inserted=result.rowcount
             )
 
 

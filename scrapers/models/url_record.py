@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,4 +11,4 @@ class UrlRecord(BaseModel):
     state: Literal["pending", "in_progress", "complete", "error"]
     created_at: datetime
     archive_url: str | None = None
-    log_date: datetime | None = None
+    log_date: date | None = None

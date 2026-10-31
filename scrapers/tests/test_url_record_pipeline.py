@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from items import PoliceLogItem, UrlRecordItem
 from pipelines import UrlRecordPipeline
@@ -79,3 +79,32 @@ def test_pipeline_upsert_includes_log_date(mock_db):
     ops = mock_db.get_collection.return_value.bulk_write.call_args[0][0]
     set_on_insert = ops[0]._doc["$setOnInsert"]
     assert set_on_insert["log_date"] == log_date
+
+
+@patch("pipelines.db")
+def test_creates_unique_canonical_url_index_before_upserting(mock_db):
+    pipeline = UrlRecordPipeline()
+    pipeline.open_spider(None)
+    pipeline.process_item(
+        UrlRecordItem(
+            canonical_url="https://example.com/a.pdf",
+            state="pending",
+            created_at=datetime.now(UTC),
+        ),
+        None,
+    )
+    pipeline.close_spider(None)
+
+    urls = mock_db.get_collection.return_value
+    call_names = [name for name, _, _ in urls.mock_calls]
+    assert call("canonical_url", unique=True) in urls.create_index.call_args_list
+    assert call_names.index("create_index") < call_names.index("bulk_write")
+
+
+@patch("pipelines.db")
+def test_skips_index_creation_when_no_items(mock_db):
+    pipeline = UrlRecordPipeline()
+    pipeline.open_spider(None)
+    pipeline.close_spider(None)
+
+    mock_db.get_collection.return_value.create_index.assert_not_called()

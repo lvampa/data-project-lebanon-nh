@@ -13,7 +13,7 @@ from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
-from mongo import db
+from mongo import db, init_indexes
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
@@ -65,6 +65,9 @@ class UrlRecordPipeline:
         if not self._ops:
             return
 
+        # The upsert relies on the unique canonical_url index. Every spider runs
+        # this pipeline, so only touch Mongo when there are URLs to write.
+        init_indexes(db)
         with logfire.span(
             "bulk upsert url records", found=self._count, count=len(self._ops)
         ):

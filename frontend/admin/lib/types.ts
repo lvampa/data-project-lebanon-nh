@@ -2,12 +2,14 @@ import type { Incident } from '@project/ui/lib/types'
 
 export type { Incident, TypeStat, WeekdayStat } from '@project/ui/lib/types'
 
-export interface IncidentsResponse {
+export interface Page<T> {
   total: number
   page: number
   per_page: number
-  items: Incident[]
+  items: T[]
 }
+
+export type IncidentsResponse = Page<Incident>
 
 export interface HourStat {
   hour: number
@@ -54,10 +56,7 @@ export interface Llc {
   error_message: string | null
 }
 
-export interface LlcsResponse {
-  total: number
-  items: Llc[]
-}
+export type LlcsResponse = Page<Llc>
 
 export interface SearchResult {
   id: number

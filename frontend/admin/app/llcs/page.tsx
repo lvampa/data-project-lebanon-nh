@@ -1,5 +1,8 @@
 import { fetchLlcs } from '@/lib/api'
+import { pageFromParams } from '@/lib/paging'
 import type { Llc } from '@/lib/types'
+import { PER_PAGE } from '@project/ui/lib/constants'
+import { PageNav } from '@/components/page-nav'
 
 const STATUS_BADGE: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -19,8 +22,13 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-export default async function LlcsPage() {
-  const data = await fetchLlcs()
+export default async function LlcsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>
+}) {
+  const params = await searchParams
+  const data = await fetchLlcs({ page: pageFromParams(params.page), per_page: PER_PAGE })
 
   return (
     <div>
@@ -85,6 +93,7 @@ export default async function LlcsPage() {
           </tbody>
         </table>
       </div>
+      <PageNav page={data.page} total={data.total} perPage={data.per_page} />
     </div>
   )
 }

@@ -1,8 +1,10 @@
 import { Suspense } from 'react'
 import { fetchIncidents } from '@/lib/api'
+import { pageFromParams } from '@/lib/paging'
 import { PER_PAGE } from '@project/ui/lib/constants'
 import { IncidentsFilters } from '@/components/incidents-filters'
 import { IncidentsTable } from '@/components/incidents-table'
+import { PageNav } from '@/components/page-nav'
 
 export default async function IncidentsPage({
   searchParams,
@@ -15,7 +17,7 @@ export default async function IncidentsPage({
     date_to: params.date_to,
     incident_type: params.incident_type,
     officer: params.officer,
-    page: params.page ? parseInt(params.page) : 1,
+    page: pageFromParams(params.page),
     per_page: PER_PAGE,
   })
 
@@ -26,6 +28,7 @@ export default async function IncidentsPage({
         <IncidentsFilters />
       </Suspense>
       <IncidentsTable data={data} />
+      <PageNav page={data.page} total={data.total} perPage={data.per_page} />
     </div>
   )
 }

@@ -2,6 +2,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # must run before postgres client initializes
 
+import os  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+
+from elasticsearch import Elasticsearch  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 
 from api.routers import (  # noqa: E402
@@ -13,7 +17,17 @@ from api.routers import (  # noqa: E402
     stats,
 )
 
-app = FastAPI(title="Lebanon PD Log — Internal API")
+ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.es = Elasticsearch(ES_HOST, request_timeout=10)
+    yield
+    app.state.es.close()
+
+
+app = FastAPI(title="Lebanon PD Log — Internal API", lifespan=lifespan)
 
 app.include_router(incidents.router, prefix="/api/incidents", tags=["incidents"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])

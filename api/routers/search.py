@@ -1,8 +1,7 @@
-import os
 from typing import Annotated
 
 from elasticsearch import Elasticsearch
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,8 +10,6 @@ from api.deps import get_db
 from api.schemas import SearchResponse, SearchResult
 
 router = APIRouter()
-
-ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
 
 ES_INDICES = [
     "properties",
@@ -26,14 +23,9 @@ ES_INDICES = [
     "budget_capital_projects",
 ]
 
-_es: Elasticsearch | None = None
 
-
-def _get_es() -> Elasticsearch:
-    global _es
-    if _es is None:
-        _es = Elasticsearch(ES_HOST)
-    return _es
+def get_es(request: Request) -> Elasticsearch:
+    return request.app.state.es
 
 
 def _normalize_query(q: str, db: Session) -> str | None:
@@ -49,9 +41,9 @@ def _normalize_query(q: str, db: Session) -> str | None:
 def search(
     q: Annotated[str, Query(min_length=1)],
     db: Annotated[Session, Depends(get_db)],
+    es: Annotated[Elasticsearch, Depends(get_es)],
     limit: int = Query(default=5, ge=1, le=20),
 ) -> SearchResponse:
-    es = _get_es()
     normalized = _normalize_query(q, db)
     search_query = normalized or q
 

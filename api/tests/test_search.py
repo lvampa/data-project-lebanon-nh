@@ -4,7 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.deps import get_db
-from api.main import app
+from api.main import ES_HOST, app
+from api.routers.search import get_es
 
 
 def _make_es_response(hits_per_index: dict[str, list[dict]]) -> dict:
@@ -38,15 +39,13 @@ def clear_overrides():
 
 
 @pytest.fixture(autouse=True)
-def reset_es_singleton():
-    import api.routers.search as search_mod
-
-    search_mod._es = None
-    yield
-    search_mod._es = None
+def mock_es():
+    es = MagicMock()
+    app.dependency_overrides[get_es] = lambda: es
+    return es
 
 
-def test_search_returns_grouped_results():
+def test_search_returns_grouped_results(mock_es):
     mock_db = MagicMock()
     mock_db.execute.return_value.scalar_one_or_none.return_value = (
         None  # no normalization
@@ -73,13 +72,10 @@ def test_search_returns_grouped_results():
         }
     )
 
-    with patch("api.routers.search.Elasticsearch") as MockES:
-        es_instance = MagicMock()
-        MockES.return_value = es_instance
-        es_instance.msearch.return_value = es_response
-        app.dependency_overrides[get_db] = lambda: mock_db
-        client = TestClient(app)
-        resp = client.get("/api/search?q=304+Hanover+St")
+    mock_es.msearch.return_value = es_response
+    app.dependency_overrides[get_db] = lambda: mock_db
+    client = TestClient(app)
+    resp = client.get("/api/search?q=304+Hanover+St")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -89,19 +85,16 @@ def test_search_returns_grouped_results():
     assert data["results"]["properties"][0]["id"] == 1
 
 
-def test_search_returns_empty_when_no_hits():
+def test_search_returns_empty_when_no_hits(mock_es):
     mock_db = MagicMock()
     mock_db.execute.return_value.scalar_one_or_none.return_value = None
 
     es_response = _make_es_response({})
 
-    with patch("api.routers.search.Elasticsearch") as MockES:
-        es_instance = MagicMock()
-        MockES.return_value = es_instance
-        es_instance.msearch.return_value = es_response
-        app.dependency_overrides[get_db] = lambda: mock_db
-        client = TestClient(app)
-        resp = client.get("/api/search?q=nothing")
+    mock_es.msearch.return_value = es_response
+    app.dependency_overrides[get_db] = lambda: mock_db
+    client = TestClient(app)
+    resp = client.get("/api/search?q=nothing")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -109,7 +102,7 @@ def test_search_returns_empty_when_no_hits():
         assert index_results == []
 
 
-def test_search_uses_normalized_query_when_address_match():
+def test_search_uses_normalized_query_when_address_match(mock_es):
     from postgres.models.address_normalization import AddressNormalization
 
     mock_db = MagicMock()
@@ -119,32 +112,26 @@ def test_search_uses_normalized_query_when_address_match():
 
     es_response = _make_es_response({})
 
-    with patch("api.routers.search.Elasticsearch") as MockES:
-        es_instance = MagicMock()
-        MockES.return_value = es_instance
-        es_instance.msearch.return_value = es_response
-        app.dependency_overrides[get_db] = lambda: mock_db
-        client = TestClient(app)
-        resp = client.get("/api/search?q=304+Hanover+St")
+    mock_es.msearch.return_value = es_response
+    app.dependency_overrides[get_db] = lambda: mock_db
+    client = TestClient(app)
+    resp = client.get("/api/search?q=304+Hanover+St")
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["normalized_query"] == "304 hanover st lebanon nh"
 
 
-def test_search_normalized_query_is_none_when_no_match():
+def test_search_normalized_query_is_none_when_no_match(mock_es):
     mock_db = MagicMock()
     mock_db.execute.return_value.scalar_one_or_none.return_value = None
 
     es_response = _make_es_response({})
 
-    with patch("api.routers.search.Elasticsearch") as MockES:
-        es_instance = MagicMock()
-        MockES.return_value = es_instance
-        es_instance.msearch.return_value = es_response
-        app.dependency_overrides[get_db] = lambda: mock_db
-        client = TestClient(app)
-        resp = client.get("/api/search?q=unknown place")
+    mock_es.msearch.return_value = es_response
+    app.dependency_overrides[get_db] = lambda: mock_db
+    client = TestClient(app)
+    resp = client.get("/api/search?q=unknown place")
 
     assert resp.status_code == 200
     assert resp.json()["normalized_query"] is None
@@ -154,3 +141,10 @@ def test_search_requires_q_param():
     client = TestClient(app)
     resp = client.get("/api/search")
     assert resp.status_code == 422
+
+
+def test_lifespan_builds_es_client_with_timeout_and_closes_it():
+    with patch("api.main.Elasticsearch") as MockES, TestClient(app):
+        MockES.assert_called_once_with(ES_HOST, request_timeout=10)
+        assert app.state.es is MockES.return_value
+    MockES.return_value.close.assert_called_once()

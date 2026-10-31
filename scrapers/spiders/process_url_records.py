@@ -1,5 +1,5 @@
 import io
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import logfire
@@ -8,8 +8,13 @@ from items import PoliceLogItem, PoliceLogPdfItem
 from models import UrlDocument
 from mongo import db
 from parsers import parse_log_entries
+from pymongo.collection import Collection
 from pypdf import PdfReader
 from scrapy.http import Request, Response
+from twisted.python.failure import Failure
+
+CLAIM_LEASE = timedelta(hours=2)
+MAX_ATTEMPTS = 3
 
 
 class ProcessUrlsSpider(scrapy.Spider):
@@ -20,14 +25,18 @@ class ProcessUrlsSpider(scrapy.Spider):
         self.limit = int(limit)
 
     async def start(self):
+        urls = db.get_collection("urls")
+        self._requeue_failed_urls(urls)
+
         # Atomically claim URLs so concurrent runs don't double-process.
-        # Crashed spiders leave URLs stuck in "in_progress"; reset them manually
-        # or add a locked_at timeout if that becomes a problem.
         claimed = []
         for _ in range(self.limit):
-            doc = db.get_collection("urls").find_one_and_update(
+            doc = urls.find_one_and_update(
                 {"state": "pending"},
-                {"$set": {"state": "in_progress"}},
+                {
+                    "$set": {"state": "in_progress", "claimed_at": datetime.now(UTC)},
+                    "$inc": {"attempts": 1},
+                },
             )
             if doc is None:
                 break
@@ -37,8 +46,37 @@ class ProcessUrlsSpider(scrapy.Spider):
         for doc in claimed:
             url_doc = UrlDocument(**doc)
             yield Request(
-                url_doc.canonical_url, cb_kwargs={"url_doc": url_doc}, dont_filter=True
+                url_doc.canonical_url,
+                cb_kwargs={"url_doc": url_doc},
+                errback=self._on_request_error,
+                dont_filter=True,
             )
+
+    def _requeue_failed_urls(self, urls: Collection) -> None:
+        # A crashed run leaves its claims in_progress. Expire them to error so
+        # the attempt limit below applies to them too. $not also matches rows
+        # claimed before claimed_at and attempts were recorded.
+        lease_cutoff = datetime.now(UTC) - CLAIM_LEASE
+        expired = urls.update_many(
+            {"state": "in_progress", "claimed_at": {"$not": {"$gte": lease_cutoff}}},
+            {"$set": {"state": "error", "error_message": "Claim expired"}},
+        )
+        retried = urls.update_many(
+            {"state": "error", "attempts": {"$not": {"$gte": MAX_ATTEMPTS}}},
+            {"$set": {"state": "pending"}},
+        )
+        logfire.info(
+            "requeued failed urls",
+            expired=expired.modified_count,
+            retried=retried.modified_count,
+        )
+
+    def _on_request_error(self, failure: Failure) -> None:
+        url_doc = failure.request.cb_kwargs["url_doc"]
+        logfire.error(
+            "request failed", url=failure.request.url, error=repr(failure.value)
+        )
+        self._mark_error(url_doc, f"Request failed: {failure.value!r}")
 
     def parse(self, response: Response, url_doc: UrlDocument, **kwargs: Any) -> Any:
         if not response.body.startswith(b"%PDF"):
@@ -50,6 +88,7 @@ class ProcessUrlsSpider(scrapy.Spider):
                     url_doc.archive_url,
                     callback=self.parse_archive,
                     cb_kwargs={"url_doc": url_doc},
+                    errback=self._on_request_error,
                 )
             else:
                 logfire.error("response is not a pdf, no archive url", url=response.url)
@@ -72,12 +111,17 @@ class ProcessUrlsSpider(scrapy.Spider):
     def _process_pdf(
         self, pdf_bytes: bytes, source_url: str, url_doc: UrlDocument
     ) -> Any:
-        with logfire.span("extract pdf text", url=source_url):
-            reader = PdfReader(io.BytesIO(pdf_bytes))
-            raw_text = "\n".join(page.extract_text() for page in reader.pages)
+        try:
+            with logfire.span("extract pdf text", url=source_url):
+                reader = PdfReader(io.BytesIO(pdf_bytes))
+                raw_text = "\n".join(page.extract_text() for page in reader.pages)
+            entries = parse_log_entries(raw_text)
+        except Exception as exc:
+            logfire.error("pdf processing failed", url=source_url, error=repr(exc))
+            self._mark_error(url_doc, f"PDF processing failed: {exc!r}")
+            return
 
         now = datetime.now(UTC)
-        entries = parse_log_entries(raw_text)
 
         if not entries:
             logfire.warning("no entries parsed from pdf", url=source_url)

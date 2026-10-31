@@ -1,6 +1,78 @@
+from types import SimpleNamespace
+
+import httpx
 import pytest
 
-from scripts.scrape.download_budget_pdfs import extract_text, output_path
+from scripts.scrape import download_budget_pdfs
+from scripts.scrape.download_budget_pdfs import (
+    documents_needing_text,
+    download_pdf,
+    extract_text,
+    make_client,
+    output_path,
+)
+
+# --- documents_needing_text ---
+
+
+def budget_doc(fiscal_year: int, text_extracted: bool) -> SimpleNamespace:
+    return SimpleNamespace(
+        fiscal_year=fiscal_year,
+        document_type="budget_book",
+        text_extracted=text_extracted,
+    )
+
+
+def test_documents_needing_text_includes_unextracted(tmp_path, monkeypatch):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    doc = budget_doc(2026, text_extracted=False)
+    assert documents_needing_text([doc]) == [doc]
+
+
+def test_documents_needing_text_redoes_extracted_doc_with_missing_file(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    doc = budget_doc(2026, text_extracted=True)
+    assert documents_needing_text([doc]) == [doc]
+
+
+def test_documents_needing_text_skips_extracted_doc_with_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    (tmp_path / "2026-budget_book.txt").write_text("budget text")
+    doc = budget_doc(2026, text_extracted=True)
+    assert documents_needing_text([doc]) == []
+
+
+# --- download_pdf ---
+
+
+def test_client_sends_user_agent_with_contact():
+    with make_client() as client:
+        assert "github.com/" in client.headers["User-Agent"]
+        assert client.timeout.read is not None
+
+
+def test_download_pdf_writes_response_body(tmp_path):
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=b"%PDF-1.7 body")
+    )
+    dest = tmp_path / "budget.pdf"
+    with httpx.Client(transport=transport) as client:
+        download_pdf(client, "https://lebanonnh.gov/budget.pdf", dest)
+    assert dest.read_bytes() == b"%PDF-1.7 body"
+
+
+def test_download_pdf_raises_on_http_error(tmp_path):
+    transport = httpx.MockTransport(lambda request: httpx.Response(404))
+    dest = tmp_path / "budget.pdf"
+    with (
+        httpx.Client(transport=transport) as client,
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        download_pdf(client, "https://lebanonnh.gov/budget.pdf", dest)
+    assert not dest.exists()
+
 
 # --- output_path ---
 

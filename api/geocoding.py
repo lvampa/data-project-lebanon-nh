@@ -10,7 +10,7 @@ _REPO_URL = "https://github.com/lvampa/Data-Project-Lebanon-NH"
 
 def _user_agent() -> str:
     # Nominatim's usage policy requires a way to reach whoever runs the client.
-    contact = os.environ.get("NOMINATIM_CONTACT", _REPO_URL)
+    contact = os.environ.get("NOMINATIM_CONTACT") or _REPO_URL
     return f"lebanon-nh-police-log/1.0 ({contact})"
 
 

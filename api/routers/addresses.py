@@ -57,31 +57,39 @@ def update_address(
     body: AddressUpdate,
     db: Annotated[Session, Depends(get_db)],
 ) -> AddressResult:
-    lat, lng, geocoded_via = None, None, None
-    if body.geocode:
-        lat, lng = geocode_nominatim(body.normalized_address)
-        if lat is not None:
-            geocoded_via = "nominatim"
-
     now = datetime.now(UTC).replace(tzinfo=None)
     changes = {
         "normalized_address": body.normalized_address,
-        "lat": lat,
-        "lng": lng,
-        "geocoded_via": geocoded_via,
         "notes": body.notes,
         "updated_at": now,
+        **_new_coordinates(body),
     }
-    db.execute(
+    stored = db.execute(
         insert(AddressNormalization)
         .values(raw_address=raw_address, created_at=now, **changes)
         .on_conflict_do_update(index_elements=["raw_address"], set_=changes)
-    )
+        .returning(
+            AddressNormalization.lat,
+            AddressNormalization.lng,
+            AddressNormalization.geocoded_via,
+        )
+    ).one()
     db.commit()
     return AddressResult(
         raw_address=raw_address,
         normalized_address=body.normalized_address,
-        lat=lat,
-        lng=lng,
-        geocoded_via=geocoded_via,
+        lat=stored.lat,
+        lng=stored.lng,
+        geocoded_via=stored.geocoded_via,
     )
+
+
+def _new_coordinates(body: AddressUpdate) -> dict:
+    """Coordinates to write, or {} to keep whatever the row already has."""
+    if body.lat is not None:
+        return {"lat": body.lat, "lng": body.lng, "geocoded_via": "manual"}
+    if body.geocode:
+        lat, lng = geocode_nominatim(body.normalized_address)
+        if lat is not None:
+            return {"lat": lat, "lng": lng, "geocoded_via": "nominatim"}
+    return {}

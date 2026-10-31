@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 
 class Incident(BaseModel):
@@ -53,6 +53,14 @@ class AddressUpdate(BaseModel):
     normalized_address: str
     notes: str | None = None
     geocode: bool = True
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def lat_and_lng_together(self) -> "AddressUpdate":
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("lat and lng must be set together")
+        return self
 
 
 class AddressResult(BaseModel):

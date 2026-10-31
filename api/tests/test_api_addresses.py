@@ -28,7 +28,13 @@ def test_list_addresses_returns_all_locations(mock_db, client):
     assert data[1]["is_normalized"] is False
 
 
+def _stored(mock_db, lat=None, lng=None, geocoded_via=None):
+    stored = MagicMock(lat=lat, lng=lng, geocoded_via=geocoded_via)
+    mock_db.execute.return_value.one.return_value = stored
+
+
 def test_patch_address_upserts_on_raw_address(mock_db, client):
+    _stored(mock_db, 43.64, -72.25, "nominatim")
     with patch("api.routers.addresses.geocode_nominatim", return_value=(43.64, -72.25)):
         resp = client.patch(
             "/api/addresses/EAGLE%20RIDGE%20RD",
@@ -45,3 +51,82 @@ def test_patch_address_upserts_on_raw_address(mock_db, client):
     assert {"normalized_address", "notes", "updated_at"} <= upsert_set_columns(stmt)
     mock_db.add.assert_not_called()
     mock_db.commit.assert_called_once()
+
+
+def test_patch_address_without_geocode_keeps_existing_coords(mock_db, client):
+    _stored(mock_db, 43.64, -72.25, "nominatim")
+    with patch("api.routers.addresses.geocode_nominatim") as geocode:
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={"normalized_address": "Timberwood Drive", "geocode": False},
+        )
+
+    assert resp.status_code == 200
+    geocode.assert_not_called()
+    stmt = executed_stmt(mock_db)
+    assert upsert_set_columns(stmt).isdisjoint({"lat", "lng", "geocoded_via"})
+    assert resp.json()["lat"] == 43.64
+    assert resp.json()["lng"] == -72.25
+    assert resp.json()["geocoded_via"] == "nominatim"
+
+
+def test_patch_address_geocode_miss_keeps_existing_coords(mock_db, client):
+    _stored(mock_db, 43.64, -72.25, "nominatim")
+    with patch("api.routers.addresses.geocode_nominatim", return_value=(None, None)):
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={"normalized_address": "Timberwood Drive", "geocode": True},
+        )
+
+    assert resp.status_code == 200
+    stmt = executed_stmt(mock_db)
+    assert upsert_set_columns(stmt).isdisjoint({"lat", "lng", "geocoded_via"})
+    assert resp.json()["lat"] == 43.64
+
+
+def test_patch_address_geocode_hit_sets_coords(mock_db, client):
+    _stored(mock_db, 43.7, -72.3, "nominatim")
+    with patch("api.routers.addresses.geocode_nominatim", return_value=(43.7, -72.3)):
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={"normalized_address": "Timberwood Drive", "geocode": True},
+        )
+
+    assert resp.status_code == 200
+    stmt = executed_stmt(mock_db)
+    assert {"lat", "lng", "geocoded_via"} <= upsert_set_columns(stmt)
+    params = compile_pg(stmt).params
+    assert (params["lat"], params["lng"]) == (43.7, -72.3)
+    assert params["geocoded_via"] == "nominatim"
+
+
+def test_patch_address_manual_coords_skip_geocoding(mock_db, client):
+    _stored(mock_db, 43.65, -72.26, "manual")
+    with patch("api.routers.addresses.geocode_nominatim") as geocode:
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={
+                "normalized_address": "Timberwood Drive",
+                "lat": 43.65,
+                "lng": -72.26,
+            },
+        )
+
+    assert resp.status_code == 200
+    geocode.assert_not_called()
+    stmt = executed_stmt(mock_db)
+    assert {"lat", "lng", "geocoded_via"} <= upsert_set_columns(stmt)
+    params = compile_pg(stmt).params
+    assert (params["lat"], params["lng"]) == (43.65, -72.26)
+    assert params["geocoded_via"] == "manual"
+    assert resp.json()["geocoded_via"] == "manual"
+
+
+def test_patch_address_lat_without_lng_returns_422(mock_db, client):
+    resp = client.patch(
+        "/api/addresses/TIMBERWOOD%20DR",
+        json={"normalized_address": "Timberwood Drive", "lat": 43.65},
+    )
+
+    assert resp.status_code == 422
+    mock_db.execute.assert_not_called()

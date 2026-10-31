@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     app.state.es.close()
 
 
-app = FastAPI(title="Lebanon PD Log — Internal API", lifespan=lifespan)
+app = FastAPI(title="Lebanon PD Log - Internal API", lifespan=lifespan)
 # Not in the lifespan: Starlette builds the middleware stack before the
 # lifespan runs, so instrumenting there never wraps a request.
 logfire.configure()

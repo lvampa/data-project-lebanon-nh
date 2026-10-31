@@ -5,16 +5,57 @@ from typing import Any
 import logfire
 import scrapy
 from items import PoliceLogItem, PoliceLogPdfItem
-from models import UrlDocument
-from mongo import db
+from models import PdfUrlClaim
 from parsers import parse_log_entries
-from pymongo.collection import Collection
+from postgres import SessionLocal
+from postgres.models.pdf_url import PdfUrl
 from pypdf import PdfReader
 from scrapy.http import Request, Response
+from sqlalchemy import Update, select, update
 from twisted.python.failure import Failure
 
 CLAIM_LEASE = timedelta(hours=2)
 MAX_ATTEMPTS = 3
+
+
+def expire_stale_claims(now: datetime) -> Update:
+    # A crashed run leaves its claims in_progress. Expire them to error so the
+    # attempt limit in retry_failed_urls applies to them too.
+    return (
+        update(PdfUrl)
+        .where(PdfUrl.state == "in_progress", PdfUrl.claimed_at < now - CLAIM_LEASE)
+        .values(state="error", error_message="Claim expired")
+    )
+
+
+def retry_failed_urls() -> Update:
+    return (
+        update(PdfUrl)
+        .where(PdfUrl.state == "error", PdfUrl.attempts < MAX_ATTEMPTS)
+        .values(state="pending")
+    )
+
+
+def claim_statement(limit: int, now: datetime) -> Update:
+    # SKIP LOCKED lets concurrent runs split the queue instead of waiting on each other.
+    claimable = (
+        select(PdfUrl.id)
+        .where(PdfUrl.state == "pending")
+        .order_by(PdfUrl.created_at)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    return (
+        update(PdfUrl)
+        .where(PdfUrl.id.in_(claimable))
+        .values(state="in_progress", claimed_at=now, attempts=PdfUrl.attempts + 1)
+        .returning(PdfUrl.id, PdfUrl.canonical_url, PdfUrl.archive_url)
+    )
+
+
+def _utc_now() -> datetime:
+    # pdf_urls timestamps are naive columns that hold UTC, like the other tables.
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ProcessUrlsSpider(scrapy.Spider):
@@ -25,91 +66,68 @@ class ProcessUrlsSpider(scrapy.Spider):
         self.limit = int(limit)
 
     async def start(self):
-        urls = db.get_collection("urls")
-        self._requeue_failed_urls(urls)
-
-        # Atomically claim URLs so concurrent runs don't double-process.
-        claimed = []
-        for _ in range(self.limit):
-            doc = urls.find_one_and_update(
-                {"state": "pending"},
-                {
-                    "$set": {"state": "in_progress", "claimed_at": datetime.now(UTC)},
-                    "$inc": {"attempts": 1},
-                },
-            )
-            if doc is None:
-                break
-            claimed.append(doc)
-
+        claimed = self._claim_urls()
         logfire.info("queued urls for processing", count=len(claimed), limit=self.limit)
-        for doc in claimed:
-            url_doc = UrlDocument(**doc)
+        for pdf_url in claimed:
             yield Request(
-                url_doc.canonical_url,
-                cb_kwargs={"url_doc": url_doc},
+                pdf_url.canonical_url,
+                cb_kwargs={"pdf_url": pdf_url},
                 errback=self._on_request_error,
                 dont_filter=True,
             )
 
-    def _requeue_failed_urls(self, urls: Collection) -> None:
-        # A crashed run leaves its claims in_progress. Expire them to error so
-        # the attempt limit below applies to them too. $not also matches rows
-        # claimed before claimed_at and attempts were recorded.
-        lease_cutoff = datetime.now(UTC) - CLAIM_LEASE
-        expired = urls.update_many(
-            {"state": "in_progress", "claimed_at": {"$not": {"$gte": lease_cutoff}}},
-            {"$set": {"state": "error", "error_message": "Claim expired"}},
-        )
-        retried = urls.update_many(
-            {"state": "error", "attempts": {"$not": {"$gte": MAX_ATTEMPTS}}},
-            {"$set": {"state": "pending"}},
-        )
-        logfire.info(
-            "requeued failed urls",
-            expired=expired.modified_count,
-            retried=retried.modified_count,
-        )
+    def _claim_urls(self) -> list[PdfUrlClaim]:
+        now = _utc_now()
+        with (
+            logfire.span("claim pdf urls", limit=self.limit),
+            SessionLocal() as session,
+        ):
+            expired = session.execute(expire_stale_claims(now)).rowcount
+            retried = session.execute(retry_failed_urls()).rowcount
+            rows = session.execute(claim_statement(self.limit, now)).all()
+            session.commit()
+            logfire.info("requeued failed urls", expired=expired, retried=retried)
+        return [PdfUrlClaim.model_validate(row, from_attributes=True) for row in rows]
 
     def _on_request_error(self, failure: Failure) -> None:
-        url_doc = failure.request.cb_kwargs["url_doc"]
+        pdf_url = failure.request.cb_kwargs["pdf_url"]
         logfire.error(
             "request failed", url=failure.request.url, error=repr(failure.value)
         )
-        self._mark_error(url_doc, f"Request failed: {failure.value!r}")
+        self._mark_error(pdf_url, f"Request failed: {failure.value!r}")
 
-    def parse(self, response: Response, url_doc: UrlDocument, **kwargs: Any) -> Any:
+    def parse(self, response: Response, pdf_url: PdfUrlClaim, **kwargs: Any) -> Any:
         if not response.body.startswith(b"%PDF"):
-            if url_doc.archive_url:
+            if pdf_url.archive_url:
                 logfire.warning(
                     "canonical url not a pdf, trying archive", url=response.url
                 )
                 yield Request(
-                    url_doc.archive_url,
+                    pdf_url.archive_url,
                     callback=self.parse_archive,
-                    cb_kwargs={"url_doc": url_doc},
+                    cb_kwargs={"pdf_url": pdf_url},
                     errback=self._on_request_error,
                 )
             else:
                 logfire.error("response is not a pdf, no archive url", url=response.url)
                 self._mark_error(
-                    url_doc, "Response is not a PDF and no archive URL available"
+                    pdf_url, "Response is not a PDF and no archive URL available"
                 )
             return
 
-        yield from self._process_pdf(response.body, response.url, url_doc)
+        yield from self._process_pdf(response.body, response.url, pdf_url)
 
     def parse_archive(
-        self, response: Response, url_doc: UrlDocument, **kwargs: Any
+        self, response: Response, pdf_url: PdfUrlClaim, **kwargs: Any
     ) -> Any:
         if not response.body.startswith(b"%PDF"):
             logfire.error("archive url also not a pdf", url=response.url)
-            self._mark_error(url_doc, "Archive URL also not a PDF")
+            self._mark_error(pdf_url, "Archive URL also not a PDF")
             return
-        yield from self._process_pdf(response.body, url_doc.canonical_url, url_doc)
+        yield from self._process_pdf(response.body, pdf_url.canonical_url, pdf_url)
 
     def _process_pdf(
-        self, pdf_bytes: bytes, source_url: str, url_doc: UrlDocument
+        self, pdf_bytes: bytes, source_url: str, pdf_url: PdfUrlClaim
     ) -> Any:
         try:
             with logfire.span("extract pdf text", url=source_url):
@@ -118,31 +136,26 @@ class ProcessUrlsSpider(scrapy.Spider):
             entries = parse_log_entries(raw_text)
         except Exception as exc:
             logfire.error("pdf processing failed", url=source_url, error=repr(exc))
-            self._mark_error(url_doc, f"PDF processing failed: {exc!r}")
+            self._mark_error(pdf_url, f"PDF processing failed: {exc!r}")
             return
 
-        # log_entries.scraped_at is a naive column that holds UTC, like the other writers.
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = _utc_now()
 
         if not entries:
             logfire.warning("no entries parsed from pdf", url=source_url)
-            db.get_collection("urls").update_one(
-                {"_id": url_doc.id},
-                {
-                    "$set": {
-                        "raw_text": raw_text,
-                        "state": "error",
-                        "error_message": "No entries parsed from PDF",
-                        "entry_count": 0,
-                        "completed_at": now,
-                    }
-                },
+            self._update_url(
+                pdf_url,
+                raw_text=raw_text,
+                state="error",
+                error_message="No entries parsed from PDF",
+                entry_count=0,
+                completed_at=now,
             )
             return
 
-        # One item per PDF so the pipeline saves all entries before it marks the URL complete.
+        # One item per PDF so the pipeline saves its entries and completes the URL in one commit.
         yield PoliceLogPdfItem(
-            url_id=url_doc.id,
+            url_id=pdf_url.id,
             raw_text=raw_text,
             entries=[
                 PoliceLogItem(
@@ -154,14 +167,14 @@ class ProcessUrlsSpider(scrapy.Spider):
             ],
         )
 
-    def _mark_error(self, url_doc: UrlDocument, error_message: str) -> None:
-        db.get_collection("urls").update_one(
-            {"_id": url_doc.id},
-            {
-                "$set": {
-                    "state": "error",
-                    "error_message": error_message,
-                    "completed_at": datetime.now(UTC),
-                }
-            },
+    def _mark_error(self, pdf_url: PdfUrlClaim, error_message: str) -> None:
+        self._update_url(
+            pdf_url, state="error", error_message=error_message, completed_at=_utc_now()
         )
+
+    def _update_url(self, pdf_url: PdfUrlClaim, **values: Any) -> None:
+        with SessionLocal() as session:
+            session.execute(
+                update(PdfUrl).where(PdfUrl.id == pdf_url.id).values(**values)
+            )
+            session.commit()

@@ -4,7 +4,7 @@ from typing import Any
 
 import logfire
 import scrapy
-from items import PoliceLogItem
+from items import PoliceLogItem, PoliceLogPdfItem
 from models import UrlDocument
 from mongo import db
 from parsers import parse_log_entries
@@ -95,24 +95,19 @@ class ProcessUrlsSpider(scrapy.Spider):
             )
             return
 
-        db.get_collection("urls").update_one(
-            {"_id": url_doc.id},
-            {
-                "$set": {
-                    "raw_text": raw_text,
-                    "state": "complete",
-                    "entry_count": len(entries),
-                    "completed_at": now,
-                }
-            },
+        # One item per PDF so the pipeline saves all entries before it marks the URL complete.
+        yield PoliceLogPdfItem(
+            url_id=url_doc.id,
+            raw_text=raw_text,
+            entries=[
+                PoliceLogItem(
+                    source_url=source_url,
+                    scraped_at=now,
+                    **entry,  # includes per-entry raw_text from the parser
+                )
+                for entry in entries
+            ],
         )
-
-        for entry in entries:
-            yield PoliceLogItem(
-                source_url=source_url,
-                scraped_at=now,
-                **entry,  # includes per-entry raw_text from the parser
-            )
 
     def _mark_error(self, url_doc: UrlDocument, error_message: str) -> None:
         db.get_collection("urls").update_one(

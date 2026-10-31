@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from items import PoliceLogItem
+from items import PoliceLogItem, PoliceLogPdfItem
 from scrapy.http import Request, Response
 from spiders.process_url_records import ProcessUrlsSpider
 
@@ -38,16 +38,21 @@ def test_parse_yields_police_log_items(mock_db, mock_pdf_reader):
     items = list(spider.parse(response, url_doc=url_doc))
 
     assert len(items) == 1
-    assert isinstance(items[0], PoliceLogItem)
-    assert items[0]["source_url"] == "https://example.com/a.pdf"
-    assert items[0]["parse_error"] is False
-    # raw_text is the per-entry block, not the full PDF text
+    assert isinstance(items[0], PoliceLogPdfItem)
+    assert items[0]["url_id"] is url_doc.id
     assert "26-13339" in items[0]["raw_text"]
+    entries = items[0]["entries"]
+    assert len(entries) == 1
+    assert isinstance(entries[0], PoliceLogItem)
+    assert entries[0]["source_url"] == "https://example.com/a.pdf"
+    assert entries[0]["parse_error"] is False
+    # raw_text is the per-entry block, not the full PDF text
+    assert entries[0]["raw_text"].startswith("26-13339")
 
 
 @patch("spiders.process_url_records.PdfReader")
 @patch("spiders.process_url_records.db")
-def test_parse_sets_entry_count_and_state_on_mongo(mock_db, mock_pdf_reader):
+def test_parse_leaves_url_completion_to_pipeline(mock_db, mock_pdf_reader):
     mock_page = MagicMock()
     mock_page.extract_text.return_value = SAMPLE_TEXT
     mock_pdf_reader.return_value.pages = [mock_page]
@@ -60,12 +65,7 @@ def test_parse_sets_entry_count_and_state_on_mongo(mock_db, mock_pdf_reader):
     response = make_response("https://example.com/a.pdf", FAKE_PDF)
     list(spider.parse(response, url_doc=url_doc))
 
-    update_call = mock_db.get_collection.return_value.update_one.call_args
-    set_doc = update_call[0][1]["$set"]
-    assert set_doc["state"] == "complete"
-    assert set_doc["entry_count"] == 1
-    assert "raw_text" in set_doc
-    assert "completed_at" in set_doc
+    mock_db.get_collection.return_value.update_one.assert_not_called()
 
 
 @patch("spiders.process_url_records.db")

@@ -1,0 +1,7 @@
+# Local dev settings. `docker compose up` loads this file automatically.
+# Skip it outside dev with `docker compose -f compose.yml up`.
+services:
+  api:
+    command: ["uv", "run", "--frozen", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./api:/opt/project/api

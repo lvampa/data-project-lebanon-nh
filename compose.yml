@@ -48,8 +48,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-app}
-    volumes:
-      - ./api:/opt/project/api
     depends_on:
       postgres:
         condition: service_healthy

@@ -13,7 +13,6 @@ from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
-from mongo import db
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
@@ -23,7 +22,7 @@ from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 _LLC_PATTERN = re.compile(
@@ -72,48 +71,50 @@ class PoliceLogPipeline:
         if not isinstance(item, PoliceLogPdfItem):
             return item
 
-        urls = db.get_collection("urls")
         try:
             records = [
                 PoliceLogRecord.model_validate(dict(entry)) for entry in item["entries"]
             ]
             with logfire.span(
-                "save police log entries",
-                url_id=str(item["url_id"]),
-                count=len(records),
+                "save police log entries", url_id=item["url_id"], count=len(records)
             ):
                 for record in records:
                     self._session.execute(_log_entry_insert(record))
-            self._session.commit()
+                self._session.execute(
+                    _pdf_url_update(
+                        item["url_id"],
+                        state="complete",
+                        raw_text=item["raw_text"],
+                        entry_count=len(records),
+                    )
+                )
+                self._session.commit()
         except Exception as exc:
             self._session.rollback()
-            urls.update_one(
-                {"_id": item["url_id"]},
-                {
-                    "$set": {
-                        "state": "error",
-                        "error_message": f"Saving entries failed: {exc}",
-                        "completed_at": datetime.now(UTC),
-                    }
-                },
+            self._session.execute(
+                _pdf_url_update(
+                    item["url_id"],
+                    state="error",
+                    error_message=f"Saving entries failed: {exc}",
+                )
             )
+            self._session.commit()
             raise
 
-        urls.update_one(
-            {"_id": item["url_id"]},
-            {
-                "$set": {
-                    "raw_text": item["raw_text"],
-                    "state": "complete",
-                    "entry_count": len(records),
-                    "completed_at": datetime.now(UTC),
-                }
-            },
-        )
         return item
 
     def close_spider(self, spider) -> None:
         self._session.close()
+
+
+def _pdf_url_update(url_id: int, **values):
+    # pdf_urls timestamps are naive columns that hold UTC, like the other tables.
+    completed_at = datetime.now(UTC).replace(tzinfo=None)
+    return (
+        update(PdfUrl)
+        .where(PdfUrl.id == url_id)
+        .values(completed_at=completed_at, **values)
+    )
 
 
 def _log_entry_insert(record: PoliceLogRecord):

@@ -2,7 +2,7 @@
 
 **Status:** Done
 **Created:** 2026-06-10
-**Updated:** 2026-10-16
+**Updated:** 2026-10-31
 
 - [x] 1. Scaffold the workspace and CLI
   - Add the root `Cargo.toml` workspace and the `tools/report-gen` crate with its dependencies.

@@ -9,7 +9,7 @@ use sqlx::PgPool;
 #[derive(Debug, Serialize)]
 #[allow(clippy::struct_field_names)]
 pub struct ByType {
-    pub incident_type: Option<String>,
+    pub incident_type: String,
     pub count: i64,
 }
 
@@ -40,7 +40,7 @@ pub struct Incident {
     pub location: Option<String>,
     pub officer: Option<String>,
     pub reference_number: Option<String>,
-    pub source_url: Option<String>,
+    pub source_url: String,
 }
 
 // ---- Address ----
@@ -48,11 +48,11 @@ pub struct Incident {
 #[derive(Debug, Serialize, sqlx::FromRow)]
 #[allow(clippy::struct_field_names)]
 pub struct Address {
-    pub raw_address: Option<String>,
+    pub raw_address: String,
     pub normalized_address: Option<String>,
     pub count: i64,
-    pub lat: Option<f64>,
-    pub lng: Option<f64>,
+    pub lat: f64,
+    pub lng: f64,
 }
 
 // ---- Staff ----
@@ -60,20 +60,20 @@ pub struct Address {
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct Staff {
     pub id: i32,
-    pub name: Option<String>,
+    pub name: String,
     pub title: Option<String>,
-    pub department: Option<String>,
+    pub department: String,
     pub division: Option<String>,
     pub email: Option<String>,
     pub phone: Option<String>,
-    pub source_url: Option<String>,
+    pub source_url: String,
 }
 
 // ---- Property ----
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct Property {
-    pub parcel_id: Option<String>,
+    pub parcel_id: String,
     pub location: Option<String>,
     pub owner: Option<String>,
     pub owner_address: Option<String>,
@@ -90,6 +90,8 @@ pub struct Property {
 
 // ---- Query functions ----
 
+pub const INCIDENT_LIMIT: i64 = 2000;
+
 pub async fn fetch_stats(pool: &PgPool) -> Result<Stats> {
     const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -98,7 +100,7 @@ pub async fn fetch_stats(pool: &PgPool) -> Result<Stats> {
             .fetch_one(pool)
             .await?;
 
-    let by_type_rows = sqlx::query_as::<_, (Option<String>, i64)>(
+    let by_type_rows = sqlx::query_as::<_, (String, i64)>(
         r"
         SELECT incident_type, COUNT(*) AS count
         FROM log_entries
@@ -151,10 +153,11 @@ pub async fn fetch_incidents(pool: &PgPool) -> Result<Vec<Incident>> {
                disposition, location, officer, reference_number, source_url
         FROM log_entries
         WHERE parse_error = false
-        ORDER BY reported_at DESC
-        LIMIT 2000
+        ORDER BY reported_at DESC NULLS LAST
+        LIMIT $1
         ",
     )
+    .bind(INCIDENT_LIMIT)
     .fetch_all(pool)
     .await
     .map_err(Into::into)
@@ -170,9 +173,9 @@ pub async fn fetch_addresses(pool: &PgPool) -> Result<Vec<Address>> {
             an.lat,
             an.lng
         FROM log_entries le
-        LEFT JOIN address_normalizations an
+        JOIN address_normalizations an
             ON le.location = an.raw_address
-        WHERE le.location IS NOT NULL
+        WHERE le.parse_error = false
           AND an.lat IS NOT NULL
           AND an.lng IS NOT NULL
         GROUP BY le.location, an.normalized_address, an.lat, an.lng

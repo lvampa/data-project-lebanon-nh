@@ -2,7 +2,7 @@
 
 **Status:** Done
 **Created:** 2026-06-10
-**Updated:** 2026-10-16
+**Updated:** 2026-10-31
 
 ## Overview
 
@@ -52,7 +52,7 @@ Stdout on success:
 
 ```
 ✓ stats.json  (N total incidents)
-✓ incidents.json  (N rows)
+✓ incidents.json  (N rows of T total, capped at 2000)
 ✓ addresses.json  (N rows)
 ✓ staff.json  (N rows)
 ✓ properties.json  (N rows)
@@ -78,8 +78,8 @@ Queries use runtime `sqlx::query_as` and `sqlx::query_scalar`, not the compile-t
 | `fetch_stats` total | `log_entries` | `parse_error = false` | - | - |
 | `fetch_stats` by type | `log_entries` | valid, `incident_type IS NOT NULL` | count desc | 20 |
 | `fetch_stats` by weekday | `log_entries` | valid, `reported_at IS NOT NULL` | DOW asc | - |
-| `fetch_incidents` | `log_entries` | valid | `reported_at DESC` | 2000 |
-| `fetch_addresses` | `log_entries` join `address_normalizations` on `location = raw_address` | location, lat, lng not null | count desc | - |
+| `fetch_incidents` | `log_entries` | valid | `reported_at DESC NULLS LAST` | `INCIDENT_LIMIT` (2000), bound as `$1` |
+| `fetch_addresses` | `log_entries` inner join `address_normalizations` on `location = raw_address` | valid, lat, lng not null | count desc | - |
 | `fetch_staff` | `city_staff` | - | department, division, name | - |
 | `fetch_properties` | `properties` | - | `assessed_total DESC NULLS LAST` | - |
 
@@ -103,11 +103,11 @@ Runs the binary, stages `frontend/web/public/data/`, and commits only if `git di
 
 | Postgres | Rust | Note |
 |---|---|---|
-| `TEXT` | `Option<String>` | |
+| `TEXT` | `Option<String>`, or `String` when the column is `NOT NULL` or the query filters out nulls | |
 | `TIMESTAMP` | `Option<chrono::NaiveDateTime>` | Serialized without a time zone, like `2026-06-01T14:30:00`. |
 | `INTEGER` | `Option<i32>` (`i32` for `city_staff.id`) | |
 | `NUMERIC(10,4)` | `Option<f64>` | Cast with `::FLOAT8` in SQL so it serializes as a number. |
-| `FLOAT8` | `Option<f64>` | `lat`, `lng`. |
+| `FLOAT8` | `f64` | `lat`, `lng`; the address query filters out nulls. |
 | `COUNT(*)` | `i64` | |
 | `EXTRACT(DOW ...)` | `f64` | Cast with `::FLOAT8`, then indexes `["Sun", ..., "Sat"]`. |
 
@@ -120,7 +120,7 @@ pub struct Stats {
     pub by_type: Vec<ByType>,
     pub by_weekday: Vec<ByWeekday>,
 }
-pub struct ByType { pub incident_type: Option<String>, pub count: i64 }
+pub struct ByType { pub incident_type: String, pub count: i64 }
 pub struct ByWeekday { pub day: String, pub count: i64 }
 
 pub struct Incident {
@@ -132,30 +132,30 @@ pub struct Incident {
     pub location: Option<String>,
     pub officer: Option<String>,
     pub reference_number: Option<String>,
-    pub source_url: Option<String>,
+    pub source_url: String,
 }
 
 pub struct Address {
-    pub raw_address: Option<String>,
+    pub raw_address: String,
     pub normalized_address: Option<String>,
     pub count: i64,
-    pub lat: Option<f64>,
-    pub lng: Option<f64>,
+    pub lat: f64,
+    pub lng: f64,
 }
 
 pub struct Staff {
     pub id: i32,
-    pub name: Option<String>,
+    pub name: String,
     pub title: Option<String>,
-    pub department: Option<String>,
+    pub department: String,
     pub division: Option<String>,
     pub email: Option<String>,
     pub phone: Option<String>,
-    pub source_url: Option<String>,
+    pub source_url: String,
 }
 
 pub struct Property {
-    pub parcel_id: Option<String>,
+    pub parcel_id: String,
     pub location: Option<String>,
     pub owner: Option<String>,
     pub owner_address: Option<String>,
@@ -186,6 +186,7 @@ All files are pretty-printed JSON in the output directory.
 | `properties.json` | array of `Property` | `[{"parcel_id": "...", "lot_size_acres": 0.25, "assessed_total": 350000, ...}]` |
 
 Null database values serialize as JSON `null`.
+Fields typed `String` or `f64` are never `null`, and the frontend types in `frontend/web/lib/types.ts` and `frontend/shared/lib/types.ts` match.
 
 ## Error handling
 
@@ -234,16 +235,21 @@ A run that fails partway can leave a mix of new and old files in the output dire
 - **Divergence: the old generators were deleted.**
   The plan only swapped the call in the publish script.
   Commit `d7262dc` (2026-09-07) later removed `scrapers/scripts/generate_report.py`, `scripts/generate/generate_web_data.py`, their tests, and a stale root `deploy.sh`.
+- **Non-null fields are not `Option`.**
+  `NOT NULL` columns, and columns the query filters to non-null, decode into plain types, so the JSON matches the frontend types.
+  Rejected: keeping every field `Option`, which told the frontend any field could be `null` when the database never allows it.
+- **Undated incidents sort last, and the cap is printed.**
+  `ORDER BY reported_at DESC NULLS LAST` keeps rows with no `reported_at` from filling the top of `incidents.json`.
+  The stdout line shows the row count next to `stats.total`, so a run that hits the 2000 cap says so.
+  `stats.total` counts the same rows, so no extra query is needed.
+- **Addresses count only valid log entries.**
+  `fetch_addresses` filters `parse_error = false` like every other query, and uses an inner join since it already required a match.
 - **Divergence: stdout for `stats.json` prints before the write.**
   The plan printed after writing the summary; the built code prints the line, then writes.
   A failed write therefore follows a success line for that file.
 
 ## Open questions
 
-- `incidents.json` orders by `reported_at DESC`, and Postgres puts nulls first in descending order.
-  Should entries with no `reported_at` sort last instead?
-- `addresses.json` counts include log entries with `parse_error = true`, unlike every other query.
-  Is that intended?
 - `generated_at` changes on every run, so after any successful run `stats.json` differs and the publish script's `(no changes)` path never triggers.
   Should the timestamp move out of the diffed data, or should the script ignore it?
 - The committed `stats.json` is still a placeholder (`total` 0, empty `generated_at`) from 2026-06-07.

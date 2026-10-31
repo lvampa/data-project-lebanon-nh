@@ -30,7 +30,12 @@ async fn main() -> Result<()> {
     output::write_json(&args.output_dir, "stats.json", &stats)?;
 
     let incidents = db::fetch_incidents(&pool).await?;
-    println!("✓ incidents.json  ({} rows)", incidents.len());
+    println!(
+        "✓ incidents.json  ({} rows of {} total, capped at {})",
+        incidents.len(),
+        stats.total,
+        db::INCIDENT_LIMIT
+    );
     output::write_json(&args.output_dir, "incidents.json", &incidents)?;
 
     let addresses = db::fetch_addresses(&pool).await?;

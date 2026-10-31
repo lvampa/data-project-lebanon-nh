@@ -2,7 +2,7 @@
 
 **Status:** Done
 **Created:** 2026-06-10
-**Updated:** 2026-10-16
+**Updated:** 2026-10-31
 
 ## Introduction
 
@@ -64,7 +64,7 @@ Success means a single Rust binary replaces the Python generators and produces t
 #### Acceptance criteria
 
 1. THE report generator SHALL write `incidents.json` as an array of at most 2000 valid log entries.
-2. THE report generator SHALL order the entries by `reported_at`, newest first.
+2. THE report generator SHALL order the entries by `reported_at`, newest first, with entries that have no `reported_at` last.
 3. THE report generator SHALL include for each entry `case_number`, `reported_at`, `call_source`, `incident_type`, `disposition`, `location`, `officer`, `reference_number`, and `source_url`.
 4. IF a field is null in the database, THEN THE report generator SHALL write it as JSON `null`.
 5. IF there are no valid log entries, THEN THE report generator SHALL write an empty array.
@@ -75,7 +75,7 @@ Success means a single Rust binary replaces the Python generators and produces t
 
 #### Acceptance criteria
 
-1. THE report generator SHALL write `addresses.json` as an array with one row per distinct log entry location that has a geocoded match in `address_normalizations`.
+1. THE report generator SHALL write `addresses.json` as an array with one row per distinct valid log entry location that has a geocoded match in `address_normalizations`.
 2. THE report generator SHALL include for each row `raw_address`, `normalized_address`, `count`, `lat`, and `lng`.
 3. THE report generator SHALL order the rows by `count`, highest first.
 4. IF a location has no match or its match has a null `lat` or `lng`, THEN THE report generator SHALL leave that location out.
@@ -115,6 +115,7 @@ Success means a single Rust binary replaces the Python generators and produces t
 3. IF a query or a file write fails, THEN THE report generator SHALL stop, print the error, and exit with a non-zero status.
 4. IF a run stops partway, THEN THE report generator SHALL leave the files it already wrote in place.
 5. WHEN all five files are written, THE report generator SHALL exit with status 0.
+6. WHEN the report generator writes `incidents.json`, THE report generator SHALL print the total number of valid log entries and the 2000-row cap next to the row count.
 
 ### Requirement 9: Publish the data
 
@@ -134,4 +135,3 @@ Success means a single Rust binary replaces the Python generators and produces t
 - Pushing the commit or deploying. The operator pushes, and CI deploys.
 - A live API. The frontend stays static for the MVP.
 - Incremental exports. Every run rewrites all five files.
-- Filtering parse errors out of `addresses.json` counts. See Open questions in the design.

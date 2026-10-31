@@ -150,6 +150,26 @@ def test_lifespan_builds_es_client_with_timeout_and_closes_it():
     MockES.return_value.close.assert_called_once()
 
 
+def test_search_queries_explicit_fields_and_hides_raw_text(mock_es):
+    mock_db = MagicMock()
+    mock_db.execute.return_value.scalar_one_or_none.return_value = None
+    mock_es.msearch.return_value = _make_es_response({})
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    TestClient(app).get("/api/search?q=theft")
+
+    searches = mock_es.msearch.call_args.kwargs["searches"]
+    bodies = {
+        header["index"]: body
+        for header, body in zip(searches[::2], searches[1::2], strict=True)
+    }
+    for body in bodies.values():
+        assert "*" not in body["query"]["multi_match"]["fields"]
+        assert body["_source"] == {"excludes": ["raw_text", "owner_address"]}
+    assert "raw_text" in bodies["incidents"]["query"]["multi_match"]["fields"]
+    assert "owner^2" in bodies["properties"]["query"]["multi_match"]["fields"]
+
+
 def test_search_skips_index_that_returns_an_error(mock_es):
     mock_db = MagicMock()
     mock_db.execute.return_value.scalar_one_or_none.return_value = None

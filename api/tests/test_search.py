@@ -148,3 +148,24 @@ def test_lifespan_builds_es_client_with_timeout_and_closes_it():
         MockES.assert_called_once_with(ES_HOST, request_timeout=10)
         assert app.state.es is MockES.return_value
     MockES.return_value.close.assert_called_once()
+
+
+def test_search_skips_index_that_returns_an_error(mock_es):
+    mock_db = MagicMock()
+    mock_db.execute.return_value.scalar_one_or_none.return_value = None
+    es_response = _make_es_response(
+        {"incidents": [{"id": 10, "location": "304 HANOVER ST"}]}
+    )
+    es_response["responses"][0] = {
+        "error": {"type": "index_not_found_exception"},
+        "status": 404,
+    }
+    mock_es.msearch.return_value = es_response
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    resp = TestClient(app).get("/api/search?q=304+Hanover+St")
+
+    assert resp.status_code == 200
+    results = resp.json()["results"]
+    assert results["properties"] == []
+    assert results["incidents"][0]["id"] == 10

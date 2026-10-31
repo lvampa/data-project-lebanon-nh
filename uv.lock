@@ -78,6 +78,7 @@ dependencies = [
     { name = "elasticsearch" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
+    { name = "logfire" },
     { name = "postgres" },
     { name = "python-dotenv" },
 ]
@@ -87,6 +88,7 @@ requires-dist = [
     { name = "elasticsearch", specifier = ">=8.13,<9" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "logfire", specifier = ">=4.31.0" },
     { name = "postgres", editable = "shared/postgres" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]

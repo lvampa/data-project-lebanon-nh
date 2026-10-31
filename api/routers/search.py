@@ -1,5 +1,6 @@
 from typing import Annotated
 
+import logfire
 from elasticsearch import Elasticsearch
 from fastapi import APIRouter, Depends, Query, Request
 from postgres.models.address_normalization import AddressNormalization
@@ -75,6 +76,11 @@ def search(
 
     results: dict[str, list[SearchResult]] = {idx: [] for idx in ES_INDICES}
     for index, response in zip(ES_INDICES, resp["responses"], strict=True):
+        if "error" in response:
+            logfire.warning(
+                "search skipped {index}", index=index, error=response["error"]
+            )
+            continue
         for hit in response["hits"]["hits"]:
             results[index].append(
                 SearchResult(

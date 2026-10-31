@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from api.auth import require_admin
+from api.config import Settings, get_settings
 from api.deps import Paging, get_db, get_paging
 from api.schemas import AddressRecord, AddressResult, AddressUpdate, Page
 from api.services import addresses
@@ -28,5 +29,8 @@ def update_address(
     raw_address: str,
     body: AddressUpdate,
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> AddressResult:
-    return addresses.update_address(db, raw_address, body)
+    return addresses.update_address(
+        db, raw_address, body, nominatim_contact=settings.nominatim_contact
+    )

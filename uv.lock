@@ -80,6 +80,7 @@ dependencies = [
     { name = "httpx" },
     { name = "logfire" },
     { name = "postgres" },
+    { name = "pydantic-settings" },
     { name = "python-dotenv" },
 ]
 
@@ -90,6 +91,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "logfire", specifier = ">=4.31.0" },
     { name = "postgres", editable = "shared/postgres" },
+    { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 

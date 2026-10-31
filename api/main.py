@@ -1,16 +1,12 @@
-from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-load_dotenv()  # must run before postgres client initializes
+import logfire
+from elasticsearch import Elasticsearch
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-import os  # noqa: E402
-from contextlib import asynccontextmanager  # noqa: E402
-
-import logfire  # noqa: E402
-from elasticsearch import Elasticsearch  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-
-from api.routers import (  # noqa: E402
+from api.config import get_settings
+from api.routers import (
     addresses,
     categories,
     incidents,
@@ -19,21 +15,20 @@ from api.routers import (  # noqa: E402
     stats,
 )
 
-ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3001").split(",")
+settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logfire.configure()
-    app.state.es = Elasticsearch(ES_HOST, request_timeout=10)
+    app.state.es = Elasticsearch(settings.elasticsearch_host, request_timeout=10)
     yield
     app.state.es.close()
 
 
 app = FastAPI(title="Lebanon PD Log — Internal API", lifespan=lifespan)
 
-app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS)
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins)
 
 app.include_router(incidents.router, prefix="/api/incidents", tags=["incidents"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])

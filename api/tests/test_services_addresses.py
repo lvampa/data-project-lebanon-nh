@@ -41,9 +41,11 @@ def test_update_address_upserts_geocoded_coordinates_and_commits():
     with patch(
         "api.services.addresses.geocode_nominatim", return_value=(43.7, -72.3)
     ) as geocode:
-        result = addresses.update_address(db, "TIMBERWOOD DR", update)
+        result = addresses.update_address(
+            db, "TIMBERWOOD DR", update, nominatim_contact="ops@example.com"
+        )
 
-    geocode.assert_called_once_with("Timberwood Drive")
+    geocode.assert_called_once_with("Timberwood Drive", contact="ops@example.com")
     stmt = executed_stmt(db)
     assert "ON CONFLICT (raw_address) DO UPDATE" in str(compile_pg(stmt))
     assert {"normalized_address", "lat", "lng", "geocoded_via"} <= (

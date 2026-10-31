@@ -56,14 +56,18 @@ def list_addresses(db: Session, paging: Paging) -> Page[AddressRecord]:
 
 
 def update_address(
-    db: Session, raw_address: str, update: AddressUpdate
+    db: Session,
+    raw_address: str,
+    update: AddressUpdate,
+    *,
+    nominatim_contact: str | None,
 ) -> AddressResult:
     now = datetime.now(UTC).replace(tzinfo=None)
     changes = {
         "normalized_address": update.normalized_address,
         "notes": update.notes,
         "updated_at": now,
-        **_new_coordinates(update),
+        **_new_coordinates(update, nominatim_contact),
     }
     with logfire.span(
         "upsert address normalization {raw_address}", raw_address=raw_address
@@ -88,12 +92,14 @@ def update_address(
     )
 
 
-def _new_coordinates(update: AddressUpdate) -> dict:
+def _new_coordinates(update: AddressUpdate, nominatim_contact: str | None) -> dict:
     """Coordinates to write, or {} to keep whatever the row already has."""
     if update.lat is not None:
         return {"lat": update.lat, "lng": update.lng, "geocoded_via": "manual"}
     if update.geocode:
-        lat, lng = geocode_nominatim(update.normalized_address)
+        lat, lng = geocode_nominatim(
+            update.normalized_address, contact=nominatim_contact
+        )
         if lat is not None:
             return {"lat": lat, "lng": lng, "geocoded_via": "nominatim"}
         logfire.info(

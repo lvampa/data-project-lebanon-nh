@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from api.config import get_settings
 from api.deps import get_db
 from api.main import app
 from api.tests.conftest import ADMIN_TOKEN
@@ -60,6 +61,7 @@ def test_write_with_correct_token_passes_through(mock_db):
 
 def test_write_rejected_when_token_not_configured(mock_db, monkeypatch):
     monkeypatch.delenv("ADMIN_API_TOKEN")
+    get_settings.cache_clear()
     headers = {"Authorization": "Bearer anything"}
     resp = TestClient(app).patch(
         "/api/categories/MV%20Stop",

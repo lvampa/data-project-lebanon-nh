@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock, patch
 
+from api.config import Settings, get_settings
+from api.main import app
+from api.tests.conftest import ADMIN_TOKEN
 from api.tests.sql import compile_pg, executed_stmt, upsert_set_columns
 
 
@@ -148,3 +151,20 @@ def test_patch_address_lat_without_lng_returns_422(mock_db, client):
 
     assert resp.status_code == 422
     mock_db.execute.assert_not_called()
+
+
+def test_patch_address_geocodes_with_configured_contact(mock_db, client):
+    _stored(mock_db)
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        admin_api_token=ADMIN_TOKEN, nominatim_contact="ops@example.com"
+    )
+    with patch(
+        "api.services.addresses.geocode_nominatim", return_value=(None, None)
+    ) as geocode:
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={"normalized_address": "Timberwood Drive"},
+        )
+
+    assert resp.status_code == 200
+    geocode.assert_called_once_with("Timberwood Drive", contact="ops@example.com")

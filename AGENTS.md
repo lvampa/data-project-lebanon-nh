@@ -84,9 +84,9 @@ scripts/                  generate_report.sh, deploy.sh
 ### Data Flow
 
 1. `build_daily_urls` spider → scrapes PDF links → saves to MongoDB `urls` collection as `pending`
-2. `process_urls` spider → atomically claims `pending` URLs via `find_one_and_update` → downloads PDFs → parses → yields `PoliceLogItem`
-3. `PoliceLogPipeline` → validates via Pydantic → upserts to PostgreSQL `log_entries` (keyed on `case_number`)
-4. `scripts/generate_report.sh` → exports JSON → committed to `public/data/` → deployed via `wrangler pages deploy`
+2. `process_urls` spider → atomically claims `pending` URLs via `find_one_and_update` (recording `claimed_at` and `attempts`) → downloads PDFs → parses → yields one `PoliceLogPdfItem` per PDF carrying its entries
+3. `PoliceLogPipeline` → validates via Pydantic → upserts to PostgreSQL `log_entries` (keyed on `case_number`) → marks the URL `complete` only after the commit, or `error` on failure
+4. `scripts/deploy.sh` → runs `generate_report.sh` to export JSON into `public/data/` (gitignored) → `bun run build` → `wrangler pages deploy`
 
 ### Key Patterns
 

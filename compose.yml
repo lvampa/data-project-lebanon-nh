@@ -5,20 +5,20 @@ x-airflow-common:
     dockerfile: docker/Dockerfile.airflow
   environment:
     &airflow-env
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?see .env.example}@postgres/airflow
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?see .env.example}
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?see .env.example}
     MONGO_HOST: mongo
     MONGO_PORT: "27017"
     MONGO_USER: ${MONGO_USER:-admin}
-    MONGO_PASSWORD: ${MONGO_PASSWORD:-changeme}
+    MONGO_PASSWORD: ${MONGO_PASSWORD:?see .env.example}
     MONGO_DB: ${MONGO_DB:-scraped_data}
     POSTGRES_HOST: postgres
     POSTGRES_PORT: "5432"
     POSTGRES_USER: ${POSTGRES_USER:-app}
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?see .env.example}
     POSTGRES_DB: ${POSTGRES_DB:-app}
     ELASTICSEARCH_HOST: http://elasticsearch:9200
   volumes:
@@ -46,7 +46,7 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-app}
     volumes:
       - ./api:/opt/project/api
@@ -61,7 +61,7 @@ services:
       - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeme}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?see .env.example}
     volumes:
       - mongo_data:/data/db
 
@@ -72,7 +72,7 @@ services:
       - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-app}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -116,7 +116,7 @@ services:
     environment:
       <<: *airflow-env
       _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:?see .env.example}
     entrypoint: /bin/bash
     command:
       - -c

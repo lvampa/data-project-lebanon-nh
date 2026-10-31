@@ -4,6 +4,13 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
+class Page[T](BaseModel):
+    total: int
+    page: int
+    per_page: int
+    items: list[T]
+
+
 class Incident(BaseModel):
     case_number: str | None
     reported_at: datetime | None
@@ -16,13 +23,6 @@ class Incident(BaseModel):
     source_url: str
 
     model_config = {"from_attributes": True}
-
-
-class IncidentsResponse(BaseModel):
-    total: int
-    page: int
-    per_page: int
-    items: list[Incident]
 
 
 class TypeStat(BaseModel):
@@ -113,11 +113,6 @@ class Llc(BaseModel):
     error_message: str | None
 
     model_config = {"from_attributes": True}
-
-
-class LlcsResponse(BaseModel):
-    total: int
-    items: list[Llc]
 
 
 LookupStatus = Literal["pending", "in_progress", "complete", "error", "skipped"]

@@ -8,15 +8,18 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
-from api.schemas import CategoryRecord, CategoryResult, CategoryUpdate
+from api.deps import Paging, get_db, get_paging
+from api.schemas import CategoryRecord, CategoryResult, CategoryUpdate, Page
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[CategoryRecord])
-def list_categories(db: Annotated[Session, Depends(get_db)]) -> list[CategoryRecord]:
-    rows = db.execute(
+@router.get("", response_model=Page[CategoryRecord])
+def list_categories(
+    db: Annotated[Session, Depends(get_db)],
+    paging: Annotated[Paging, Depends(get_paging)],
+) -> Page[CategoryRecord]:
+    stmt = (
         select(
             LogEntry.incident_type,
             func.count().label("count"),
@@ -33,18 +36,26 @@ def list_categories(db: Annotated[Session, Depends(get_db)]) -> list[CategoryRec
             IncidentTypeCategory.category,
             IncidentTypeCategory.subcategory,
         )
-        .order_by(func.count().desc())
+    )
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = db.execute(
+        paging.apply(stmt.order_by(func.count().desc(), LogEntry.incident_type))
     ).all()
-    return [
-        CategoryRecord(
-            raw_incident_type=r.incident_type,
-            count=r.count,
-            category=r.category,
-            subcategory=r.subcategory,
-            is_categorized=r.category is not None,
-        )
-        for r in rows
-    ]
+    return Page[CategoryRecord](
+        total=total,
+        page=paging.page,
+        per_page=paging.per_page,
+        items=[
+            CategoryRecord(
+                raw_incident_type=r.incident_type,
+                count=r.count,
+                category=r.category,
+                subcategory=r.subcategory,
+                is_categorized=r.category is not None,
+            )
+            for r in rows
+        ],
+    )
 
 
 @router.patch("/{raw_incident_type:path}", response_model=CategoryResult)

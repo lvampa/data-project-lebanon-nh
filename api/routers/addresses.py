@@ -8,16 +8,19 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
+from api.deps import Paging, get_db, get_paging
 from api.geocoding import geocode_nominatim
-from api.schemas import AddressRecord, AddressResult, AddressUpdate
+from api.schemas import AddressRecord, AddressResult, AddressUpdate, Page
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[AddressRecord])
-def list_addresses(db: Annotated[Session, Depends(get_db)]) -> list[AddressRecord]:
-    rows = db.execute(
+@router.get("", response_model=Page[AddressRecord])
+def list_addresses(
+    db: Annotated[Session, Depends(get_db)],
+    paging: Annotated[Paging, Depends(get_paging)],
+) -> Page[AddressRecord]:
+    stmt = (
         select(
             LogEntry.location,
             func.count().label("count"),
@@ -36,19 +39,27 @@ def list_addresses(db: Annotated[Session, Depends(get_db)]) -> list[AddressRecor
             AddressNormalization.lat,
             AddressNormalization.lng,
         )
-        .order_by(func.count().desc())
+    )
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = db.execute(
+        paging.apply(stmt.order_by(func.count().desc(), LogEntry.location))
     ).all()
-    return [
-        AddressRecord(
-            raw_address=r.location,
-            count=r.count,
-            normalized_address=r.normalized_address,
-            lat=r.lat,
-            lng=r.lng,
-            is_normalized=r.normalized_address is not None,
-        )
-        for r in rows
-    ]
+    return Page[AddressRecord](
+        total=total,
+        page=paging.page,
+        per_page=paging.per_page,
+        items=[
+            AddressRecord(
+                raw_address=r.location,
+                count=r.count,
+                normalized_address=r.normalized_address,
+                lat=r.lat,
+                lng=r.lng,
+                is_normalized=r.normalized_address is not None,
+            )
+            for r in rows
+        ],
+    )
 
 
 @router.patch("/{raw_address:path}", response_model=AddressResult)

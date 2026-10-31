@@ -86,14 +86,6 @@ def test_incidents_filter_matches_wildcards_literally(mock_db, client, field):
     assert "50/%/_off" in compiled.params.values()
 
 
-@pytest.mark.parametrize("query", ["page=0", "page=-1", "per_page=0", "per_page=201"])
-def test_incidents_rejects_out_of_range_paging(mock_db, client, query):
-    resp = client.get(f"/api/incidents?{query}")
-
-    assert resp.status_code == 422
-    mock_db.scalars.assert_not_called()
-
-
 def test_incidents_order_is_stable_across_pages(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []

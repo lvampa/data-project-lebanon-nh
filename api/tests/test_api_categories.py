@@ -12,7 +12,8 @@ def _make_row(incident_type, count, category=None, subcategory=None):
     return r
 
 
-def test_list_categories_returns_all_types(mock_db, client):
+def test_list_categories_returns_types(mock_db, client):
+    mock_db.scalar.return_value = 2
     mock_db.execute.return_value.all.return_value = [
         _make_row("Telephone Harassment", 10, "Disturbance"),
         _make_row("MV Stop", 8, None),
@@ -21,11 +22,26 @@ def test_list_categories_returns_all_types(mock_db, client):
 
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 2
-    assert data[0]["raw_incident_type"] == "Telephone Harassment"
-    assert data[0]["category"] == "Disturbance"
-    assert data[0]["is_categorized"] is True
-    assert data[1]["is_categorized"] is False
+    assert (data["total"], data["page"], data["per_page"]) == (2, 1, 50)
+    items = data["items"]
+    assert len(items) == 2
+    assert items[0]["raw_incident_type"] == "Telephone Harassment"
+    assert items[0]["category"] == "Disturbance"
+    assert items[0]["is_categorized"] is True
+    assert items[1]["is_categorized"] is False
+
+
+def test_list_categories_pages_in_stable_order(mock_db, client):
+    mock_db.scalar.return_value = 0
+    mock_db.execute.return_value.all.return_value = []
+
+    resp = client.get("/api/categories?page=2&per_page=100")
+
+    assert resp.status_code == 200
+    compiled = compile_pg(executed_stmt(mock_db))
+    assert "ORDER BY count(*) DESC, log_entries.incident_type" in str(compiled)
+    assert compiled.params["param_1"] == 100
+    assert compiled.params["param_2"] == 100
 
 
 def test_patch_category_upserts_on_raw_incident_type(mock_db, client):

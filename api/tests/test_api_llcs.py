@@ -2,6 +2,8 @@ from datetime import UTC, datetime
 
 from postgres.models.llc import Llc as LlcModel
 
+from api.tests.sql import compile_pg
+
 
 def _make_llc(**kwargs) -> LlcModel:
     defaults = {
@@ -33,7 +35,21 @@ def test_list_llcs_empty(mock_db, client):
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data == {"total": 0, "items": []}
+    assert data == {"total": 0, "page": 1, "per_page": 50, "items": []}
+
+
+def test_list_llcs_pages_by_name(mock_db, client):
+    mock_db.scalar.return_value = 0
+    mock_db.scalars.return_value.all.return_value = []
+
+    resp = client.get("/api/llcs?page=2&per_page=10")
+
+    assert resp.status_code == 200
+    assert resp.json()["page"] == 2
+    compiled = compile_pg(mock_db.scalars.call_args.args[0])
+    assert "ORDER BY llcs.name" in str(compiled)
+    assert compiled.params["param_1"] == 10
+    assert compiled.params["param_2"] == 10
 
 
 def test_list_llcs_returns_llc(mock_db, client):

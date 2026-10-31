@@ -13,7 +13,8 @@ def _make_row(location, count, normalized_address=None, lat=None, lng=None):
     return row
 
 
-def test_list_addresses_returns_all_locations(mock_db, client):
+def test_list_addresses_returns_locations(mock_db, client):
+    mock_db.scalar.return_value = 2
     mock_db.execute.return_value.all.return_value = [
         _make_row("TIMBERWOOD DR", 5, "Timberwood Drive", 43.64, -72.25),
         _make_row("EAGLE RIDGE RD", 2, None, None, None),
@@ -22,10 +23,25 @@ def test_list_addresses_returns_all_locations(mock_db, client):
 
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data) == 2
-    assert data[0]["raw_address"] == "TIMBERWOOD DR"
-    assert data[0]["is_normalized"] is True
-    assert data[1]["is_normalized"] is False
+    assert (data["total"], data["page"], data["per_page"]) == (2, 1, 50)
+    items = data["items"]
+    assert len(items) == 2
+    assert items[0]["raw_address"] == "TIMBERWOOD DR"
+    assert items[0]["is_normalized"] is True
+    assert items[1]["is_normalized"] is False
+
+
+def test_list_addresses_pages_in_stable_order(mock_db, client):
+    mock_db.scalar.return_value = 0
+    mock_db.execute.return_value.all.return_value = []
+
+    resp = client.get("/api/addresses?page=3&per_page=25")
+
+    assert resp.status_code == 200
+    compiled = compile_pg(executed_stmt(mock_db))
+    assert "ORDER BY count(*) DESC, log_entries.location" in str(compiled)
+    assert compiled.params["param_1"] == 25
+    assert compiled.params["param_2"] == 50
 
 
 def _stored(mock_db, lat=None, lng=None, geocoded_via=None):

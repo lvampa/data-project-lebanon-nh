@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from api.deps import get_db
 from api.main import app
+from api.tests.conftest import ADMIN_TOKEN
 
 
 @pytest.fixture(autouse=True)
@@ -15,7 +16,7 @@ def clear_overrides():
 
 def _client(mock_db):
     app.dependency_overrides[get_db] = lambda: mock_db
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"})
 
 
 def _make_row(location, count, normalized_address=None, lat=None, lng=None):

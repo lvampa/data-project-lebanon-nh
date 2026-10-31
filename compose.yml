@@ -50,6 +50,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-app}
       ELASTICSEARCH_HOST: http://elasticsearch:9200
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?see .env.example}
     depends_on:
       postgres:
         condition: service_healthy

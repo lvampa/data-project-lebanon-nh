@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager  # noqa: E402
 import logfire  # noqa: E402
 from elasticsearch import Elasticsearch  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from api.routers import (  # noqa: E402
     addresses,
@@ -19,6 +20,7 @@ from api.routers import (  # noqa: E402
 )
 
 ES_HOST = os.getenv("ELASTICSEARCH_HOST", "http://localhost:9200")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3001").split(",")
 
 
 @asynccontextmanager
@@ -30,6 +32,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Lebanon PD Log — Internal API", lifespan=lifespan)
+
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS)
 
 app.include_router(incidents.router, prefix="/api/incidents", tags=["incidents"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])

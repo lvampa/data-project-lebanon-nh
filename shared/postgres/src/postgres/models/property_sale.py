@@ -11,7 +11,7 @@ class PropertySale(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     property_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("properties.id"), nullable=False
+        Integer, ForeignKey("properties.id"), nullable=False, index=True
     )
     sale_date: Mapped[date | None] = mapped_column(Date)
     sale_price: Mapped[int | None] = mapped_column(Integer)  # dollars

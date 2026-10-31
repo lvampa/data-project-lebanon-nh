@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Text
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,7 +9,13 @@ from postgres.base import Base
 
 class Llc(Base):
     __tablename__ = "llcs"
-    __table_args__ = (Index("idx_llcs_lookup_status", "lookup_status"),)
+    __table_args__ = (
+        Index("idx_llcs_lookup_status", "lookup_status"),
+        CheckConstraint(
+            "lookup_status IN ('pending', 'in_progress', 'complete', 'error', 'skipped')",
+            name="ck_llcs_lookup_status",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
@@ -32,6 +38,7 @@ class Llc(Base):
 
 class PropertyLlc(Base):
     __tablename__ = "property_llcs"
+    __table_args__ = (Index("idx_property_llcs_llc_id", "llc_id"),)
 
     property_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("properties.id"), primary_key=True

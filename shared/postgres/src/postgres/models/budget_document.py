@@ -15,7 +15,9 @@ class BudgetDocument(Base):
         Text, nullable=False
     )  # 'budget_book' | 'line_items'
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
-    text_extracted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    text_extracted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     scraped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     __table_args__ = (

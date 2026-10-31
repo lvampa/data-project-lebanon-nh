@@ -70,7 +70,22 @@ def test_parses_sale_date(pipeline):
     pipeline.process_item(SAMPLE_ITEM, MagicMock())
 
 
-def test_close_spider_commits(pipeline):
+def test_close_spider_closes_session(pipeline):
     pipeline.close_spider(MagicMock())
-    pipeline._session.commit.assert_called_once()
     pipeline._session.close.assert_called_once()
+
+
+def test_first_property_stays_committed_when_second_fails(fake_session):
+    pipeline = PropertyPipeline()
+    pipeline._session = fake_session
+    # SAMPLE_ITEM runs upsert, id lookup, sales delete, one sale insert.
+    # Failing on call 8 breaks the second item's sale insert, after its delete.
+    fake_session.fail_on_call = 8
+
+    pipeline.process_item(SAMPLE_ITEM, None)
+    with pytest.raises(RuntimeError):
+        pipeline.process_item(SAMPLE_ITEM, None)
+    pipeline.close_spider(None)
+
+    # Only the first item's four statements; the second item's delete is rolled back.
+    assert len(fake_session.committed) == 4

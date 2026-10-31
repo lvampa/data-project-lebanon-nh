@@ -45,7 +45,19 @@ def test_process_item_returns_item(pipeline):
     assert result is SAMPLE_ITEM
 
 
-def test_close_commits(pipeline):
+def test_close_spider_closes_session(pipeline):
     pipeline.close_spider(MagicMock())
-    pipeline._session.commit.assert_called_once()
     pipeline._session.close.assert_called_once()
+
+
+def test_first_item_stays_committed_when_second_fails(fake_session):
+    pipeline = CityStaffPipeline()
+    pipeline._session = fake_session
+    fake_session.fail_on_call = 2
+
+    pipeline.process_item(SAMPLE_ITEM, None)
+    with pytest.raises(RuntimeError):
+        pipeline.process_item(SAMPLE_ITEM, None)
+    pipeline.close_spider(None)
+
+    assert len(fake_session.committed) == 1

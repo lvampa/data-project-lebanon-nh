@@ -115,6 +115,7 @@ class PoliceLogPipeline:
                     .on_conflict_do_nothing(index_elements=["case_number"])
                 )
                 self._session.execute(stmt)
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -122,7 +123,6 @@ class PoliceLogPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
 
 
@@ -223,6 +223,7 @@ class PropertyPipeline:
                             created_at=now,
                         )
                     )
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -230,7 +231,6 @@ class PropertyPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
 
 
@@ -273,6 +273,7 @@ class CityStaffPipeline:
                     )
                 )
                 self._session.execute(stmt)
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -280,7 +281,6 @@ class CityStaffPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
 
 
@@ -320,6 +320,7 @@ class OfficerPipeline:
                     )
                 )
                 self._session.execute(stmt)
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -327,7 +328,6 @@ class OfficerPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
 
 
@@ -361,6 +361,7 @@ class BudgetDocumentPipeline:
                     )
                 )
                 self._session.execute(stmt)
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -368,5 +369,4 @@ class BudgetDocumentPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()

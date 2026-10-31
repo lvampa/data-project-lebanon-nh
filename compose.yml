@@ -26,6 +26,7 @@ x-airflow-common:
     - ./dags:/opt/airflow/dags
     - ./scrapers:/opt/project/scrapers
     - ./shared:/opt/project/shared
+    - ./scripts:/opt/project/scripts
     - airflow_logs:/opt/airflow/logs
   depends_on:
     &airflow-depends

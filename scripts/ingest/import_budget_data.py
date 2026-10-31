@@ -20,6 +20,12 @@ from postgres.models.budget_capital_project import BudgetCapitalProject
 from postgres.models.budget_line_item import BudgetLineItem
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from scripts.models import (
+    BudgetCapitalProjectRecord,
+    BudgetLineItemRecord,
+    BudgetYearRecord,
+)
+
 DATA_DIR = Path(__file__).parents[1] / "data"
 INPUT_FILE = DATA_DIR / "budget_data.json"
 
@@ -37,73 +43,42 @@ def parse_budget_data(text: str) -> list[dict]:
     return data
 
 
-def validate_year_entry(entry: dict) -> None:
-    if "fiscal_year" not in entry:
-        raise ValueError(f"Entry missing 'fiscal_year': {entry}")
-    if not isinstance(entry["fiscal_year"], int):
-        raise ValueError(
-            f"fiscal_year must be an integer, got {entry['fiscal_year']!r}"
-        )
+def validate_year_entry(entry: dict) -> BudgetYearRecord:
+    return BudgetYearRecord.model_validate(entry)
 
 
-def upsert_line_items(session, fiscal_year: int, items: list[dict]) -> int:
+def upsert_line_items(
+    session, fiscal_year: int, items: list[BudgetLineItemRecord]
+) -> int:
     if not items:
         return 0
     for item in items:
+        values = item.model_dump()
         stmt = (
             pg_insert(BudgetLineItem)
-            .values(
-                fiscal_year=fiscal_year,
-                gl_number=item["gl_number"],
-                fund_code=item["fund_code"],
-                fund_name=item["fund_name"],
-                department=item["department"],
-                description=item["description"],
-                prior_year_amended=item.get("prior_year_amended"),
-                year_requested=item.get("year_requested"),
-                year_approved=item.get("year_approved"),
-            )
+            .values(fiscal_year=fiscal_year, **values)
             .on_conflict_do_update(
                 constraint="uq_budget_line_item_year_gl",
-                set_={
-                    "fund_code": item["fund_code"],
-                    "fund_name": item["fund_name"],
-                    "department": item["department"],
-                    "description": item["description"],
-                    "prior_year_amended": item.get("prior_year_amended"),
-                    "year_requested": item.get("year_requested"),
-                    "year_approved": item.get("year_approved"),
-                },
+                set_={k: v for k, v in values.items() if k != "gl_number"},
             )
         )
         session.execute(stmt)
     return len(items)
 
 
-def upsert_capital_projects(session, fiscal_year: int, projects: list[dict]) -> int:
+def upsert_capital_projects(
+    session, fiscal_year: int, projects: list[BudgetCapitalProjectRecord]
+) -> int:
     if not projects:
         return 0
     for project in projects:
+        values = project.model_dump()
         stmt = (
             pg_insert(BudgetCapitalProject)
-            .values(
-                fiscal_year=fiscal_year,
-                gl_number=project["gl_number"],
-                project_name=project["project_name"],
-                fund_code=project["fund_code"],
-                fund_name=project["fund_name"],
-                year_requested=project.get("year_requested"),
-                year_approved=project.get("year_approved"),
-            )
+            .values(fiscal_year=fiscal_year, **values)
             .on_conflict_do_update(
                 constraint="uq_budget_capital_project_year_gl",
-                set_={
-                    "project_name": project["project_name"],
-                    "fund_code": project["fund_code"],
-                    "fund_name": project["fund_name"],
-                    "year_requested": project.get("year_requested"),
-                    "year_approved": project.get("year_approved"),
-                },
+                set_={k: v for k, v in values.items() if k != "gl_number"},
             )
         )
         session.execute(stmt)
@@ -117,18 +92,17 @@ def main() -> None:
             f"{INPUT_FILE} not found — run the Claude Code agent first to generate it"
         )
     text = INPUT_FILE.read_text(encoding="utf-8")
-    entries = parse_budget_data(text)
+    # Validate every year before writing any, so a bad year late in the file
+    # does not leave a partial import behind.
+    years = [validate_year_entry(entry) for entry in parse_budget_data(text)]
 
     with SessionLocal() as session:
-        for entry in entries:
-            validate_year_entry(entry)
-            fiscal_year = entry["fiscal_year"]
+        for year in years:
+            fiscal_year = year.fiscal_year
             with logfire.span("import budget year", fiscal_year=fiscal_year):
-                n_items = upsert_line_items(
-                    session, fiscal_year, entry.get("line_items", [])
-                )
+                n_items = upsert_line_items(session, fiscal_year, year.line_items)
                 n_projects = upsert_capital_projects(
-                    session, fiscal_year, entry.get("capital_projects", [])
+                    session, fiscal_year, year.capital_projects
                 )
                 session.commit()
                 logfire.info(

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
@@ -53,25 +54,16 @@ def update_category(
     db: Annotated[Session, Depends(get_db)],
 ) -> CategoryResult:
     now = datetime.now(UTC).replace(tzinfo=None)
-    existing = db.scalar(
-        select(IncidentTypeCategory).where(
-            IncidentTypeCategory.raw_incident_type == raw_incident_type
-        )
+    changes = {
+        "category": body.category,
+        "subcategory": body.subcategory,
+        "updated_at": now,
+    }
+    db.execute(
+        insert(IncidentTypeCategory)
+        .values(raw_incident_type=raw_incident_type, created_at=now, **changes)
+        .on_conflict_do_update(index_elements=["raw_incident_type"], set_=changes)
     )
-    if existing:
-        existing.category = body.category
-        existing.subcategory = body.subcategory
-        existing.updated_at = now
-    else:
-        db.add(
-            IncidentTypeCategory(
-                raw_incident_type=raw_incident_type,
-                category=body.category,
-                subcategory=body.subcategory,
-                created_at=now,
-                updated_at=now,
-            )
-        )
     db.commit()
     return CategoryResult(
         raw_incident_type=raw_incident_type,

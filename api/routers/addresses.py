@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
@@ -63,31 +64,19 @@ def update_address(
             geocoded_via = "nominatim"
 
     now = datetime.now(UTC).replace(tzinfo=None)
-    existing = db.scalar(
-        select(AddressNormalization).where(
-            AddressNormalization.raw_address == raw_address
-        )
+    changes = {
+        "normalized_address": body.normalized_address,
+        "lat": lat,
+        "lng": lng,
+        "geocoded_via": geocoded_via,
+        "notes": body.notes,
+        "updated_at": now,
+    }
+    db.execute(
+        insert(AddressNormalization)
+        .values(raw_address=raw_address, created_at=now, **changes)
+        .on_conflict_do_update(index_elements=["raw_address"], set_=changes)
     )
-    if existing:
-        existing.normalized_address = body.normalized_address
-        existing.lat = lat
-        existing.lng = lng
-        existing.geocoded_via = geocoded_via
-        existing.notes = body.notes
-        existing.updated_at = now
-    else:
-        db.add(
-            AddressNormalization(
-                raw_address=raw_address,
-                normalized_address=body.normalized_address,
-                lat=lat,
-                lng=lng,
-                geocoded_via=geocoded_via,
-                notes=body.notes,
-                created_at=now,
-                updated_at=now,
-            )
-        )
     db.commit()
     return AddressResult(
         raw_address=raw_address,

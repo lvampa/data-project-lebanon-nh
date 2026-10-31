@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+from api.tests.sql import compile_pg, executed_stmt, upsert_set_columns
+
 
 def _make_row(location, count, normalized_address=None, lat=None, lng=None):
     row = MagicMock()
@@ -26,34 +28,20 @@ def test_list_addresses_returns_all_locations(mock_db, client):
     assert data[1]["is_normalized"] is False
 
 
-def test_patch_address_creates_normalization(mock_db, client):
-    mock_db.scalar.return_value = None  # no existing record
-
+def test_patch_address_upserts_on_raw_address(mock_db, client):
     with patch("api.routers.addresses.geocode_nominatim", return_value=(43.64, -72.25)):
         resp = client.patch(
             "/api/addresses/EAGLE%20RIDGE%20RD",
-            json={"normalized_address": "Eagle Ridge Road", "geocode": True},
+            json={"normalized_address": "Eagle Ridge Road", "notes": "typo"},
         )
 
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["normalized_address"] == "Eagle Ridge Road"
-    assert data["lat"] == 43.64
-    mock_db.add.assert_called_once()
-    mock_db.commit.assert_called_once()
-
-
-def test_patch_address_updates_existing(mock_db, client):
-    existing = MagicMock()
-    mock_db.scalar.return_value = existing
-
-    with patch("api.routers.addresses.geocode_nominatim", return_value=(43.64, -72.25)):
-        resp = client.patch(
-            "/api/addresses/TIMBERWOOD%20DR",
-            json={"normalized_address": "Timberwood Drive", "geocode": True},
-        )
-
-    assert resp.status_code == 200
-    assert existing.normalized_address == "Timberwood Drive"
+    assert resp.json()["normalized_address"] == "Eagle Ridge Road"
+    stmt = executed_stmt(mock_db)
+    assert "ON CONFLICT (raw_address) DO UPDATE" in str(compile_pg(stmt))
+    params = compile_pg(stmt).params
+    assert params["raw_address"] == "EAGLE RIDGE RD"
+    assert params["normalized_address"] == "Eagle Ridge Road"
+    assert {"normalized_address", "notes", "updated_at"} <= upsert_set_columns(stmt)
     mock_db.add.assert_not_called()
     mock_db.commit.assert_called_once()

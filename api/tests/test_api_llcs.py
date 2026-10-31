@@ -60,6 +60,13 @@ def test_list_llcs_filters_by_lookup_status(mock_db, client):
     assert resp.json()["total"] == 0
 
 
+def test_list_llcs_rejects_unknown_lookup_status(mock_db, client):
+    resp = client.get("/api/llcs?lookup_status=bogus")
+
+    assert resp.status_code == 422
+    mock_db.scalars.assert_not_called()
+
+
 def test_patch_llc_status_updates_correctly(mock_db, client):
     llc = _make_llc(lookup_status="pending")
     mock_db.get.return_value = llc

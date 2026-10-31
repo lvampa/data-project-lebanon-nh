@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.deps import get_db
-from api.schemas import Llc, LlcsResponse, LlcStatusUpdate
+from api.schemas import Llc, LlcsResponse, LlcStatusUpdate, LookupStatus
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("", response_model=LlcsResponse)
 def list_llcs(
     db: Annotated[Session, Depends(get_db)],
-    lookup_status: str | None = None,
+    lookup_status: LookupStatus | None = None,
 ) -> LlcsResponse:
     stmt = select(LlcModel)
     if lookup_status:

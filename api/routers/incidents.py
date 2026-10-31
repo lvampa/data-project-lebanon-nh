@@ -29,11 +29,13 @@ def list_incidents(
     if date_to:
         stmt = stmt.where(LogEntry.reported_at < date_to + timedelta(days=1))
     if incident_type:
-        stmt = stmt.where(LogEntry.incident_type.ilike(f"%{incident_type}%"))
+        stmt = stmt.where(
+            LogEntry.incident_type.icontains(incident_type, autoescape=True)
+        )
     if disposition:
-        stmt = stmt.where(LogEntry.disposition.ilike(f"%{disposition}%"))
+        stmt = stmt.where(LogEntry.disposition.icontains(disposition, autoescape=True))
     if officer:
-        stmt = stmt.where(LogEntry.officer.ilike(f"%{officer}%"))
+        stmt = stmt.where(LogEntry.officer.icontains(officer, autoescape=True))
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.scalars(

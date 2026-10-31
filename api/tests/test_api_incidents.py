@@ -63,6 +63,19 @@ def test_incidents_pagination_defaults(mock_db, client):
     assert data["per_page"] == 50
 
 
+@pytest.mark.parametrize("field", ["incident_type", "disposition", "officer"])
+def test_incidents_filter_matches_wildcards_literally(mock_db, client, field):
+    mock_db.scalar.return_value = 0
+    mock_db.scalars.return_value.all.return_value = []
+
+    resp = client.get(f"/api/incidents?{field}=50%25_off")
+
+    assert resp.status_code == 200
+    compiled = compile_pg(mock_db.scalars.call_args.args[0])
+    assert "ESCAPE '/'" in str(compiled)
+    assert "50/%/_off" in compiled.params.values()
+
+
 @pytest.mark.parametrize("query", ["page=0", "page=-1", "per_page=0", "per_page=201"])
 def test_incidents_rejects_out_of_range_paging(mock_db, client, query):
     resp = client.get(f"/api/incidents?{query}")

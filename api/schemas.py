@@ -120,8 +120,11 @@ class LlcsResponse(BaseModel):
     items: list[Llc]
 
 
+LookupStatus = Literal["pending", "in_progress", "complete", "error", "skipped"]
+
+
 class LlcStatusUpdate(BaseModel):
-    lookup_status: Literal["pending", "in_progress", "complete", "error", "skipped"]
+    lookup_status: LookupStatus
 
 
 class SearchResult(BaseModel):

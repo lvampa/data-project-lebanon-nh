@@ -1,6 +1,6 @@
 FROM apache/airflow:2.10.4
 
-RUN pip install --no-cache-dir uv==0.4.29
+RUN pip install --no-cache-dir uv==0.10.4
 
 USER root
 RUN mkdir -p /opt/project && chown airflow /opt/project

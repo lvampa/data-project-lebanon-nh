@@ -17,3 +17,6 @@ postgres = { workspace = true }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.logfire]
+ignore_no_config = true

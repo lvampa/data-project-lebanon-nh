@@ -1950,6 +1950,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "scrapy" },
+    { name = "scripts" },
 ]
 
 [package.dev-dependencies]
@@ -1966,6 +1967,7 @@ requires-dist = [
     { name = "pypdf", specifier = ">=6.9.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "scrapy", specifier = ">=2.14.2" },
+    { name = "scripts", editable = "scripts" },
 ]
 
 [package.metadata.requires-dev]

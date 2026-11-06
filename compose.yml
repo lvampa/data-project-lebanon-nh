@@ -56,6 +56,8 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   mongo:
     image: mongo:8
@@ -131,12 +133,24 @@ services:
         --firstname Admin --lastname User --role Admin
         --email admin@example.com || true)
 
+  # Applies the Postgres migrations once, so no job or API request sees an old schema.
+  migrate:
+    <<: *airflow-common
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/opt/project/.venv/bin/alembic"]
+    command: ["-c", "/opt/project/shared/postgres/alembic.ini", "upgrade", "head"]
+
   airflow-webserver:
     <<: *airflow-common
     restart: unless-stopped
     depends_on:
       <<: *airflow-depends
       airflow-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
@@ -148,6 +162,8 @@ services:
     depends_on:
       <<: *airflow-depends
       airflow-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
     environment:
       <<: *airflow-env

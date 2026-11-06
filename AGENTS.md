@@ -131,6 +131,7 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 - Use `wrangler pages deploy` (via `bash scripts/deploy.sh`) for Cloudflare Pages deployment
 - Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
+- CI (`.github/workflows/ci.yml`) runs the pre-push checks plus Rust and, when Docker inputs change, the image builds; `ci-ok` is the one required check.
 
 ## 7. Frontend
 

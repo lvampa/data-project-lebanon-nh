@@ -26,7 +26,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    # Tests pass their own connection so they can target TEST_DATABASE_URL.
+    # Tests pass their own connection so the migrations join its transaction.
     connection = config.attributes.get("connection")
     if connection is None:
         with engine.connect() as connection:

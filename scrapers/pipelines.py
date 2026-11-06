@@ -2,6 +2,8 @@ import re
 from datetime import UTC, datetime
 
 import logfire
+from ingest import ingest_pdf_url
+from ingest.pdf_urls import mark_error
 from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
@@ -10,19 +12,17 @@ from items.property import PropertyItem
 from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
-from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
 from postgres.models.llc import Llc, PropertyLlc
-from postgres.models.log_entry import LogEntry
 from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 _LLC_PATTERN = re.compile(
@@ -71,31 +71,30 @@ class PoliceLogPipeline:
         if not isinstance(item, PoliceLogPdfItem):
             return item
 
+        url_id = item["url_id"]
         try:
-            records = [
-                PoliceLogRecord.model_validate(dict(entry)) for entry in item["entries"]
-            ]
-            with logfire.span(
-                "save police log entries", url_id=item["url_id"], count=len(records)
-            ):
-                for record in records:
-                    self._session.execute(_log_entry_insert(record))
-                self._session.execute(
-                    _pdf_url_update(
-                        item["url_id"],
-                        state="complete",
-                        raw_text=item["raw_text"],
-                        entry_count=len(records),
-                    )
-                )
+            with logfire.span("ingest police log pdf", url_id=url_id):
+                pdf_url = self._session.get(PdfUrl, url_id)
+                counts = ingest_pdf_url(self._session, pdf_url, item["raw_text"])
+                # One commit, so the URL is never complete without its entries.
                 self._session.commit()
+                logfire.info(
+                    "police log pdf ingested",
+                    url_id=url_id,
+                    parsed=counts.parsed,
+                    stored=counts.stored,
+                    skipped=counts.skipped,
+                )
         except Exception as exc:
             self._session.rollback()
+            # A save error is not downloaded again, so the text has to be kept here
+            # for a reprocess to work from.
             self._session.execute(
-                _pdf_url_update(
-                    item["url_id"],
-                    state="error",
-                    error_message=f"Saving entries failed: {exc}",
+                mark_error(
+                    url_id,
+                    "save",
+                    f"Saving entries failed: {exc}",
+                    raw_text=item["raw_text"],
                 )
             )
             self._session.commit()
@@ -105,44 +104,6 @@ class PoliceLogPipeline:
 
     def close_spider(self, spider) -> None:
         self._session.close()
-
-
-def _pdf_url_update(url_id: int, **values):
-    # pdf_urls timestamps are naive columns that hold UTC, like the other tables.
-    completed_at = datetime.now(UTC).replace(tzinfo=None)
-    return (
-        update(PdfUrl)
-        .where(PdfUrl.id == url_id)
-        .values(completed_at=completed_at, **values)
-    )
-
-
-def _log_entry_insert(record: PoliceLogRecord):
-    return (
-        pg_insert(LogEntry)
-        .values(
-            source_url=record.source_url,
-            case_number=record.case_number,
-            reported_at=record.reported_at,
-            call_source=record.call_source,
-            incident_type=record.incident_type,
-            disposition=record.disposition,
-            raw_reason_action=record.raw_reason_action,
-            location=record.location,
-            officer=record.officer,
-            reference_number=record.reference_number,
-            dispatched_at=record.dispatched_at,
-            enroute_at=record.enroute_at,
-            arrived_at=record.arrived_at,
-            cleared_at=record.cleared_at,
-            response_seconds=record.response_seconds,
-            scene_seconds=record.scene_seconds,
-            raw_text=record.raw_text,
-            parse_error=record.parse_error,
-            scraped_at=record.scraped_at,
-        )
-        .on_conflict_do_nothing(index_elements=["case_number"])
-    )
 
 
 class PropertyPipeline:

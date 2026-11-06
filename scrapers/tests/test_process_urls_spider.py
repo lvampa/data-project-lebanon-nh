@@ -4,7 +4,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from items import PoliceLogItem, PoliceLogPdfItem
+from items import PoliceLogPdfItem
 from models import PdfUrlClaim
 from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
@@ -85,26 +85,14 @@ def pdf_with_text(pdf_reader, text: str) -> None:
 # --- parse ---
 
 
-def test_parse_yields_police_log_items(pdf_reader):
+def test_parse_yields_one_item_with_the_pdf_text(pdf_reader):
     pdf_with_text(pdf_reader, SAMPLE_TEXT)
     pdf_url = make_claim()
 
     response = make_response("https://example.com/a.pdf", FAKE_PDF)
     items = list(make_spider().parse(response, pdf_url=pdf_url))
 
-    assert len(items) == 1
-    assert isinstance(items[0], PoliceLogPdfItem)
-    assert items[0]["url_id"] == pdf_url.id
-    assert "26-13339" in items[0]["raw_text"]
-    entries = items[0]["entries"]
-    assert len(entries) == 1
-    assert isinstance(entries[0], PoliceLogItem)
-    assert entries[0]["source_url"] == "https://example.com/a.pdf"
-    assert entries[0]["parse_error"] is False
-    # raw_text is the per-entry block, not the full PDF text
-    assert entries[0]["raw_text"].startswith("26-13339")
-    # log_entries.scraped_at is a naive UTC column, like every other writer uses.
-    assert entries[0]["scraped_at"].tzinfo is None
+    assert items == [PoliceLogPdfItem(url_id=pdf_url.id, raw_text=SAMPLE_TEXT)]
 
 
 def test_parse_leaves_url_completion_to_pipeline(db_session, claimed_url, pdf_reader):
@@ -133,24 +121,8 @@ def test_parse_non_pdf_without_archive_url_marks_url_error(db_session, claimed_u
 
     assert results == []
     url = stored_url(db_session, claimed_url)
-    assert url.state == "error"
+    assert (url.state, url.error_kind) == ("error", "download")
     assert "no archive URL" in url.error_message
-
-
-def test_parse_no_entries_marks_url_error_and_yields_nothing(
-    db_session, claimed_url, pdf_reader
-):
-    pdf_with_text(pdf_reader, "No date header here, will not parse")
-
-    response = make_response("https://example.com/a.pdf", FAKE_PDF)
-    items = list(make_spider().parse(response, pdf_url=claimed_url))
-
-    assert items == []
-    url = stored_url(db_session, claimed_url)
-    assert url.state == "error"
-    assert url.entry_count == 0
-    assert url.error_message == "No entries parsed from PDF"
-    assert url.raw_text == "No date header here, will not parse"
 
 
 def test_archive_request_failure_marks_url_error(db_session, claimed_url):
@@ -161,7 +133,8 @@ def test_archive_request_failure_marks_url_error(db_session, claimed_url):
     failure.request = request
     request.errback(failure)
 
-    assert stored_url(db_session, claimed_url).state == "error"
+    url = stored_url(db_session, claimed_url)
+    assert (url.state, url.error_kind) == ("error", "download")
 
 
 def test_unreadable_pdf_marks_url_error(db_session, claimed_url, pdf_reader):
@@ -172,7 +145,7 @@ def test_unreadable_pdf_marks_url_error(db_session, claimed_url, pdf_reader):
 
     assert items == []
     url = stored_url(db_session, claimed_url)
-    assert url.state == "error"
+    assert (url.state, url.error_kind) == ("error", "download")
     assert "EOF marker not found" in url.error_message
 
 
@@ -292,8 +265,10 @@ def test_stale_claim_is_retried(queue_db):
     assert get_url(queue_db, fresh).attempts == 1
 
 
-def test_error_under_attempt_limit_is_retried(queue_db):
-    url_id = add_url(queue_db, state="error", attempts=MAX_ATTEMPTS - 1)
+def test_download_error_under_attempt_limit_is_retried(queue_db):
+    url_id = add_url(
+        queue_db, state="error", error_kind="download", attempts=MAX_ATTEMPTS - 1
+    )
 
     requests = run_start(ProcessUrlsSpider(limit=10))
 
@@ -308,6 +283,7 @@ def test_exhausted_attempts_stay_in_error(queue_db):
         queue_db,
         canonical_url="https://example.com/errored.pdf",
         state="error",
+        error_kind="download",
         attempts=MAX_ATTEMPTS,
     )
     stale = add_url(
@@ -324,6 +300,7 @@ def test_exhausted_attempts_stay_in_error(queue_db):
     assert get_url(queue_db, errored).state == "error"
     assert get_url(queue_db, stale).state == "error"
     assert get_url(queue_db, stale).error_message == "Claim expired"
+    assert get_url(queue_db, stale).error_kind == "download"
     assert get_url(queue_db, stale).attempts == MAX_ATTEMPTS
 
 
@@ -336,9 +313,19 @@ def test_request_failure_marks_url_error(queue_db):
     request.errback(failure)
 
     row = get_url(queue_db, url_id)
-    assert row.state == "error"
+    assert (row.state, row.error_kind) == ("error", "download")
     assert "no such host" in row.error_message
     assert row.completed_at is not None
+
+
+@pytest.mark.parametrize("error_kind", ["parse", "save"])
+def test_parse_and_save_errors_are_not_downloaded_again(queue_db, error_kind):
+    url_id = add_url(queue_db, state="error", error_kind=error_kind, attempts=1)
+
+    requests = run_start(ProcessUrlsSpider(limit=10))
+
+    assert requests == []
+    assert get_url(queue_db, url_id).state == "error"
 
 
 # --- concurrent claims ---

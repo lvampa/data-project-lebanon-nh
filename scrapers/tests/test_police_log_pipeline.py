@@ -1,45 +1,39 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from items import PoliceLogItem, PoliceLogPdfItem, UrlRecordItem
+from items import PoliceLogPdfItem, UrlRecordItem
 from pipelines import PoliceLogPipeline
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
 from sqlalchemy import select
 
-
-def make_entry(**kwargs):
-    defaults = {
-        "source_url": "https://example.com/a.pdf",
-        "raw_text": "some text",
-        "scraped_at": datetime.now(UTC),
-        "case_number": "2024-1001",
-        "reported_at": datetime(2024, 3, 15, 8, 32),
-        "incident_type": "MV STOP",
-        "location": "N MAIN ST",
-        "officer": "Jones",
-        "disposition": "WARNING",
-        "parse_error": False,
-    }
-    defaults.update(kwargs)
-    return PoliceLogItem(**defaults)
+HEADER = """\
+For Date: 05/11/2026  -  Monday
+Call   Number   Time   Call   Reason   Action
+"""
 
 
-def make_pdf(*entries, url_id=7):
-    return PoliceLogPdfItem(
-        url_id=url_id,
-        raw_text="full pdf text",
-        entries=list(entries) or [make_entry()],
+def entry_text(case_number: str) -> str:
+    return (
+        f"{case_number}        0106 Phone - Noise Complaint Log Information\n"
+        "       Call Source:    Telephone\n"
+        "  Location/Address:    MAIN ST\n"
     )
+
+
+def make_pdf(url_id: int, *case_numbers: str) -> PoliceLogPdfItem:
+    text = HEADER + "".join(entry_text(case_number) for case_number in case_numbers)
+    return PoliceLogPdfItem(url_id=url_id, raw_text=text)
 
 
 def add_claimed_url(session, canonical_url="https://example.com/a.pdf") -> int:
     url = PdfUrl(
         canonical_url=canonical_url,
+        log_date=date(2026, 5, 11),
         state="in_progress",
         attempts=1,
-        created_at=datetime(2024, 3, 16),
+        created_at=datetime(2026, 5, 12),
     )
     session.add(url)
     session.commit()
@@ -56,6 +50,11 @@ def stored_case_numbers(session) -> list[str]:
     return session.scalars(
         select(LogEntry.case_number).order_by(LogEntry.case_number)
     ).all()
+
+
+def stored_url(session, url_id: int) -> PdfUrl:
+    session.expire_all()
+    return session.get(PdfUrl, url_id)
 
 
 @patch("pipelines.SessionLocal")
@@ -77,84 +76,55 @@ def test_pipeline_passes_through_non_police_log_items(mock_session_local):
 def test_completes_url_with_its_entries(db_session):
     url_id = add_claimed_url(db_session)
 
-    open_pipeline().process_item(
-        make_pdf(
-            make_entry(case_number="2024-1001"),
-            make_entry(case_number="2024-1002"),
-            url_id=url_id,
-        ),
-        None,
-    )
+    open_pipeline().process_item(make_pdf(url_id, "26-1001", "26-1002"), None)
 
-    assert stored_case_numbers(db_session) == ["2024-1001", "2024-1002"]
-    url = db_session.get(PdfUrl, url_id)
+    assert stored_case_numbers(db_session) == ["26-1001", "26-1002"]
+    url = stored_url(db_session, url_id)
     assert url.state == "complete"
-    assert url.entry_count == 2
-    assert url.raw_text == "full pdf text"
+    assert (url.parsed_count, url.stored_count) == (2, 2)
+    assert url.raw_text.startswith("For Date: 05/11/2026")
     assert url.completed_at is not None
 
 
-def test_entries_are_not_stored_when_completing_the_url_fails(
-    db_session, fail_on_execute
-):
+def test_entries_are_not_stored_when_the_commit_fails(db_session, monkeypatch):
     url_id = add_claimed_url(db_session)
     pipeline = open_pipeline()
-    # Calls 1 and 2 insert the entries; call 3 is the update that completes the URL.
-    fail_on_execute(pipeline._session, 3)
+    real_commit = pipeline._session.commit
+
+    def fail_once():
+        # Only the commit that carries the entries and the completed URL fails.
+        monkeypatch.setattr(pipeline._session, "commit", real_commit)
+        raise RuntimeError("database error")
+
+    monkeypatch.setattr(pipeline._session, "commit", fail_once)
 
     with pytest.raises(RuntimeError):
-        pipeline.process_item(
-            make_pdf(
-                make_entry(case_number="2024-1001"),
-                make_entry(case_number="2024-1002"),
-                url_id=url_id,
-            ),
-            None,
-        )
+        pipeline.process_item(make_pdf(url_id, "26-1001", "26-1002"), None)
 
     assert stored_case_numbers(db_session) == []
-    assert db_session.get(PdfUrl, url_id).state == "error"
+    url = stored_url(db_session, url_id)
+    assert (url.state, url.error_kind) == ("error", "save")
+    assert "database error" in url.error_message
+    # Kept so a reprocess can store the entries without downloading again.
+    assert url.raw_text.startswith("For Date: 05/11/2026")
 
 
-def test_first_pdf_stays_committed_when_second_fails(db_session, fail_on_execute):
+def test_first_pdf_stays_committed_when_second_fails(db_session, monkeypatch):
     first_url = add_claimed_url(db_session, "https://example.com/a.pdf")
     second_url = add_claimed_url(db_session, "https://example.com/b.pdf")
     pipeline = open_pipeline()
-    # Calls 1 and 2 are the first PDF's entry and URL update; call 3 is the second entry.
-    fail_on_execute(pipeline._session, 3)
 
-    pipeline.process_item(
-        make_pdf(make_entry(case_number="2024-1001"), url_id=first_url), None
+    pipeline.process_item(make_pdf(first_url, "26-1001"), None)
+    monkeypatch.setattr(
+        "pipelines.ingest_pdf_url", MagicMock(side_effect=RuntimeError("bad pdf"))
     )
     with pytest.raises(RuntimeError):
-        pipeline.process_item(
-            make_pdf(make_entry(case_number="2024-1002"), url_id=second_url), None
-        )
+        pipeline.process_item(make_pdf(second_url, "26-1002"), None)
     pipeline.close_spider(None)
 
-    assert stored_case_numbers(db_session) == ["2024-1001"]
-    assert db_session.get(PdfUrl, first_url).state == "complete"
-
-
-def test_failed_entry_rolls_back_pdf_and_marks_url_error(db_session, fail_on_execute):
-    url_id = add_claimed_url(db_session)
-    pipeline = open_pipeline()
-    fail_on_execute(pipeline._session, 2)
-
-    with pytest.raises(RuntimeError):
-        pipeline.process_item(
-            make_pdf(
-                make_entry(case_number="2024-1001"),
-                make_entry(case_number="2024-1002"),
-                url_id=url_id,
-            ),
-            None,
-        )
-
-    assert stored_case_numbers(db_session) == []
-    url = db_session.get(PdfUrl, url_id)
-    assert url.state == "error"
-    assert "database error" in url.error_message
+    assert stored_case_numbers(db_session) == ["26-1001"]
+    assert stored_url(db_session, first_url).state == "complete"
+    assert stored_url(db_session, second_url).error_kind == "save"
 
 
 def test_same_case_number_twice_gives_one_row(db_session):
@@ -162,12 +132,20 @@ def test_same_case_number_twice_gives_one_row(db_session):
     second_url = add_claimed_url(db_session, "https://example.com/b.pdf")
     pipeline = open_pipeline()
 
-    pipeline.process_item(
-        make_pdf(make_entry(case_number="2024-1001"), url_id=first_url), None
-    )
-    pipeline.process_item(
-        make_pdf(make_entry(case_number="2024-1001"), url_id=second_url), None
+    pipeline.process_item(make_pdf(first_url, "26-1001"), None)
+    pipeline.process_item(make_pdf(second_url, "26-1001"), None)
+
+    assert stored_case_numbers(db_session) == ["26-1001"]
+    assert stored_url(db_session, second_url).state == "complete"
+
+
+def test_pdf_with_no_entries_becomes_a_parse_error(db_session):
+    url_id = add_claimed_url(db_session)
+
+    open_pipeline().process_item(
+        PoliceLogPdfItem(url_id=url_id, raw_text="not a police log"), None
     )
 
-    assert stored_case_numbers(db_session) == ["2024-1001"]
-    assert db_session.get(PdfUrl, second_url).state == "complete"
+    url = stored_url(db_session, url_id)
+    assert (url.state, url.error_kind) == ("error", "parse")
+    assert url.raw_text == "not a police log"

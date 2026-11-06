@@ -27,11 +27,9 @@ def pipeline():
 
 
 def test_ignores_non_city_staff_items(pipeline):
-    from items.police_log import PoliceLogItem
+    from items.police_log import PoliceLogPdfItem
 
-    other = PoliceLogItem(
-        raw_text="x", source_url="http://x", scraped_at=datetime.now()
-    )
+    other = PoliceLogPdfItem(url_id=1, raw_text="x")
     result = pipeline.process_item(other, MagicMock())
     assert result is other
     pipeline._session.execute.assert_not_called()

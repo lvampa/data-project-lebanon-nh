@@ -1,31 +1,8 @@
 import scrapy
 
 
-class PoliceLogItem(scrapy.Item):
-    source_url = scrapy.Field()
-    pdf_filename = scrapy.Field()
-    log_date = scrapy.Field()
-    raw_text = scrapy.Field()
-    scraped_at = scrapy.Field()
-    case_number = scrapy.Field()
-    reported_at = scrapy.Field()
-    call_source = scrapy.Field()
-    incident_type = scrapy.Field()
-    disposition = scrapy.Field()
-    raw_reason_action = scrapy.Field()
-    location = scrapy.Field()
-    officer = scrapy.Field()
-    reference_number = scrapy.Field()
-    dispatched_at = scrapy.Field()
-    enroute_at = scrapy.Field()
-    arrived_at = scrapy.Field()
-    cleared_at = scrapy.Field()
-    response_seconds = scrapy.Field()
-    scene_seconds = scrapy.Field()
-    parse_error = scrapy.Field()
-
-
 class PoliceLogPdfItem(scrapy.Item):
+    """One downloaded log PDF. The pipeline parses its text and stores the entries."""
+
     url_id = scrapy.Field()
     raw_text = scrapy.Field()
-    entries = scrapy.Field()

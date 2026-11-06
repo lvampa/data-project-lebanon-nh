@@ -61,19 +61,19 @@ The three spec files ride along in this pull request.
 About 20 files.
 This is the pull request that changes how entries are written, so it ships alone.
 
-- [ ] 4. Add the `log_entries` and `pdf_urls` columns
+- [x] 4. Add the `log_entries` and `pdf_urls` columns
   - One Alembic migration with the columns in design.md, `case_number` and `log_date` NOT NULL, `created_at` from `scraped_at`.
   - Backfill `log_date` from the URL record, else from `reported_at`, and fail the migration if any row is still null.
   - Update the ORM models and `PoliceLogRecord` (`extra="forbid"`, required `raw_text`, `case_number`, `log_date`).
   - _Requirements: 1.5, 1.6, 2.13_
 
-- [ ] 5. Add `ingest_log_text`
+- [x] 5. Add `ingest_log_text`
   - Parse, validate, and upsert one PDF's entries from `model_dump()`, guarded so unchanged rows are not touched and the later log date wins.
   - Count parsed, inserted, updated, unchanged, skipped, missing, and header lines; set and clear `missing_from_parse`.
   - Tests: the upsert, a skipped invalid entry, an entry with no case number, the later-date rule with the older PDF second, an entry stored before this pull request is updated by a fresh ingest, and a second call that changes no row.
   - _Requirements: 1.1, 1.4, 2.4, 2.5, 2.12, 2.13, 2.14, 13.6_
 
-- [ ] 6. Move the process job onto `ingest_log_text`
+- [x] 6. Move the process job onto `ingest_log_text`
   - `PoliceLogPdfItem` carries the text, not parsed entries; delete `PoliceLogItem` and its test.
   - Add `error_kind`; retry only `download` errors; a PDF with no entries or unreadable text is kind `parse`.
   - Add the runner that exits non-zero when a record moved to `error`, and the advisory lock.

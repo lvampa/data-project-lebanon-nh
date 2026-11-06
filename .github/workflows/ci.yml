@@ -181,6 +181,13 @@ jobs:
           docker compose --env-file .github/ci.env run --rm --no-deps airflow-init
           docker compose --env-file .github/ci.env run --rm --no-deps \
             airflow-scheduler airflow dags list-import-errors
+          # No import errors also means nothing if no DAGs loaded, as with an empty
+          # or wrongly mounted dags folder.
+          dags=$(docker compose --env-file .github/ci.env run --rm --no-deps -T \
+            airflow-scheduler airflow dags list --output json)
+          count=$(jq length <<< "$dags")
+          echo "$count DAGs loaded."
+          [ "$count" -gt 0 ]
 
   # The one check to require in branch protection. A job-level `if` on any job it
   # needs would leave that job `skipped`, and this check then fails; gate steps

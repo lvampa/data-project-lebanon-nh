@@ -95,7 +95,7 @@ class BudgetDocumentItem(scrapy.Item):
 
 ### Airflow DAG
 
-Lives in `dags/scrape/budget_discovery.py` (3.1 to 3.3).
+Lives in `dags/specs.py` as the `budget_discovery` spec (3.1 to 3.3).
 
 - `dag_id="budget_discovery"`, `schedule="0 4 1 * *"`, start date 2026-06-01 UTC, `catchup=False`, tag `budget`.
 - One `BashOperator` runs `cd /opt/project/scrapers && uv run --frozen scrapy crawl budget_discovery` with `retries=1` and `retry_delay=5 minutes`.
@@ -332,7 +332,7 @@ Divergences from the original design and plan:
   The pipeline is idempotent, so extra runs cost nothing.
 - **DAG location.**
   The plan put the DAG in `scrapers/dags/`.
-  All DAGs moved to the top-level `dags/` folder, and this one is now `dags/scrape/budget_discovery.py`.
+  All DAGs moved to the top-level `dags/` folder, and this one is now the `budget_discovery` spec in `dags/specs.py`.
 - **Script locations.**
   The scripts moved from `scripts/` into `scripts/scrape/` and `scripts/ingest/` in a later reorganization.
   Their docstrings still show the old `scripts/<name>.py` run commands.

@@ -25,7 +25,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
 
 - [x] 4. Schedule discovery
-  - Add the `budget_discovery` DAG in `dags/scrape/budget_discovery.py`, monthly on the 1st at 04:00 UTC, no catchup, one retry after 5 minutes.
+  - Add the `budget_discovery` DAG spec in `dags/specs.py`, monthly on the 1st at 04:00 UTC, no catchup, one retry after 5 minutes.
   - _Requirements: 3.1, 3.2, 3.3_
 
 - [x] 5. Download PDFs and extract text

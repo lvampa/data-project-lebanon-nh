@@ -14,6 +14,10 @@ class PdfUrl(Base):
             "state IN ('pending', 'in_progress', 'complete', 'error')",
             name="ck_pdf_urls_state",
         ),
+        CheckConstraint(
+            "error_kind IN ('download', 'parse', 'save')",
+            name="ck_pdf_urls_error_kind",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -28,7 +32,13 @@ class PdfUrl(Base):
     )
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # Only download errors are retried; parse and save errors wait for a reprocess.
+    error_kind: Mapped[str | None] = mapped_column(Text)
     error_message: Mapped[str | None] = mapped_column(Text)
-    entry_count: Mapped[int | None] = mapped_column(Integer)
+    parsed_count: Mapped[int | None] = mapped_column(Integer)
+    stored_count: Mapped[int | None] = mapped_column(Integer)
+    skipped_count: Mapped[int | None] = mapped_column(Integer)
+    header_lines: Mapped[int | None] = mapped_column(Integer)
+    parser_version: Mapped[int | None] = mapped_column(Integer)
     raw_text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

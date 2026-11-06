@@ -5,19 +5,23 @@ from fastapi import APIRouter, Depends
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from api.auth import require_admin
-from api.deps import get_db
+from api.deps import Paging, get_db, get_paging
 from api.geocoding import geocode_nominatim
-from api.schemas import AddressRecord, AddressResult, AddressUpdate
+from api.schemas import AddressRecord, AddressResult, AddressUpdate, Page
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[AddressRecord])
-def list_addresses(db: Annotated[Session, Depends(get_db)]) -> list[AddressRecord]:
-    rows = db.execute(
+@router.get("", response_model=Page[AddressRecord])
+def list_addresses(
+    db: Annotated[Session, Depends(get_db)],
+    paging: Annotated[Paging, Depends(get_paging)],
+) -> Page[AddressRecord]:
+    stmt = (
         select(
             LogEntry.location,
             func.count().label("count"),
@@ -36,19 +40,27 @@ def list_addresses(db: Annotated[Session, Depends(get_db)]) -> list[AddressRecor
             AddressNormalization.lat,
             AddressNormalization.lng,
         )
-        .order_by(func.count().desc())
+    )
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    rows = db.execute(
+        paging.apply(stmt.order_by(func.count().desc(), LogEntry.location))
     ).all()
-    return [
-        AddressRecord(
-            raw_address=r.location,
-            count=r.count,
-            normalized_address=r.normalized_address,
-            lat=r.lat,
-            lng=r.lng,
-            is_normalized=r.normalized_address is not None,
-        )
-        for r in rows
-    ]
+    return Page[AddressRecord](
+        total=total,
+        page=paging.page,
+        per_page=paging.per_page,
+        items=[
+            AddressRecord(
+                raw_address=r.location,
+                count=r.count,
+                normalized_address=r.normalized_address,
+                lat=r.lat,
+                lng=r.lng,
+                is_normalized=r.normalized_address is not None,
+            )
+            for r in rows
+        ],
+    )
 
 
 @router.patch(
@@ -61,43 +73,39 @@ def update_address(
     body: AddressUpdate,
     db: Annotated[Session, Depends(get_db)],
 ) -> AddressResult:
-    lat, lng, geocoded_via = None, None, None
-    if body.geocode:
-        lat, lng = geocode_nominatim(body.normalized_address)
-        if lat is not None:
-            geocoded_via = "nominatim"
-
     now = datetime.now(UTC).replace(tzinfo=None)
-    existing = db.scalar(
-        select(AddressNormalization).where(
-            AddressNormalization.raw_address == raw_address
+    changes = {
+        "normalized_address": body.normalized_address,
+        "notes": body.notes,
+        "updated_at": now,
+        **_new_coordinates(body),
+    }
+    stored = db.execute(
+        insert(AddressNormalization)
+        .values(raw_address=raw_address, created_at=now, **changes)
+        .on_conflict_do_update(index_elements=["raw_address"], set_=changes)
+        .returning(
+            AddressNormalization.lat,
+            AddressNormalization.lng,
+            AddressNormalization.geocoded_via,
         )
-    )
-    if existing:
-        existing.normalized_address = body.normalized_address
-        existing.lat = lat
-        existing.lng = lng
-        existing.geocoded_via = geocoded_via
-        existing.notes = body.notes
-        existing.updated_at = now
-    else:
-        db.add(
-            AddressNormalization(
-                raw_address=raw_address,
-                normalized_address=body.normalized_address,
-                lat=lat,
-                lng=lng,
-                geocoded_via=geocoded_via,
-                notes=body.notes,
-                created_at=now,
-                updated_at=now,
-            )
-        )
+    ).one()
     db.commit()
     return AddressResult(
         raw_address=raw_address,
         normalized_address=body.normalized_address,
-        lat=lat,
-        lng=lng,
-        geocoded_via=geocoded_via,
+        lat=stored.lat,
+        lng=stored.lng,
+        geocoded_via=stored.geocoded_via,
     )
+
+
+def _new_coordinates(body: AddressUpdate) -> dict:
+    """Coordinates to write, or {} to keep whatever the row already has."""
+    if body.lat is not None:
+        return {"lat": body.lat, "lng": body.lng, "geocoded_via": "manual"}
+    if body.geocode:
+        lat, lng = geocode_nominatim(body.normalized_address)
+        if lat is not None:
+            return {"lat": lat, "lng": lng, "geocoded_via": "nominatim"}
+    return {}

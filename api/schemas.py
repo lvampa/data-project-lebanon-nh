@@ -1,11 +1,18 @@
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
+
+
+class Page[T](BaseModel):
+    total: int
+    page: int
+    per_page: int
+    items: list[T]
 
 
 class Incident(BaseModel):
-    case_number: str
+    case_number: str | None
     reported_at: datetime | None
     call_source: str | None
     incident_type: str | None
@@ -13,16 +20,9 @@ class Incident(BaseModel):
     location: str | None
     officer: str | None
     reference_number: str | None
-    source_url: str | None
+    source_url: str
 
     model_config = {"from_attributes": True}
-
-
-class IncidentsResponse(BaseModel):
-    total: int
-    page: int
-    per_page: int
-    items: list[Incident]
 
 
 class TypeStat(BaseModel):
@@ -53,6 +53,14 @@ class AddressUpdate(BaseModel):
     normalized_address: str
     notes: str | None = None
     geocode: bool = True
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def lat_and_lng_together(self) -> "AddressUpdate":
+        if (self.lat is None) != (self.lng is None):
+            raise ValueError("lat and lng must be set together")
+        return self
 
 
 class AddressResult(BaseModel):
@@ -107,13 +115,11 @@ class Llc(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class LlcsResponse(BaseModel):
-    total: int
-    items: list[Llc]
+LookupStatus = Literal["pending", "in_progress", "complete", "error", "skipped"]
 
 
 class LlcStatusUpdate(BaseModel):
-    lookup_status: Literal["pending", "in_progress", "complete", "error", "skipped"]
+    lookup_status: LookupStatus
 
 
 class SearchResult(BaseModel):

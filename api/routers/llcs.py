@@ -6,23 +6,29 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.auth import require_admin
-from api.deps import get_db
-from api.schemas import Llc, LlcsResponse, LlcStatusUpdate
+from api.deps import Paging, get_db, get_paging
+from api.schemas import Llc, LlcStatusUpdate, LookupStatus, Page
 
 router = APIRouter()
 
 
-@router.get("", response_model=LlcsResponse)
+@router.get("", response_model=Page[Llc])
 def list_llcs(
     db: Annotated[Session, Depends(get_db)],
-    lookup_status: str | None = None,
-) -> LlcsResponse:
+    paging: Annotated[Paging, Depends(get_paging)],
+    lookup_status: LookupStatus | None = None,
+) -> Page[Llc]:
     stmt = select(LlcModel)
     if lookup_status:
         stmt = stmt.where(LlcModel.lookup_status == lookup_status)
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    rows = db.scalars(stmt.order_by(LlcModel.name)).all()
-    return LlcsResponse(total=total, items=[Llc.model_validate(r) for r in rows])
+    rows = db.scalars(paging.apply(stmt.order_by(LlcModel.name))).all()
+    return Page[Llc](
+        total=total,
+        page=paging.page,
+        per_page=paging.per_page,
+        items=[Llc.model_validate(r) for r in rows],
+    )
 
 
 @router.patch(

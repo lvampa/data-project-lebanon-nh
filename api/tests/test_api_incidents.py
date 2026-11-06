@@ -1,12 +1,9 @@
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
 from postgres.models.log_entry import LogEntry
 
-from api.deps import get_db
-from api.main import app
+from api.tests.sql import compile_pg
 
 
 def _make_entry(**kwargs) -> LogEntry:
@@ -30,24 +27,11 @@ def _make_entry(**kwargs) -> LogEntry:
     return LogEntry(**defaults)
 
 
-def _client_with_mock_db(mock_db):
-    app.dependency_overrides[get_db] = lambda: mock_db
-    return TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def clear_overrides():
-    yield
-    app.dependency_overrides.clear()
-
-
-def test_incidents_returns_list():
-    mock_db = MagicMock()
+def test_incidents_returns_list(mock_db, client):
     entry = _make_entry()
     mock_db.scalar.return_value = 1
     mock_db.scalars.return_value.all.return_value = [entry]
 
-    client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents")
 
     assert resp.status_code == 200
@@ -57,27 +41,62 @@ def test_incidents_returns_list():
     assert data["items"][0]["incident_type"] == "Telephone Harassment"
 
 
-def test_incidents_filters_by_incident_type():
-    mock_db = MagicMock()
+def test_incidents_serializes_null_case_number(mock_db, client):
+    mock_db.scalar.return_value = 1
+    mock_db.scalars.return_value.all.return_value = [_make_entry(case_number=None)]
+
+    resp = client.get("/api/incidents")
+
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["case_number"] is None
+
+
+def test_incidents_filters_by_incident_type(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []
 
-    client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents?incident_type=Harassment")
 
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
 
 
-def test_incidents_pagination_defaults():
-    mock_db = MagicMock()
+def test_incidents_pagination_defaults(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []
 
-    client = _client_with_mock_db(mock_db)
     resp = client.get("/api/incidents")
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["page"] == 1
     assert data["per_page"] == 50
+
+
+@pytest.mark.parametrize("field", ["incident_type", "disposition", "officer"])
+def test_incidents_filter_matches_wildcards_literally(mock_db, client, field):
+    mock_db.scalar.return_value = 0
+    mock_db.scalars.return_value.all.return_value = []
+
+    resp = client.get(f"/api/incidents?{field}=50%25_off")
+
+    assert resp.status_code == 200
+    compiled = compile_pg(mock_db.scalars.call_args.args[0])
+    assert "ESCAPE '/'" in str(compiled)
+    assert "50/%/_off" in compiled.params.values()
+
+
+def test_incidents_order_is_stable_across_pages(mock_db, client):
+    mock_db.scalar.return_value = 0
+    mock_db.scalars.return_value.all.return_value = []
+
+    resp = client.get("/api/incidents?page=3&per_page=20")
+
+    assert resp.status_code == 200
+    compiled = compile_pg(mock_db.scalars.call_args.args[0])
+    assert (
+        "ORDER BY log_entries.reported_at DESC NULLS LAST, log_entries.id DESC"
+        in str(compiled)
+    )
+    assert compiled.params["param_1"] == 20
+    assert compiled.params["param_2"] == 40

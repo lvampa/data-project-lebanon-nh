@@ -1,8 +1,8 @@
 # PDF URL queue: tasks
 
-**Status:** In progress
+**Status:** Done
 **Created:** 2026-10-31
-**Updated:** 2026-10-31
+**Updated:** 2026-11-06
 
 - [x] 1. Add the `pdf_urls` table
   - Add the `PdfUrl` ORM model and one Alembic migration revising `22fc0163d5ff`, with a downgrade that drops it.
@@ -27,9 +27,8 @@
   - Test with `FakeSession` that one commit holds both, and that a failure commits only the `error` update.
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 5. Remove MongoDB
-  - Delete `shared/mongo`, its workspace member, the `mongo` and `pymongo` dependencies, and relock.
-  - Remove the `mongo` service, volume and `MONGO_*` variables from `compose.yml`, `.env.example` and the Dockerfiles.
-  - Update `AGENTS.md`, `scrapers/CLAUDE.md`, `scrapers/README.md` and `.cursor/rules`.
-  - Check that `docker compose config -q` passes without `MONGO_*` set.
+- [x] 5. Keep MongoDB for document-shaped work
+  - Nothing is removed: `shared/mongo`, the `mongo` service, `pymongo` and the Logfire pymongo instrumentation stay.
+  - The police log queue no longer reads or writes MongoDB.
+  - The document-shaped job MongoDB gets next is specced separately.
   - _Requirements: 5.1, 5.2, 5.3_

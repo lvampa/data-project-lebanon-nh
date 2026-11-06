@@ -2,7 +2,7 @@ import re
 from datetime import UTC, datetime
 
 import logfire
-from items import PoliceLogItem, UrlRecordItem
+from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
 from items.officer import OfficerItem
@@ -13,7 +13,7 @@ from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
-from mongo import db
+from mongo import db, init_indexes
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
@@ -65,6 +65,9 @@ class UrlRecordPipeline:
         if not self._ops:
             return
 
+        # The upsert relies on the unique canonical_url index. Every spider runs
+        # this pipeline, so only touch Mongo when there are URLs to write.
+        init_indexes(db)
         with logfire.span(
             "bulk upsert url records", found=self._count, count=len(self._ops)
         ):
@@ -82,48 +85,79 @@ class PoliceLogPipeline:
         self._session = SessionLocal()
 
     def process_item(self, item, spider):
-        if not isinstance(item, PoliceLogItem):
+        if not isinstance(item, PoliceLogPdfItem):
             return item
 
-        record = PoliceLogRecord.model_validate(dict(item))
-
+        urls = db.get_collection("urls")
         try:
-            with logfire.span("save police log entry", source_url=record.source_url):
-                stmt = (
-                    pg_insert(LogEntry)
-                    .values(
-                        source_url=record.source_url,
-                        case_number=record.case_number,
-                        reported_at=record.reported_at,
-                        call_source=record.call_source,
-                        incident_type=record.incident_type,
-                        disposition=record.disposition,
-                        raw_reason_action=record.raw_reason_action,
-                        location=record.location,
-                        officer=record.officer,
-                        reference_number=record.reference_number,
-                        dispatched_at=record.dispatched_at,
-                        enroute_at=record.enroute_at,
-                        arrived_at=record.arrived_at,
-                        cleared_at=record.cleared_at,
-                        response_seconds=record.response_seconds,
-                        scene_seconds=record.scene_seconds,
-                        raw_text=record.raw_text,
-                        parse_error=record.parse_error,
-                        scraped_at=record.scraped_at,
-                    )
-                    .on_conflict_do_nothing(index_elements=["case_number"])
-                )
-                self._session.execute(stmt)
-        except Exception:
+            records = [
+                PoliceLogRecord.model_validate(dict(entry)) for entry in item["entries"]
+            ]
+            with logfire.span(
+                "save police log entries",
+                url_id=str(item["url_id"]),
+                count=len(records),
+            ):
+                for record in records:
+                    self._session.execute(_log_entry_insert(record))
+            self._session.commit()
+        except Exception as exc:
             self._session.rollback()
+            urls.update_one(
+                {"_id": item["url_id"]},
+                {
+                    "$set": {
+                        "state": "error",
+                        "error_message": f"Saving entries failed: {exc}",
+                        "completed_at": datetime.now(UTC),
+                    }
+                },
+            )
             raise
 
+        urls.update_one(
+            {"_id": item["url_id"]},
+            {
+                "$set": {
+                    "raw_text": item["raw_text"],
+                    "state": "complete",
+                    "entry_count": len(records),
+                    "completed_at": datetime.now(UTC),
+                }
+            },
+        )
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
+
+
+def _log_entry_insert(record: PoliceLogRecord):
+    return (
+        pg_insert(LogEntry)
+        .values(
+            source_url=record.source_url,
+            case_number=record.case_number,
+            reported_at=record.reported_at,
+            call_source=record.call_source,
+            incident_type=record.incident_type,
+            disposition=record.disposition,
+            raw_reason_action=record.raw_reason_action,
+            location=record.location,
+            officer=record.officer,
+            reference_number=record.reference_number,
+            dispatched_at=record.dispatched_at,
+            enroute_at=record.enroute_at,
+            arrived_at=record.arrived_at,
+            cleared_at=record.cleared_at,
+            response_seconds=record.response_seconds,
+            scene_seconds=record.scene_seconds,
+            raw_text=record.raw_text,
+            parse_error=record.parse_error,
+            scraped_at=record.scraped_at,
+        )
+        .on_conflict_do_nothing(index_elements=["case_number"])
+    )
 
 
 class PropertyPipeline:
@@ -223,6 +257,7 @@ class PropertyPipeline:
                             created_at=now,
                         )
                     )
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -230,7 +265,6 @@ class PropertyPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
 
 
@@ -273,6 +307,7 @@ class CityStaffPipeline:
                     )
                 )
                 self._session.execute(stmt)
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -280,7 +315,6 @@ class CityStaffPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
 
 
@@ -320,6 +354,7 @@ class OfficerPipeline:
                     )
                 )
                 self._session.execute(stmt)
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -327,7 +362,6 @@ class OfficerPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()
 
 
@@ -361,6 +395,7 @@ class BudgetDocumentPipeline:
                     )
                 )
                 self._session.execute(stmt)
+            self._session.commit()
         except Exception:
             self._session.rollback()
             raise
@@ -368,5 +403,4 @@ class BudgetDocumentPipeline:
         return item
 
     def close_spider(self, spider) -> None:
-        self._session.commit()
         self._session.close()

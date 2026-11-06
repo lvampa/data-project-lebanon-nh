@@ -4,6 +4,9 @@ from unittest.mock import MagicMock
 import pytest
 from items.property import PropertyItem
 from pipelines import PropertyPipeline
+from postgres.models.property import Property
+from postgres.models.property_sale import PropertySale
+from sqlalchemy import select
 
 SAMPLE_ITEM = PropertyItem(
     parcel_id="10001",
@@ -75,17 +78,19 @@ def test_close_spider_closes_session(pipeline):
     pipeline._session.close.assert_called_once()
 
 
-def test_first_property_stays_committed_when_second_fails(fake_session):
+def test_first_property_stays_committed_when_second_fails(db_session, fail_on_execute):
     pipeline = PropertyPipeline()
-    pipeline._session = fake_session
+    pipeline.open_spider(None)
     # SAMPLE_ITEM runs upsert, id lookup, sales delete, one sale insert.
-    # Failing on call 8 breaks the second item's sale insert, after its delete.
-    fake_session.fail_on_call = 8
+    # Failing on call 8 breaks the second run's sale insert, after its delete.
+    fail_on_execute(pipeline._session, 8)
+    rescrape = PropertyItem(SAMPLE_ITEM, owner="NEW OWNER")
 
     pipeline.process_item(SAMPLE_ITEM, None)
     with pytest.raises(RuntimeError):
-        pipeline.process_item(SAMPLE_ITEM, None)
+        pipeline.process_item(rescrape, None)
     pipeline.close_spider(None)
 
-    # Only the first item's four statements; the second item's delete is rolled back.
-    assert len(fake_session.committed) == 4
+    # The failed rescrape is rolled back whole: the owner and the sale are the first run's.
+    assert db_session.scalars(select(Property.owner)).all() == ["SMITH, JOHN"]
+    assert db_session.scalars(select(PropertySale.grantor)).all() == ["JONES, BOB"]

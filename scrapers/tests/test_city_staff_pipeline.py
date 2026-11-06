@@ -4,6 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 from items.city_staff import CityStaffItem
 from pipelines import CityStaffPipeline
+from postgres.models.city_staff import CityStaff
+from sqlalchemy import select
 
 SAMPLE_ITEM = CityStaffItem(
     name="Jane Doe",
@@ -50,14 +52,15 @@ def test_close_spider_closes_session(pipeline):
     pipeline._session.close.assert_called_once()
 
 
-def test_first_item_stays_committed_when_second_fails(fake_session):
+def test_first_item_stays_committed_when_second_fails(db_session, fail_on_execute):
     pipeline = CityStaffPipeline()
-    pipeline._session = fake_session
-    fake_session.fail_on_call = 2
+    pipeline.open_spider(None)
+    fail_on_execute(pipeline._session, 2)
+    second = CityStaffItem(SAMPLE_ITEM, name="John Smith")
 
     pipeline.process_item(SAMPLE_ITEM, None)
     with pytest.raises(RuntimeError):
-        pipeline.process_item(SAMPLE_ITEM, None)
+        pipeline.process_item(second, None)
     pipeline.close_spider(None)
 
-    assert len(fake_session.committed) == 1
+    assert db_session.scalars(select(CityStaff.name)).all() == ["Jane Doe"]

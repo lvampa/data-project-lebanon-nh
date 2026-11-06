@@ -3,7 +3,8 @@ from unittest.mock import patch
 
 from items import PoliceLogItem, UrlRecordItem
 from pipelines import UrlRecordPipeline
-from sqlalchemy.dialects import postgresql
+from postgres.models.pdf_url import PdfUrl
+from sqlalchemy import select
 
 
 def make_item(**kwargs) -> UrlRecordItem:
@@ -24,31 +25,28 @@ def run_pipeline(*items) -> None:
     pipeline.close_spider(None)
 
 
-def compile_pg(statement):
-    return statement.compile(dialect=postgresql.dialect())
+def stored_urls(session) -> list[PdfUrl]:
+    return session.scalars(select(PdfUrl).order_by(PdfUrl.canonical_url)).all()
 
 
-@patch("pipelines.SessionLocal")
-def test_inserts_urls_once_and_ignores_existing(mock_session_local, fake_session):
-    mock_session_local.return_value = fake_session
-
+def test_inserts_urls_once_and_ignores_existing(db_session):
     run_pipeline(
         make_item(canonical_url="https://example.com/a.pdf"),
         make_item(canonical_url="https://example.com/b.pdf"),
     )
+    run_pipeline(
+        make_item(canonical_url="https://example.com/b.pdf"),
+        make_item(canonical_url="https://example.com/c.pdf"),
+    )
 
-    [[statement]] = fake_session.transactions
-    compiled = compile_pg(statement)
-    assert "INSERT INTO pdf_urls" in str(compiled)
-    assert "ON CONFLICT (canonical_url) DO NOTHING" in str(compiled)
-    assert compiled.params["canonical_url_m0"] == "https://example.com/a.pdf"
-    assert compiled.params["canonical_url_m1"] == "https://example.com/b.pdf"
+    assert [url.canonical_url for url in stored_urls(db_session)] == [
+        "https://example.com/a.pdf",
+        "https://example.com/b.pdf",
+        "https://example.com/c.pdf",
+    ]
 
 
-@patch("pipelines.SessionLocal")
-def test_inserts_archive_url_and_log_date(mock_session_local, fake_session):
-    mock_session_local.return_value = fake_session
-
+def test_inserts_archive_url_and_log_date(db_session):
     run_pipeline(
         make_item(
             archive_url="https://web.archive.org/web/2019/https://example.com/a.pdf",
@@ -56,10 +54,10 @@ def test_inserts_archive_url_and_log_date(mock_session_local, fake_session):
         )
     )
 
-    params = compile_pg(fake_session.committed[0]).params
-    assert params["archive_url_m0"].startswith("https://web.archive.org/")
-    assert params["log_date_m0"] == date(2026, 5, 1)
-    assert params["state_m0"] == "pending"
+    [url] = stored_urls(db_session)
+    assert url.archive_url.startswith("https://web.archive.org/")
+    assert url.log_date == date(2026, 5, 1)
+    assert url.state == "pending"
 
 
 @patch("pipelines.SessionLocal")

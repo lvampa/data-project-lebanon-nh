@@ -56,8 +56,6 @@ export interface Llc {
   error_message: string | null
 }
 
-export type LlcsResponse = Page<Llc>
-
 export interface SearchResult {
   id: number
   entity_type: string

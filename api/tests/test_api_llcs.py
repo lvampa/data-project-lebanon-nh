@@ -1,12 +1,8 @@
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
 
-from fastapi.testclient import TestClient
 from postgres.models.llc import Llc as LlcModel
 
-from api.deps import get_db
-from api.main import app
-from api.tests.conftest import ADMIN_TOKEN
+from api.tests.sql import compile_pg
 
 
 def _make_llc(**kwargs) -> LlcModel:
@@ -31,40 +27,36 @@ def _make_llc(**kwargs) -> LlcModel:
     return LlcModel(**defaults)
 
 
-def _client(mock_db):
-    app.dependency_overrides[get_db] = lambda: mock_db
-    return TestClient(app, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"})
-
-
-import pytest
-
-
-@pytest.fixture(autouse=True)
-def clear_overrides():
-    yield
-    app.dependency_overrides.clear()
-
-
-def test_list_llcs_empty():
-    mock_db = MagicMock()
+def test_list_llcs_empty(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []
 
-    client = _client(mock_db)
     resp = client.get("/api/llcs")
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data == {"total": 0, "items": []}
+    assert data == {"total": 0, "page": 1, "per_page": 50, "items": []}
 
 
-def test_list_llcs_returns_llc():
-    mock_db = MagicMock()
+def test_list_llcs_pages_by_name(mock_db, client):
+    mock_db.scalar.return_value = 0
+    mock_db.scalars.return_value.all.return_value = []
+
+    resp = client.get("/api/llcs?page=2&per_page=10")
+
+    assert resp.status_code == 200
+    assert resp.json()["page"] == 2
+    compiled = compile_pg(mock_db.scalars.call_args.args[0])
+    assert "ORDER BY llcs.name" in str(compiled)
+    assert compiled.params["param_1"] == 10
+    assert compiled.params["param_2"] == 10
+
+
+def test_list_llcs_returns_llc(mock_db, client):
     llc = _make_llc()
     mock_db.scalar.return_value = 1
     mock_db.scalars.return_value.all.return_value = [llc]
 
-    client = _client(mock_db)
     resp = client.get("/api/llcs")
 
     assert resp.status_code == 200
@@ -74,24 +66,27 @@ def test_list_llcs_returns_llc():
     assert data["items"][0]["lookup_status"] == "pending"
 
 
-def test_list_llcs_filters_by_lookup_status():
-    mock_db = MagicMock()
+def test_list_llcs_filters_by_lookup_status(mock_db, client):
     mock_db.scalar.return_value = 0
     mock_db.scalars.return_value.all.return_value = []
 
-    client = _client(mock_db)
     resp = client.get("/api/llcs?lookup_status=pending")
 
     assert resp.status_code == 200
     assert resp.json()["total"] == 0
 
 
-def test_patch_llc_status_updates_correctly():
-    mock_db = MagicMock()
+def test_list_llcs_rejects_unknown_lookup_status(mock_db, client):
+    resp = client.get("/api/llcs?lookup_status=bogus")
+
+    assert resp.status_code == 422
+    mock_db.scalars.assert_not_called()
+
+
+def test_patch_llc_status_updates_correctly(mock_db, client):
     llc = _make_llc(lookup_status="pending")
     mock_db.get.return_value = llc
 
-    client = _client(mock_db)
     resp = client.patch("/api/llcs/1/status", json={"lookup_status": "complete"})
 
     assert resp.status_code == 200
@@ -100,20 +95,16 @@ def test_patch_llc_status_updates_correctly():
     mock_db.refresh.assert_called_once_with(llc)
 
 
-def test_patch_llc_status_invalid_returns_422():
-    mock_db = MagicMock()
+def test_patch_llc_status_invalid_returns_422(mock_db, client):
 
-    client = _client(mock_db)
     resp = client.patch("/api/llcs/1/status", json={"lookup_status": "bad_status"})
 
     assert resp.status_code == 422
 
 
-def test_patch_llc_status_not_found_returns_404():
-    mock_db = MagicMock()
+def test_patch_llc_status_not_found_returns_404(mock_db, client):
     mock_db.get.return_value = None
 
-    client = _client(mock_db)
     resp = client.patch("/api/llcs/999/status", json={"lookup_status": "complete"})
 
     assert resp.status_code == 404

@@ -23,3 +23,9 @@ class PoliceLogItem(scrapy.Item):
     response_seconds = scrapy.Field()
     scene_seconds = scrapy.Field()
     parse_error = scrapy.Field()
+
+
+class PoliceLogPdfItem(scrapy.Item):
+    url_id = scrapy.Field()
+    raw_text = scrapy.Field()
+    entries = scrapy.Field()

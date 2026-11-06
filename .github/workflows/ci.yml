@@ -157,7 +157,7 @@ jobs:
           # writes would evict the uv, bun and Rust caches under GitHub's 10 GB limit.
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=api' || '' }}
 
-      # Tagged with the name compose gives the scheduler's image, so the step
+      # Tagged with the names compose gives these services' images, so the step
       # below runs this build instead of building again.
       - name: Build the Airflow image
         if: steps.changes.outputs.build == 'true'
@@ -165,16 +165,20 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.airflow
-          tags: ci-airflow-scheduler
+          tags: |
+            ci-airflow-init
+            ci-airflow-scheduler
           load: true
           cache-from: type=gha,scope=airflow
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=airflow' || '' }}
 
-      # The Airflow entrypoint waits for its database before running a command.
+      # The image's entrypoint refuses to run a command until Airflow's database is
+      # migrated, so airflow-init runs first, as it does when the stack starts.
       - name: Check every DAG imports
         if: steps.changes.outputs.build == 'true'
         run: |
           docker compose --env-file .github/ci.env up --detach --wait postgres
+          docker compose --env-file .github/ci.env run --rm --no-deps airflow-init
           docker compose --env-file .github/ci.env run --rm --no-deps \
             airflow-scheduler airflow dags list-import-errors
 

@@ -11,6 +11,19 @@ def reset_client():
     MongoDB._client = None
 
 
+@pytest.fixture(autouse=True)
+def no_mongo_env(monkeypatch):
+    # The defaults are under test, so settings from the shell or CI must not leak in.
+    for name in (
+        "MONGO_HOST",
+        "MONGO_PORT",
+        "MONGO_USER",
+        "MONGO_PASSWORD",
+        "MONGO_DB",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def db():
     return MongoDB()

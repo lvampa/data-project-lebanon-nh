@@ -16,6 +16,8 @@ WRITE_ROUTES = [
     ("/api/llcs/1/status", {"lookup_status": "complete"}),
 ]
 
+READ_ROUTES = ["/api/addresses", "/api/categories", "/api/llcs"]
+
 
 @pytest.fixture
 def mock_db():
@@ -69,9 +71,12 @@ def test_write_rejected_when_token_not_configured(mock_db, monkeypatch):
     mock_db.commit.assert_not_called()
 
 
-def test_reads_need_no_token(mock_db):
+@pytest.mark.parametrize("path", READ_ROUTES)
+def test_reads_need_no_token(mock_db, path):
     mock_db.execute.return_value.all.return_value = []
+    mock_db.scalars.return_value.all.return_value = []
+    mock_db.scalar.return_value = 0
 
-    resp = TestClient(app).get("/api/categories")
+    resp = TestClient(app).get(path)
 
     assert resp.status_code == 200

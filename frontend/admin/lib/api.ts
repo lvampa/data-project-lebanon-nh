@@ -61,7 +61,11 @@ export async function fetchLlcs(params?: { lookup_status?: string }): Promise<Ll
 export async function updateLlcStatus(id: number, status: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/llcs/${id}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // Server-only on purpose: Next.js never ships a non-NEXT_PUBLIC_ var to the browser.
+      Authorization: `Bearer ${process.env.ADMIN_API_TOKEN}`,
+    },
     body: JSON.stringify({ lookup_status: status }),
   })
   if (!res.ok) throw new Error(`Failed to update LLC ${id} status: ${res.status}`)

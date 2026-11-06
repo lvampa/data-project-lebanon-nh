@@ -7,6 +7,7 @@ from postgres.models.log_entry import LogEntry
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from api.auth import require_admin
 from api.deps import get_db
 from api.geocoding import geocode_nominatim
 from api.schemas import AddressRecord, AddressResult, AddressUpdate
@@ -50,7 +51,11 @@ def list_addresses(db: Annotated[Session, Depends(get_db)]) -> list[AddressRecor
     ]
 
 
-@router.patch("/{raw_address:path}", response_model=AddressResult)
+@router.patch(
+    "/{raw_address:path}",
+    response_model=AddressResult,
+    dependencies=[Depends(require_admin)],
+)
 def update_address(
     raw_address: str,
     body: AddressUpdate,

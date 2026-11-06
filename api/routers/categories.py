@@ -7,6 +7,7 @@ from postgres.models.log_entry import LogEntry
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from api.auth import require_admin
 from api.deps import get_db
 from api.schemas import CategoryRecord, CategoryResult, CategoryUpdate
 
@@ -46,7 +47,11 @@ def list_categories(db: Annotated[Session, Depends(get_db)]) -> list[CategoryRec
     ]
 
 
-@router.patch("/{raw_incident_type:path}", response_model=CategoryResult)
+@router.patch(
+    "/{raw_incident_type:path}",
+    response_model=CategoryResult,
+    dependencies=[Depends(require_admin)],
+)
 def update_category(
     raw_incident_type: str,
     body: CategoryUpdate,

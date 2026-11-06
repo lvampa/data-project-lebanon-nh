@@ -5,6 +5,7 @@ from postgres.models.llc import Llc as LlcModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from api.auth import require_admin
 from api.deps import get_db
 from api.schemas import Llc, LlcsResponse, LlcStatusUpdate
 
@@ -24,7 +25,9 @@ def list_llcs(
     return LlcsResponse(total=total, items=[Llc.model_validate(r) for r in rows])
 
 
-@router.patch("/{llc_id}/status", response_model=Llc)
+@router.patch(
+    "/{llc_id}/status", response_model=Llc, dependencies=[Depends(require_admin)]
+)
 def update_llc_status(
     llc_id: int,
     body: LlcStatusUpdate,

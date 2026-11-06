@@ -59,8 +59,6 @@ jobs:
     defaults:
       run:
         working-directory: frontend
-    env:
-      BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -72,11 +70,14 @@ jobs:
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
+          path: ${{ runner.temp }}/bun-install-cache
           key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      # The runner context is only available at step level, so the path is set here.
       - name: Install
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
         run: bun install --frozen-lockfile
 
       - name: Typecheck, lint, format and test

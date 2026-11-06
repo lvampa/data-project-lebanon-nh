@@ -9,6 +9,7 @@ dev = [
     "playwright>=1.60.0",
     "playwright-stealth>=2.0.3",
     "pre-commit>=4.0.0",
+    "pyrefly==1.4.0",
     "ruff>=0.15.16",
 ]
 
@@ -17,9 +18,102 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "ANN"]
 ignore = ["E501", "E402"]
+
+[tool.ruff.lint.flake8-annotations]
+# `*args: Any, **kwargs: Any` passed straight through to a parent class is fine.
+allow-star-arg-any = true
+
+[tool.ruff.lint.per-file-ignores]
+# Tests take pytest fixtures by name; the same rule as the pyrefly config.
+"**/tests/**" = ["ANN"]
+# Not yet strict: code written before annotations were required. Remove a line once
+# its file is annotated. The list under [tool.pyrefly] also covers four paths that
+# already pass these rules but not pyrefly's implicit-Any check.
+"api/**" = ["ANN"]
+"scripts/**" = ["ANN"]
+"scrapers/extensions.py" = ["ANN"]
+"scrapers/spiders/budget_discovery.py" = ["ANN"]
+"scrapers/spiders/city_staff.py" = ["ANN"]
+"scrapers/spiders/create_url_records.py" = ["ANN"]
+"scrapers/spiders/officer_roster.py" = ["ANN"]
+"scrapers/spiders/vgsi_property.py" = ["ANN"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pyrefly]
+# Strict everywhere, except the files listed under "Not yet strict" below.
+preset = "strict"
+project-includes = ["api", "dags", "scrapers", "scripts", "shared"]
+# Scrapy runs from scrapers/ and Airflow from dags/, so modules in those folders
+# import each other by top-level name (`from items import ...`).
+search-path = [".", "scrapers", "dags"]
+# Airflow and pendulum are installed in the Airflow image, not in the workspace venv.
+ignore-missing-imports = ["airflow.*", "pendulum.*"]
+# Real errors that existed when type checking was added, listed so that only new
+# ones fail. Fix one, then run `uv run pyrefly check --update-baseline` to drop it.
+baseline = "pyrefly-baseline.json"
+# Each existing error has to stay in its place in its file, so a new error in a
+# baselined file still fails.
+baseline-matching-mode = "column-ordered"
+
+# Tests take pytest fixtures by name, so annotating every parameter adds noise.
+# Every other check stays on for them.
+[[tool.pyrefly.sub-config]]
+matches = "**/tests/**"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+# Not yet strict: code written before type checking. Remove a block once its file
+# passes the strict checks. Each block takes one glob; `matches` does not accept a
+# list. Ruff's ANN ignores cover the same paths, less four that already pass them:
+# shared/mongo, llc.py, scrapers/settings.py and scrapers/maintenance.
+[[tool.pyrefly.sub-config]]
+matches = "api/**"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scripts/**"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "shared/mongo/**"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "shared/postgres/src/postgres/models/llc.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/extensions.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/settings.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/maintenance/**"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/spiders/budget_discovery.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/spiders/city_staff.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/spiders/create_url_records.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/spiders/officer_roster.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "scrapers/spiders/vgsi_property.py"
+errors = { implicit-any = false, missing-override-decorator = false }

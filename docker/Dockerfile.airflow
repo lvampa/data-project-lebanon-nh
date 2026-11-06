@@ -13,9 +13,10 @@ COPY --chown=airflow pyproject.toml uv.lock ./
 COPY --chown=airflow scrapers/pyproject.toml ./scrapers/
 COPY --chown=airflow api/pyproject.toml ./api/
 
-# shared/* packages need their source to build — volume mount overlays at runtime
+# shared/* and scripts/ need their source to build. The volume mounts overlay them at runtime.
 COPY --chown=airflow shared/mongo ./shared/mongo/
 COPY --chown=airflow shared/postgres ./shared/postgres/
+COPY --chown=airflow scripts ./scripts/
 
 RUN uv sync --frozen --package scrapers
 

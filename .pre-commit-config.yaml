@@ -18,7 +18,7 @@ repos:
       - id: pytest
         name: pytest
         language: system
-        entry: uv run pytest --ignore=scrapers/tests/test_officer_roster_spider.py -q
+        entry: uv run pytest -q
         types: [python]
         pass_filenames: false
         stages: [pre-push]

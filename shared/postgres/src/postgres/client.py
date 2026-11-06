@@ -15,6 +15,8 @@ def _build_url() -> URL:
     )
 
 
-engine: Engine = create_engine(_build_url())
+# Scrapers and DAGs run for hours, so a connection can be dropped by the server
+# while the pool holds it. pre_ping replaces a dead connection instead of raising.
+engine: Engine = create_engine(_build_url(), pool_pre_ping=True)
 
 SessionLocal: sessionmaker[Session] = sessionmaker(bind=engine)

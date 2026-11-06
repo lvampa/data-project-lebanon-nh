@@ -1,0 +1,210 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Cancel superseded PR runs, but let every run on main finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          # Same uv as the Dockerfiles, so `uv lock --check` agrees with them.
+          version: "0.10.4"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          cache-python: true
+
+      - name: Check the lockfile is current
+        run: uv lock --check
+
+      - name: Install
+        run: uv sync --frozen --all-packages
+
+      - name: Ruff
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+
+      - name: Start Postgres
+        run: docker compose --env-file .github/ci.env up --detach --wait postgres
+
+      # Same command as the pre-push hook in .pre-commit-config.yaml.
+      - name: Pytest
+        run: |
+          set -a
+          . .github/ci.env
+          set +a
+          uv run --no-sync pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: frontend/package.json
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/bun-install-cache
+          key: bun-${{ runner.os }}-${{ hashFiles('frontend/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      # The runner context is only available at step level, so the path is set here.
+      - name: Install
+        env:
+          BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck, lint, format and test
+        run: bun run check
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Pinned, because clippy runs with -D warnings: a new stable release that adds
+      # a lint would otherwise fail PRs that did not touch Rust. Bump it by hand.
+      - name: Install Rust 1.98.1
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt,clippy
+          rustup default 1.98.1
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked -p report-gen
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The base branch has to be present to diff against it.
+          fetch-depth: 0
+
+      - name: Check for changes to what the images are built from
+        id: changes
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")
+          # What the images are built from or mount: Docker and compose files, the
+          # workspace packages and lockfile, the DAGs, and this workflow.
+          pattern='^docker/|(^|/)Dockerfile|^compose(\.[a-z]+)?\.ya?ml$|(^|/)uv\.lock$|(^|/)pyproject\.toml$|^(dags|shared|scripts)/|^\.github/(ci\.env|workflows/ci\.yml)$'
+          if grep -qE "$pattern" <<< "$changed"; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "No Docker-related changes, so the image builds are skipped."
+          fi
+
+      - name: Validate the compose file
+        if: steps.changes.outputs.build == 'true'
+        run: docker compose --env-file .github/ci.env config --quiet
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.changes.outputs.build == 'true'
+
+      - name: Build the API image
+        if: steps.changes.outputs.build == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile.api
+          tags: ci-api
+          load: true
+          cache-from: type=gha,scope=api
+          # Only main writes the layer cache. The Airflow image is gigabytes, and PR
+          # writes would evict the uv, bun and Rust caches under GitHub's 10 GB limit.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=api' || '' }}
+
+      # Tagged with the names compose gives these services' images, so the step
+      # below runs this build instead of building again.
+      - name: Build the Airflow image
+        if: steps.changes.outputs.build == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile.airflow
+          tags: |
+            ci-airflow-init
+            ci-airflow-scheduler
+          load: true
+          cache-from: type=gha,scope=airflow
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=airflow' || '' }}
+
+      # The image's entrypoint refuses to run a command until Airflow's database is
+      # migrated, so airflow-init runs first, as it does when the stack starts.
+      - name: Check every DAG imports
+        if: steps.changes.outputs.build == 'true'
+        run: |
+          docker compose --env-file .github/ci.env up --detach --wait postgres
+          docker compose --env-file .github/ci.env run --rm --no-deps airflow-init
+          docker compose --env-file .github/ci.env run --rm --no-deps \
+            airflow-scheduler airflow dags list-import-errors
+          # No import errors also means nothing if no DAGs loaded, as with an empty
+          # or wrongly mounted dags folder.
+          dags=$(docker compose --env-file .github/ci.env run --rm --no-deps -T \
+            airflow-scheduler airflow dags list --output json)
+          count=$(jq length <<< "$dags")
+          echo "$count DAGs loaded."
+          [ "$count" -gt 0 ]
+
+  # The one check to require in branch protection. A job-level `if` on any job it
+  # needs would leave that job `skipped`, and this check then fails; gate steps
+  # instead, as the docker job does.
+  ci-ok:
+    if: always()
+    needs: [python, frontend, rust, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail unless every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "A required job ended as '$result'."
+              exit 1
+            fi
+          done

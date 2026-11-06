@@ -1,16 +1,17 @@
 # PDF URL queue: requirements
 
-**Status:** In progress
+**Status:** Done
 **Created:** 2026-10-31
-**Updated:** 2026-10-31
+**Updated:** 2026-11-06
 
 ## Introduction
 
 The police log scraper finds daily log PDFs, then downloads and parses them in a separate run.
 The list of found PDFs and their processing state is a work queue.
-It lives in a MongoDB `urls` collection, which is the only thing MongoDB is used for.
+It lives in a MongoDB `urls` collection.
 The parsed entries go to Postgres, so the URL state change and the entry insert are two writes to two databases that cannot share a transaction.
-Success is the queue living in a Postgres `pdf_urls` table, with entry inserts and URL completion committed together, and MongoDB removed from the stack.
+Success is the queue living in a Postgres `pdf_urls` table, with entry inserts and URL completion committed together.
+MongoDB stays in the stack for document-shaped work.
 
 ## Glossary
 
@@ -66,14 +67,14 @@ Success is the queue living in a Postgres `pdf_urls` table, with entry inserts a
 4. IF a request, an archive fallback, or PDF parsing fails, THEN THE spider SHALL set the PDF URL to `error` with a message naming the step.
 5. IF a PDF parses to zero entries, THEN THE spider SHALL set the PDF URL to `error` with `entry_count` 0 and the extracted `raw_text`.
 
-### Requirement 5: Remove MongoDB
+### Requirement 5: Keep MongoDB for document-shaped work
 
-**User story:** As a maintainer, I want one database to run, so that there is one fewer container, client package and set of credentials.
+**User story:** As Connor, I want MongoDB kept after the queue leaves it, so that document-shaped data has a home and I can practice with a document database.
 
 #### Acceptance criteria
 
-1. THE repository SHALL contain no `shared/mongo` package, `mongo` compose service, `pymongo` dependency or `MONGO_*` variable.
-2. THE `docker compose config` command SHALL succeed without any `MONGO_*` variable set.
+1. THE repository SHALL keep the `shared/mongo` package, the `mongo` compose service and the `pymongo` dependency.
+2. THE police log queue SHALL NOT read or write MongoDB.
 3. THE agent docs SHALL describe the Postgres queue in the data flow and key patterns.
 
 ## Out of scope

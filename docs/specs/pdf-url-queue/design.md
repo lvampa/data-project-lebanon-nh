@@ -1,12 +1,13 @@
 # PDF URL queue: design
 
-**Status:** In progress
+**Status:** Done
 **Created:** 2026-10-31
-**Updated:** 2026-10-31
+**Updated:** 2026-11-06
 
 ## Overview
 
-Move the police log PDF queue from the MongoDB `urls` collection to a Postgres `pdf_urls` table, then delete MongoDB.
+Move the police log PDF queue from the MongoDB `urls` collection to a Postgres `pdf_urls` table.
+MongoDB stays in the stack for document-shaped work.
 The spiders, items and requeue rules keep their shape; only the storage calls change.
 Covers requirements 1 to 5.
 
@@ -136,7 +137,7 @@ Chosen because:
 
 - Postgres already runs a correct work queue in `scripts/scrape/scrape_llcs.py` with `FOR UPDATE SKIP LOCKED`, so the pattern is proven here.
 - The URL state change and the entry inserts share one transaction, so a PDF is complete exactly when its entries are saved.
-- The queue was MongoDB's only use; removing it drops a container, a client package, `pymongo` and a set of credentials.
+- Readers of the queue's state and of the entries it produces use one database.
 
 Rejected: keep MongoDB and order the writes carefully, as wave one did by committing entries first and marking the URL second.
 It works, but a crash between the two writes still needs the lease to recover, and every reader has to know two databases.

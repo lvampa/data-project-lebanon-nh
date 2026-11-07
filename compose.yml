@@ -28,6 +28,8 @@ x-airflow-common:
     - ./shared:/opt/project/shared
     - ./scripts:/opt/project/scripts
     - airflow_logs:/opt/airflow/logs
+    # The mongo_backup DAG writes here. ${HOME} keeps the path absolute.
+    - ${MONGO_BACKUP_DIR:-${HOME}/backups/data-project/mongo}:/opt/backups/mongo
   depends_on:
     &airflow-depends
     postgres:

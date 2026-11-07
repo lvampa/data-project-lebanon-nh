@@ -179,6 +179,49 @@ def version_upsert(
     source: str, source_key: str, response: ArchivedResponse
 ) -> UpdateOne:
     """One write that stores a new version, or records a repeat of a stored one."""
+    return UpdateOne(
+        _version_filter(source, source_key, response),
+        {
+            "$setOnInsert": _first_fetch(source_key, response),
+            "$set": {"last_seen_at": response.fetched_at},
+            "$inc": {"seen_count": 1},
+        },
+        upsert=True,
+    )
+
+
+def version_insert(
+    source: str, source_key: str, response: ArchivedResponse
+) -> UpdateOne:
+    """One write that stores a new version and leaves a stored one exactly as it is.
+
+    For copies that may run more than once, where a rerun is not a new sighting.
+    """
+    first_fetch = _first_fetch(source_key, response)
+    return UpdateOne(
+        _version_filter(source, source_key, response),
+        {
+            "$setOnInsert": {
+                **first_fetch,
+                "last_seen_at": response.fetched_at,
+                "seen_count": 1,
+            }
+        },
+        upsert=True,
+    )
+
+
+def _version_filter(
+    source: str, source_key: str, response: ArchivedResponse
+) -> dict[str, Any]:
+    return {
+        "source": source,
+        "source_key": source_key,
+        "content_hash": content_hash(source, response.body),
+    }
+
+
+def _first_fetch(source_key: str, response: ArchivedResponse) -> dict[str, Any]:
     first_fetch: dict[str, Any] = {
         "url": response.url,
         "status": response.status,
@@ -190,19 +233,7 @@ def version_upsert(
     }
     if response.text is not None:
         first_fetch["text_gzip"] = Binary(gzip.compress(response.text.encode()))
-    return UpdateOne(
-        {
-            "source": source,
-            "source_key": source_key,
-            "content_hash": content_hash(source, response.body),
-        },
-        {
-            "$setOnInsert": first_fetch,
-            "$set": {"last_seen_at": response.fetched_at},
-            "$inc": {"seen_count": 1},
-        },
-        upsert=True,
-    )
+    return first_fetch
 
 
 def _compressed_body(source_key: str, body: bytes) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,7 +14,7 @@ from spiders.process_url_records import (
     ProcessUrlsSpider,
     claim_statement,
 )
-from sqlalchemy import create_engine, select
+from sqlalchemy import Table, create_engine, select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -155,7 +155,12 @@ def test_archive_request_failure_marks_url_error(session_local, fake_session):
     [request] = list(
         make_spider().parse(response, pdf_url=make_claim(archive_url=ARCHIVE_URL))
     )
+    assert isinstance(request, Request)
+    assert request.errback is not None
     failure = Failure(DNSLookupError("no such host"))
+    # Scrapy sets `request` on the Failure it passes to an errback; Twisted's
+    # types do not declare it.
+    # pyrefly: ignore[missing-attribute]
     failure.request = request
     request.errback(failure)
 
@@ -198,12 +203,17 @@ def test_claim_skips_rows_locked_by_other_runs():
 # --- start: requeue and claim against a real pdf_urls table ---
 
 
+def test_limit_from_the_command_line_is_read_as_a_number():
+    # `scrapy crawl process_urls -a limit=3` passes the limit as a string.
+    assert ProcessUrlsSpider(limit="3").limit == 3
+
+
 @pytest.fixture
 def queue_db():
     # SQLite runs the same UPDATE ... RETURNING statements and ignores FOR UPDATE,
     # which is covered by the compiled-statement test above.
     engine = create_engine("sqlite://", poolclass=StaticPool)
-    PdfUrl.__table__.create(engine)
+    cast(Table, PdfUrl.__table__).create(engine)
     session_factory = sessionmaker(bind=engine)
     with patch("spiders.process_url_records.SessionLocal", session_factory):
         yield session_factory
@@ -254,6 +264,7 @@ def test_claim_records_time_and_counts_attempt(queue_db):
     assert request.cb_kwargs["pdf_url"].id == url_id
     assert row.state == "in_progress"
     assert row.attempts == 1
+    assert row.claimed_at is not None
     assert utc_now() - row.claimed_at < timedelta(minutes=1)
 
 
@@ -339,10 +350,13 @@ def test_request_failure_marks_url_error(queue_db):
     [request] = run_start(ProcessUrlsSpider(limit=10))
 
     failure = Failure(DNSLookupError("no such host"))
+    # Scrapy sets `request` on the Failure it passes to an errback; Twisted's
+    # types do not declare it.
+    # pyrefly: ignore[missing-attribute]
     failure.request = request
     request.errback(failure)
 
     row = get_url(queue_db, url_id)
     assert row.state == "error"
-    assert "no such host" in row.error_message
+    assert row.error_message is not None and "no such host" in row.error_message
     assert row.completed_at is not None

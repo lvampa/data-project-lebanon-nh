@@ -18,6 +18,8 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def migrated():
+    # The skipif above runs these tests only when it is set.
+    assert TEST_DATABASE_URL is not None
     engine = create_engine(TEST_DATABASE_URL)
     with engine.connect() as connection:
         # Alembic joins this outer transaction, so rolling it back leaves the

@@ -1986,7 +1986,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pypdf", specifier = ">=6.9.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
-    { name = "scrapy", specifier = ">=2.14.2" },
+    { name = "scrapy", specifier = ">=2.16" },
     { name = "scripts", editable = "scripts" },
 ]
 

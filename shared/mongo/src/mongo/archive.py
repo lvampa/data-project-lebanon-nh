@@ -82,21 +82,34 @@ class RawArchive:
         self._stored = self._seen_again = self._failed = 0
         self.is_down = False
 
-    def add(self, source: str, source_key: str, response: ArchivedResponse) -> None:
+    def add(
+        self, source: str, source_key: str, response: ArchivedResponse
+    ) -> bool | None:
+        """Buffer one version, and write the buffer once it holds a full batch.
+
+        Returns whether that write worked, or None while the version is still
+        buffered. With a batch size of 1 every call writes, so the caller knows.
+        """
         self._buffer.append(_upsert_version(source, source_key, response))
-        if len(self._buffer) >= self._batch_size:
-            self.flush()
+        if len(self._buffer) < self._batch_size:
+            return None
+        return self._write_buffer()
 
     def flush(self) -> ArchiveCounts:
         """Write what is buffered, and return the counts for the run so far."""
-        batch, self._buffer = self._buffer, []
-        if batch and self.is_down:
-            self._failed += len(batch)
-        elif batch:
-            self._write(batch)
+        self._write_buffer()
         return ArchiveCounts(self._stored, self._seen_again, self._failed)
 
-    def _write(self, batch: list[UpdateOne]) -> None:
+    def _write_buffer(self) -> bool:
+        batch, self._buffer = self._buffer, []
+        if not batch:
+            return True
+        if self.is_down:
+            self._failed += len(batch)
+            return False
+        return self._write(batch)
+
+    def _write(self, batch: list[UpdateOne]) -> bool:
         try:
             result = self._collection.bulk_write(batch, ordered=False)
         except PyMongoError as exc:
@@ -109,9 +122,10 @@ class RawArchive:
                 )
             else:
                 logfire.warning("raw archive batch failed", error=repr(exc))
-            return
+            return False
         self._stored += result.upserted_count
         self._seen_again += result.matched_count
+        return True
 
 
 def _upsert_version(

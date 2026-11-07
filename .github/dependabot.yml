@@ -18,8 +18,10 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # Majors come as their own PRs, since they can need code changes.
       python:
         patterns: ["*"]
+        update-types: [minor, patch]
 
   - package-ecosystem: bun
     directory: /frontend

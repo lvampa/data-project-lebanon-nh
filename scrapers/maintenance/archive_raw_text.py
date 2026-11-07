@@ -15,9 +15,14 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from mongo.archive import ArchivedResponse, archive_collection, version_upsert
+from mongo.archive import (
+    ArchivedResponse,
+    RawArchive,
+    archive_collection,
+    version_upsert,
+)
 from mongo.client import MongoDB
-from mongo.raw_text import ENTRY_TEXT_SOURCE, PDF_TEXT_SOURCE, archived_keys
+from mongo.raw_text import ENTRY_TEXT_SOURCE, PDF_TEXT_SOURCE
 from postgres import SessionLocal
 from pymongo.collection import Collection
 from sqlalchemy import inspect, text
@@ -87,7 +92,7 @@ def check_raw_text_archived(
 
 
 def _compare(source: str, keys: set[str], collection: Collection) -> CopyResult:
-    archived = archived_keys(collection, source) & keys
+    archived = set(RawArchive(collection).keys(source)) & keys
     return CopyResult(source, in_postgres=len(keys), in_archive=len(archived))
 
 

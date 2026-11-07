@@ -51,14 +51,12 @@ def _require_raw_text_archived() -> None:
         return
 
     # Imported here, so databases with nothing to move never need the mongo package.
-    from mongo.archive import archive_collection
+    from mongo.archive import RawArchive, archive_collection
     from mongo.client import MongoDB
-    from mongo.raw_text import archived_keys
 
-    collection = archive_collection(MongoDB())
+    archive = RawArchive(archive_collection(MongoDB()))
     missing = {
-        source: keys - archived_keys(collection, source)
-        for source, keys in pending.items()
+        source: keys - set(archive.keys(source)) for source, keys in pending.items()
     }
     if any(missing.values()):
         counts = ", ".join(

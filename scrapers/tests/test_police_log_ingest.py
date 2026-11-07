@@ -72,6 +72,7 @@ def test_stores_each_entry_with_its_source_and_log_date(db_session):
     assert harassment.source_url == "https://example.com/2026-05-11"
     assert harassment.log_date == date(2026, 5, 11)
     assert harassment.incident_type == "Telephone Harassment"
+    assert harassment.parser_version == PARSER_VERSION
     assert harassment.created_at == harassment.updated_at
 
 
@@ -133,10 +134,13 @@ def test_entry_stored_before_these_columns_existed_is_updated(db_session):
     assert counts.updated == 1
     entry = entries(db_session)["26-13339"]
     assert entry.incident_type == "Telephone Harassment"
+    assert entry.parser_version == PARSER_VERSION
     assert entry.created_at == old
 
 
-def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(db_session):
+def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(
+    db_session, monkeypatch
+):
     newer = add_url(
         db_session, "https://example.com/2026-05-12", log_date=date(2026, 5, 12)
     )
@@ -146,7 +150,7 @@ def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(db_session):
     corrected = HARASSMENT.replace("TIMBERWOOD DR", "HANOVER ST")
     ingest_log_text(db_session, newer, log_text(corrected, log_date="05/12/2026"))
     db_session.commit()
-    updated_at = entries(db_session)["26-13339"].updated_at
+    monkeypatch.setattr("ingest.police_log.PARSER_VERSION", PARSER_VERSION + 1)
 
     counts = ingest_log_text(db_session, older, log_text(HARASSMENT))
 
@@ -155,7 +159,8 @@ def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(db_session):
     assert entry.location == "HANOVER ST"
     assert entry.source_url == "https://example.com/2026-05-12"
     assert entry.log_date == date(2026, 5, 12)
-    assert entry.updated_at == updated_at
+    # The row's values came from the newer PDF, so this parse does not vouch for them.
+    assert entry.parser_version == PARSER_VERSION
 
 
 def test_later_log_date_replaces_the_older_pdfs_values(db_session):
@@ -179,15 +184,21 @@ def test_later_log_date_replaces_the_older_pdfs_values(db_session):
     assert entry.source_url == "https://example.com/2026-05-12"
 
 
+def parsed_entry(case_number: str | None, **values) -> dict:
+    """An entry as the parser returns it, with the raw text it always cuts."""
+    raw = {"raw_text": f"{case_number} ...", "raw_reason_action": None}
+    return {"case_number": case_number, **raw, **values}
+
+
 def test_invalid_entry_is_skipped_and_the_rest_are_stored(db_session, monkeypatch):
     url = add_url(db_session)
     monkeypatch.setattr(
         "ingest.police_log.parse_log_entries",
         lambda text: [
-            {"case_number": "26-13339"},
-            {"case_number": "26-13340", "reported_at": "not a time"},
-            {"case_number": None},
-            {"case_number": "26-13342"},
+            parsed_entry("26-13339"),
+            parsed_entry("26-13340", reported_at="not a time"),
+            parsed_entry(None),
+            parsed_entry("26-13342"),
         ],
     )
 
@@ -244,7 +255,9 @@ def test_parser_version_bump_alone_does_not_move_updated_at(db_session, monkeypa
     counts = ingest_log_text(db_session, url, log_text(HARASSMENT))
 
     assert counts.unchanged == 1
-    assert entries(db_session)["26-13339"].updated_at == updated_at
+    entry = entries(db_session)["26-13339"]
+    assert entry.parser_version == PARSER_VERSION + 1
+    assert entry.updated_at == updated_at
 
 
 # --- ingest_pdf_url: the outcome on the URL record ---
@@ -324,3 +337,16 @@ def test_error_url_is_completed_once_it_stores_an_entry(db_session):
 )
 def test_stored_counts_every_entry_that_is_in_the_table(counts, stored):
     assert counts.stored == stored
+
+
+def test_each_entrys_raw_text_is_returned_for_the_archive_not_stored(db_session):
+    url = add_url(db_session)
+
+    counts = ingest_log_text(db_session, url, log_text(HARASSMENT))
+
+    [text] = counts.entry_texts
+    assert text.case_number == "26-13339"
+    assert text.raw_text.startswith("26-13339")
+    assert text.raw_reason_action == "Telephone Harassment Incident Report Taken"
+    assert (text.source_url, text.parser_version) == (url.canonical_url, PARSER_VERSION)
+    assert not hasattr(LogEntry, "raw_text")

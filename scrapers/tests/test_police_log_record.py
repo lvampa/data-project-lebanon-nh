@@ -24,6 +24,7 @@ def make_log(**kwargs):
         "scene_seconds": None,
         "parse_error": False,
         "log_date": date(2025, 1, 2),
+        "parser_version": 1,
     }
     return {**defaults, **kwargs}
 
@@ -57,6 +58,15 @@ def test_police_log_record_requires_what_the_table_requires(field):
 def test_police_log_record_rejects_a_key_with_no_column():
     with pytest.raises(ValidationError):
         PoliceLogRecord.model_validate(make_log(pdf_filename="log.pdf"))
+
+
+def test_police_log_record_dumps_references_as_plain_dicts():
+    record = PoliceLogRecord.model_validate(
+        make_log(refer_to=[{"kind": "Incident", "number": "26L-426-OF"}])
+    )
+    assert record.model_dump()["refer_to"] == [
+        {"kind": "Incident", "number": "26L-426-OF"}
+    ]
 
 
 def test_police_log_record_strips_whitespace():

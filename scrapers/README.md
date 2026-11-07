@@ -68,6 +68,52 @@ Run the test suite:
 uv run pytest
 ```
 
+## Raw source archive
+
+Every original the scrapers download is kept in the MongoDB `raw_sources` collection, as it was downloaded.
+These commands read it; run them from `scrapers/`.
+
+Rebuild parcels from their newest archived pages, without downloading anything:
+```bash
+uv run python -m maintenance.raw_sources replay --source vgsi_parcel
+uv run python -m maintenance.raw_sources replay --source vgsi_parcel --parcel 1000 --parcel 1001
+```
+It prints how many parcels it inserted, updated, and left unchanged, and how many had no usable body.
+It never writes to the archive.
+
+List every version of one source key, newest first, with its fetch time, content hash, size, and seen count:
+```bash
+uv run python -m maintenance.raw_sources versions --source vgsi_parcel --key 1000
+```
+
+Report what the archive holds: versions and size per source, and which finished log PDFs have an archived body, only their text, or neither.
+It also lists parcels with no archived page.
+It exits non-zero while any finished log PDF has neither, which is the gate before the raw text columns are dropped.
+```bash
+uv run python -m maintenance.raw_sources check
+```
+
+### Backups
+
+The `mongo_backup` DAG writes a gzipped `mongodump` of the archive's database every day at 2am, and keeps the 7 newest.
+It writes to `~/backups/data-project/mongo` on the host, or to `MONGO_BACKUP_DIR` when `.env` sets it.
+
+Create the folder before the first run, as the user that runs Docker:
+```bash
+mkdir -p ~/backups/data-project/mongo
+```
+If Docker creates it for the bind mount instead, root owns it, and the Airflow user cannot write to it on Linux or in CI.
+The DAG then fails with a message that names the folder.
+The folder is on the same disk as the Docker volume unless you point it elsewhere, so it survives a lost volume but not a failed disk.
+
+Check that a backup restores, into the `scraped_data_restore_test` database, which is dropped afterwards.
+`mongorestore` is installed in the Airflow image, so run it there, where the folder is `/opt/backups/mongo`:
+```bash
+docker compose exec -w /opt/project/scrapers airflow-scheduler \
+  uv run --frozen python -m maintenance.raw_sources restore-check \
+  /opt/backups/mongo/scraped_data-20261107T020000Z.archive.gz
+```
+
 ## Project Structure
 
 ```

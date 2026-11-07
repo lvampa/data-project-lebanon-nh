@@ -98,6 +98,15 @@ def test_page_break_entry_parsed_correctly():
     assert e["location"] == "BEST BUY - PLAINFIELD RD"
 
 
+def test_entry_raw_text_contains_entry_block():
+    entries = parse_log_entries(SAMPLE_TEXT)
+    # raw_text should be the entry block, not the full PDF text
+    assert "26-13339" in entries[0]["raw_text"]
+    assert entries[0]["raw_text"].startswith("26-13339")
+    # should not bleed into the next entry
+    assert "26-13343" not in entries[0]["raw_text"]
+
+
 def test_empty_text_returns_empty_list():
     assert parse_log_entries("") == []
 

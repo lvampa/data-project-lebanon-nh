@@ -38,8 +38,8 @@ Call   Number   Time   Call   Reason   Action
 ARCHIVE_URL = "https://web.archive.org/web/20191015/https://example.com/a.pdf"
 
 
-def make_response(url: str, body: bytes) -> Response:
-    return Response(url=url, body=body)
+def make_response(url: str, body: bytes, **meta: Any) -> Response:
+    return Response(url=url, body=body, request=Request(url, meta=meta))
 
 
 def make_claim(**kwargs: Any) -> PdfUrlClaim:
@@ -98,8 +98,19 @@ def test_parse_yields_one_item_with_the_pdf_text(pdf_reader):
             url_id=pdf_url.id,
             raw_text=SAMPLE_TEXT,
             content_hash=content_hash("police_log_pdf", FAKE_PDF),
+            original_archived=False,
         )
     ]
+
+
+@pytest.mark.parametrize("archived", [True, False])
+def test_the_item_says_whether_the_archive_kept_the_pdf(pdf_reader, archived):
+    pdf_with_text(pdf_reader, SAMPLE_TEXT)
+    response = make_response("https://example.com/a.pdf", FAKE_PDF, archived=archived)
+
+    [item] = list(make_spider().parse(response, pdf_url=make_claim()))
+
+    assert item["original_archived"] is archived
 
 
 def test_parse_leaves_url_completion_to_pipeline(db_session, claimed_url, pdf_reader):

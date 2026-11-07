@@ -4,7 +4,7 @@ The process job calls this for a fresh download and the reprocess job for stored
 text, so both write entries the same way.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -26,6 +26,22 @@ from sqlalchemy.orm import Session
 
 from ingest.pdf_urls import kept_for_reprocess
 
+# Bookkeeping about the write, not values read from the PDF. A change in it
+# alone does not make an entry "updated".
+_BOOKKEEPING_FIELDS = {"parser_version"}
+
+# Raw text the parser cuts for each entry. It goes to the raw archive, not Postgres.
+_RAW_TEXT_FIELDS = ("raw_text", "raw_reason_action")
+
+
+@dataclass(frozen=True)
+class EntryText:
+    case_number: str
+    source_url: str
+    raw_text: str
+    raw_reason_action: str | None
+    parser_version: int
+
 
 @dataclass(frozen=True)
 class IngestCounts:
@@ -36,6 +52,8 @@ class IngestCounts:
     skipped: int
     missing: int
     header_lines: int
+    # The raw text of each valid entry, for the caller to archive.
+    entry_texts: tuple[EntryText, ...] = field(default=(), compare=False)
 
     @property
     def stored(self) -> int:
@@ -67,7 +85,7 @@ def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCount
     log_date = pdf_url.log_date or parse_log_date(text)
     parsed_entries = parse_log_entries(text)
 
-    records = _valid_records(parsed_entries, pdf_url, log_date)
+    records, entry_texts = _valid_records(parsed_entries, pdf_url, log_date)
     stored = _stored_entries(session, [record.case_number for record in records])
 
     inserted = updated = unchanged = 0
@@ -99,6 +117,7 @@ def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCount
         skipped=len(parsed_entries) - len(records),
         missing=missing,
         header_lines=count_header_lines(text),
+        entry_texts=tuple(entry_texts),
     )
     _warn_on_unread_headers(pdf_url, counts)
     return counts
@@ -113,15 +132,18 @@ def _valid_records(
     parsed_entries: list[dict[str, Any]],
     pdf_url: PdfUrl,
     log_date: date | None,
-) -> list[PoliceLogRecord]:
-    records = []
+) -> tuple[list[PoliceLogRecord], list[EntryText]]:
+    records: list[PoliceLogRecord] = []
+    entry_texts: list[EntryText] = []
     for entry in parsed_entries:
+        parsed = {k: v for k, v in entry.items() if k not in _RAW_TEXT_FIELDS}
         try:
             record = PoliceLogRecord.model_validate(
                 {
-                    **entry,
+                    **parsed,
                     "source_url": pdf_url.canonical_url,
                     "log_date": log_date,
+                    "parser_version": PARSER_VERSION,
                 }
             )
         except ValidationError as exc:
@@ -133,7 +155,16 @@ def _valid_records(
             )
             continue
         records.append(record)
-    return records
+        entry_texts.append(
+            EntryText(
+                case_number=record.case_number,
+                source_url=record.source_url,
+                raw_text=entry["raw_text"],
+                raw_reason_action=entry["raw_reason_action"],
+                parser_version=record.parser_version,
+            )
+        )
+    return records, entry_texts
 
 
 def _stored_entries(session: Session, case_numbers: list[str]) -> dict[str, Any]:
@@ -148,7 +179,10 @@ def _is_from_an_older_log(values: dict[str, Any], existing: Any) -> bool:
 
 
 def _parsed_values_differ(values: dict[str, Any], existing: Any) -> bool:
-    return any(values[field] != _stored_value(existing, field) for field in values)
+    return any(
+        values[field] != _stored_value(existing, field)
+        for field in values.keys() - _BOOKKEEPING_FIELDS
+    )
 
 
 def _stored_value(existing: Any, field: str) -> Any:
@@ -170,11 +204,15 @@ def _upsert_entry(session: Session, values: dict[str, Any], now: datetime) -> No
 
 
 def _confirm_entry(session: Session, case_number: str) -> None:
-    """Clear `missing_from_parse` on an unchanged entry, without touching updated_at."""
+    """Note that this parser version still reads the entry, without touching updated_at."""
     session.execute(
         update(LogEntry)
-        .where(LogEntry.case_number == case_number, LogEntry.missing_from_parse)
-        .values(missing_from_parse=False)
+        .where(
+            LogEntry.case_number == case_number,
+            LogEntry.parser_version.is_distinct_from(PARSER_VERSION)
+            | LogEntry.missing_from_parse,
+        )
+        .values(parser_version=PARSER_VERSION, missing_from_parse=False)
     )
 
 

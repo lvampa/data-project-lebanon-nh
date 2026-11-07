@@ -12,6 +12,7 @@ from mongo.archive import (
     RawArchive,
     archive_collection,
     content_hash,
+    stored_body,
 )
 from mongo.client import MongoDB
 from pymongo.errors import OperationFailure
@@ -134,6 +135,21 @@ def test_a_full_batch_is_written_without_waiting_for_flush(raw_sources):
     assert raw_sources.count_documents({}) == 2
 
 
+def test_add_says_whether_the_write_worked_once_the_batch_is_full(raw_sources):
+    archive = RawArchive(raw_sources, batch_size=2)
+
+    assert archive.add("police_log_pdf", "https://example.com/a", response()) is None
+    assert archive.add("police_log_pdf", "https://example.com/b", response()) is True
+
+
+def test_with_a_batch_of_one_each_add_is_written_and_reported(raw_sources):
+    archive = RawArchive(FailingCollection(raw_sources), batch_size=1)
+
+    assert archive.add("police_log_pdf", "https://example.com/a", response()) is False
+    assert archive.add("police_log_pdf", "https://example.com/b", response()) is True
+    assert raw_sources.count_documents({}) == 1
+
+
 class FailingCollection:
     """Stands in for a collection whose writes fail, as on a full disk."""
 
@@ -191,6 +207,16 @@ def test_an_unreachable_server_marks_the_archive_down_after_one_try(monkeypatch)
     assert counts == ArchiveCounts(stored=0, seen_again=0, failed=2)
 
 
+def test_once_down_a_batch_of_one_reports_each_write_failed(monkeypatch):
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", str(unused_port()))
+    archive = RawArchive(archive_collection(MongoDB()), batch_size=1)
+
+    assert archive.add("police_log_pdf", "https://example.com/a", response()) is False
+    assert archive.add("police_log_pdf", "https://example.com/b", response()) is False
+    assert archive.flush().failed == 2
+
+
 @pytest.fixture
 def hung_server() -> Iterator[int]:
     """A server that accepts connections and never answers."""
@@ -229,3 +255,84 @@ def test_a_server_that_hangs_marks_the_archive_down(hung_server, monkeypatch):
     assert time.monotonic() - started < 10
     assert archive.is_down is True
     assert counts.failed == 1
+
+
+def test_newest_and_by_hash_find_the_right_one_of_two_versions(raw_sources):
+    archive = RawArchive(raw_sources)
+    first = response(PDF + b" v1", fetched_at=datetime(2026, 11, 1, tzinfo=UTC))
+    second = response(PDF + b" v2", fetched_at=datetime(2026, 11, 2, tzinfo=UTC))
+    archive.add("police_log_pdf", "https://example.com/a", first)
+    archive.add("police_log_pdf", "https://example.com/a", second)
+    archive.add("police_log_pdf", "https://example.com/b", response())
+    archive.flush()
+
+    newest = archive.newest("police_log_pdf", "https://example.com/a")
+    older = archive.by_hash(
+        "police_log_pdf",
+        "https://example.com/a",
+        content_hash("police_log_pdf", PDF + b" v1"),
+    )
+
+    assert newest is not None and stored_body(newest) == PDF + b" v2"
+    assert older is not None and stored_body(older) == PDF + b" v1"
+    assert archive.newest("police_log_pdf", "https://example.com/none") is None
+
+
+def test_versions_lists_one_key_newest_first(raw_sources):
+    archive = RawArchive(raw_sources)
+    for day in (1, 3, 2):
+        archive.add(
+            "vgsi_parcel",
+            "1000",
+            response(
+                parcel_page(f"day {day}") + f"day {day}".encode(),
+                fetched_at=datetime(2026, 11, day, tzinfo=UTC),
+            ),
+        )
+    archive.add("vgsi_parcel", "2000", response(parcel_page("x")))
+    archive.flush()
+
+    versions = archive.versions("vgsi_parcel", "1000")
+
+    assert [v["first_fetched_at"].day for v in versions] == [3, 2, 1]
+
+
+def test_a_truncated_version_has_no_body(raw_sources, monkeypatch):
+    monkeypatch.setattr("mongo.archive.MAX_COMPRESSED_BYTES", 10)
+    archive = RawArchive(raw_sources)
+    archive.add("police_log_pdf", "https://example.com/a", response(PDF * 50))
+    archive.flush()
+
+    version = archive.newest("police_log_pdf", "https://example.com/a")
+
+    assert version is not None and stored_body(version) is None
+
+
+def test_extracted_text_is_kept_beside_the_body(raw_sources):
+    archive = RawArchive(raw_sources)
+
+    archive.add("budget_pdf", "https://example.com/b.pdf", response(text="FY27 budget"))
+    archive.flush()
+
+    [version] = stored(raw_sources, "budget_pdf")
+    assert gzip.decompress(version["text_gzip"]) == b"FY27 budget"
+    assert gzip.decompress(version["body_gzip"]) == PDF
+
+
+def test_no_text_field_without_extracted_text(raw_sources):
+    archive = RawArchive(raw_sources)
+    archive.add("police_log_pdf", "https://example.com/a", response())
+    archive.flush()
+
+    [version] = stored(raw_sources)
+    assert "text_gzip" not in version
+
+
+def test_keys_lists_each_source_key_once(raw_sources):
+    archive = RawArchive(raw_sources)
+    for key, body in (("2000", b"a"), ("1000", b"b"), ("1000", b"c")):
+        archive.add("vgsi_parcel", key, response(body))
+    archive.add("police_log_pdf", "https://example.com/a", response())
+    archive.flush()
+
+    assert archive.keys("vgsi_parcel") == ["1000", "2000"]

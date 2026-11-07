@@ -9,28 +9,22 @@ A spider opts in with two attributes:
 
     def archive_key(self, response: Response) -> str | None:
         # The source key, or None for a response that is not an original.
+
+A spider may also set `archive_batch_size`, which defaults to 50. At 1, each original
+is written before its callback runs, and `response.meta["archived"]` says whether
+the write worked.
 """
 
 from datetime import UTC, datetime
 from typing import Protocol, Self
 
 import logfire
-from mongo.archive import ArchivedResponse, RawArchive, archive_collection
+from mongo.archive import BATCH_SIZE, ArchivedResponse, RawArchive, archive_collection
 from mongo.client import MongoDB
 from scrapy import Spider, signals
 from scrapy.crawler import Crawler
 from scrapy.exceptions import NotConfigured
 from scrapy.http import Request, Response
-
-# Set once the archive gives up for the run, so other components can tell.
-ARCHIVE_DOWN_STAT = "raw_archive/down"
-
-
-def originals_are_archived(crawler: Crawler) -> bool:
-    """Whether this run is keeping the originals it downloads."""
-    return crawler.settings.getbool("RAW_ARCHIVE_ENABLED") and not (
-        crawler.stats is not None and crawler.stats.get_value(ARCHIVE_DOWN_STAT)
-    )
 
 
 class ArchivedSpider(Protocol):
@@ -49,7 +43,9 @@ class RawArchiveMiddleware:
     def from_crawler(cls, crawler: Crawler) -> Self:
         if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
             raise NotConfigured("RAW_ARCHIVE_ENABLED is off")
-        middleware = cls(crawler, RawArchive(archive_collection(MongoDB())))
+        batch_size = getattr(crawler.spidercls, "archive_batch_size", BATCH_SIZE)
+        archive = RawArchive(archive_collection(MongoDB()), batch_size=batch_size)
+        middleware = cls(crawler, archive)
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
         return middleware
 
@@ -58,25 +54,21 @@ class RawArchiveMiddleware:
         if _is_archived(spider, response):
             source_key = spider.archive_key(response)
             if source_key is not None:
-                self._archive.add(
+                written = self._archive.add(
                     spider.archive_source, source_key, _archived(spider, response)
                 )
-                self._record_if_down()
+                if written is not None:
+                    response.meta["archived"] = written
         return response
 
     def spider_closed(self) -> None:
         counts = self._archive.flush()
-        self._record_if_down()
         logfire.info(
             "raw archive flushed",
             stored=counts.stored,
             seen_again=counts.seen_again,
             failed=counts.failed,
         )
-
-    def _record_if_down(self) -> None:
-        if self._archive.is_down and self._crawler.stats is not None:
-            self._crawler.stats.set_value(ARCHIVE_DOWN_STAT, True)
 
 
 def _is_archived(spider: Spider | None, response: Response) -> bool:

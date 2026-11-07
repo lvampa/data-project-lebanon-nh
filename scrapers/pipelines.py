@@ -1,22 +1,24 @@
 import re
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Self
 
 import logfire
 from ingest import ingest_pdf_url
 from ingest.pdf_urls import kept_for_reprocess, mark_error
+from ingest.police_log import EntryText
 from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
 from items.officer import OfficerItem
 from items.property import PropertyItem
-from middlewares.raw_archive import originals_are_archived
 from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
+from mongo.archive import RawArchive, archive_collection
+from mongo.client import MongoDB
+from mongo.raw_text import ENTRY_TEXT_SOURCE, entry_text
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
@@ -68,13 +70,19 @@ class UrlRecordPipeline:
 
 
 class PoliceLogPipeline:
-    def __init__(self, originals_archived: Callable[[], bool] = lambda: True) -> None:
-        # Asked per PDF, because the archive can go down partway through a run.
-        self._originals_archived = originals_archived
+    def __init__(
+        self, entry_texts: RawArchive | None = None, spider_name: str = "process_urls"
+    ) -> None:
+        # None while the raw archive is off.
+        self._entry_texts = entry_texts
+        self._spider_name = spider_name
 
     @classmethod
     def from_crawler(cls, crawler: Crawler) -> Self:
-        return cls(originals_archived=lambda: originals_are_archived(crawler))
+        if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
+            return cls(spider_name=crawler.spidercls.name)
+        archive = RawArchive(archive_collection(MongoDB()))
+        return cls(archive, spider_name=crawler.spidercls.name)
 
     def open_spider(self, spider) -> None:
         self._session = SessionLocal()
@@ -92,7 +100,7 @@ class PoliceLogPipeline:
                     pdf_url,
                     item["raw_text"],
                     content_hash=item["content_hash"],
-                    original_archived=self._originals_archived(),
+                    original_archived=item["original_archived"],
                 )
                 # One commit, so the URL is never complete without its entries.
                 self._session.commit()
@@ -105,14 +113,33 @@ class PoliceLogPipeline:
                 )
         except Exception as exc:
             self._session.rollback()
-            kind = kept_for_reprocess("save", self._originals_archived())
+            kind = kept_for_reprocess("save", item["original_archived"])
             self._session.execute(
                 mark_error(url_id, kind, f"Saving entries failed: {exc}")
             )
             self._session.commit()
             raise
 
+        # After the commit and outside the error handling: the archive is a side
+        # copy, and its own failures are logged and counted, never raised.
+        self._archive_entry_texts(counts.entry_texts)
         return item
+
+    def _archive_entry_texts(self, texts: tuple[EntryText, ...]) -> None:
+        if self._entry_texts is None:
+            return
+        fetched_at = datetime.now(UTC)
+        for text in texts:
+            version = entry_text(
+                source_url=text.source_url,
+                raw_text=text.raw_text,
+                raw_reason_action=text.raw_reason_action,
+                parser_version=text.parser_version,
+                fetched_at=fetched_at,
+                spider=self._spider_name,
+            )
+            self._entry_texts.add(ENTRY_TEXT_SOURCE, text.case_number, version)
+        self._entry_texts.flush()
 
     def close_spider(self, spider) -> None:
         self._session.close()

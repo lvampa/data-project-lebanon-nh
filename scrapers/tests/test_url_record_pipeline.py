@@ -1,110 +1,92 @@
-from datetime import UTC, datetime
-from unittest.mock import call, patch
+from datetime import date, datetime
+from unittest.mock import patch
 
 from items import PoliceLogItem, UrlRecordItem
 from pipelines import UrlRecordPipeline
+from sqlalchemy.dialects import postgresql
 
 
-@patch("pipelines.db")
-def test_pipeline_upserts_on_close(mock_db):
+def make_item(**kwargs) -> UrlRecordItem:
+    defaults = {
+        "canonical_url": "https://example.com/a.pdf",
+        "state": "pending",
+        "created_at": datetime(2026, 5, 1, 12, 0),
+    }
+    defaults.update(kwargs)
+    return UrlRecordItem(**defaults)
+
+
+def run_pipeline(*items) -> None:
     pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
-    now = datetime.now(UTC)
+    pipeline.open_spider()
+    for item in items:
+        pipeline.process_item(item)
+    pipeline.close_spider()
 
-    pipeline.process_item(
-        UrlRecordItem(
-            canonical_url="https://example.com/a.pdf", state="pending", created_at=now
-        ),
-        None,
+
+def compile_pg(statement):
+    return statement.compile(dialect=postgresql.dialect())
+
+
+@patch("pipelines.SessionLocal")
+def test_inserts_urls_once_and_ignores_existing(mock_session_local, fake_session):
+    mock_session_local.return_value = fake_session
+
+    run_pipeline(
+        make_item(canonical_url="https://example.com/a.pdf"),
+        make_item(canonical_url="https://example.com/b.pdf"),
     )
-    pipeline.close_spider(None)
 
-    mock_db.get_collection.assert_called_with("urls")
-    ops = mock_db.get_collection.return_value.bulk_write.call_args[0][0]
-    assert len(ops) == 1
+    [[statement]] = fake_session.transactions
+    compiled = compile_pg(statement)
+    assert "INSERT INTO pdf_urls" in str(compiled)
+    assert "ON CONFLICT (canonical_url) DO NOTHING" in str(compiled)
+    assert compiled.params["canonical_url_m0"] == "https://example.com/a.pdf"
+    assert compiled.params["canonical_url_m1"] == "https://example.com/b.pdf"
 
 
-@patch("pipelines.db")
-def test_pipeline_passes_through_non_url_record_items(mock_db):
+@patch("pipelines.SessionLocal")
+def test_inserts_archive_url_and_log_date(mock_session_local, fake_session):
+    mock_session_local.return_value = fake_session
+
+    run_pipeline(
+        make_item(
+            archive_url="https://web.archive.org/web/2019/https://example.com/a.pdf",
+            log_date=datetime(2026, 5, 1),
+        )
+    )
+
+    params = compile_pg(fake_session.committed[0]).params
+    assert params["archive_url_m0"].startswith("https://web.archive.org/")
+    assert params["log_date_m0"] == date(2026, 5, 1)
+    assert params["state_m0"] == "pending"
+
+
+@patch("pipelines.SessionLocal")
+def test_passes_through_non_url_record_items(mock_session_local):
     pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
-    item = PoliceLogItem(source_url="x", raw_text="x", scraped_at=datetime.now(UTC))
+    pipeline.open_spider()
+    item = PoliceLogItem(source_url="x", raw_text="x", scraped_at=datetime(2026, 5, 1))
 
-    result = pipeline.process_item(item, None)
+    result = pipeline.process_item(item)
+    pipeline.close_spider()
 
     assert result is item
-    pipeline.close_spider(None)
-    mock_db.get_collection.return_value.bulk_write.assert_not_called()
+    mock_session_local.assert_not_called()
 
 
-@patch("pipelines.db")
-def test_pipeline_skips_bulk_write_when_no_items(mock_db):
-    pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
-    pipeline.close_spider(None)
-    mock_db.get_collection.return_value.bulk_write.assert_not_called()
+@patch("pipelines.SessionLocal")
+def test_opens_no_session_when_no_items(mock_session_local):
+    run_pipeline()
+
+    mock_session_local.assert_not_called()
 
 
 def test_url_record_item_accepts_archive_url():
-    item = UrlRecordItem(
-        canonical_url="https://example.com/a.pdf",
-        archive_url="https://web.archive.org/web/20191015/https://example.com/a.pdf",
-        state="pending",
-        created_at=datetime.now(UTC),
+    item = make_item(
+        archive_url="https://web.archive.org/web/20191015/https://example.com/a.pdf"
     )
     assert (
         item["archive_url"]
         == "https://web.archive.org/web/20191015/https://example.com/a.pdf"
     )
-
-
-@patch("pipelines.db")
-def test_pipeline_upsert_includes_log_date(mock_db):
-    pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
-    now = datetime.now(UTC)
-    log_date = datetime(2026, 5, 1)
-
-    pipeline.process_item(
-        UrlRecordItem(
-            canonical_url="https://example.com/a.pdf",
-            log_date=log_date,
-            state="pending",
-            created_at=now,
-        ),
-        None,
-    )
-    pipeline.close_spider(None)
-
-    ops = mock_db.get_collection.return_value.bulk_write.call_args[0][0]
-    set_on_insert = ops[0]._doc["$setOnInsert"]
-    assert set_on_insert["log_date"] == log_date
-
-
-@patch("pipelines.db")
-def test_creates_unique_canonical_url_index_before_upserting(mock_db):
-    pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
-    pipeline.process_item(
-        UrlRecordItem(
-            canonical_url="https://example.com/a.pdf",
-            state="pending",
-            created_at=datetime.now(UTC),
-        ),
-        None,
-    )
-    pipeline.close_spider(None)
-
-    urls = mock_db.get_collection.return_value
-    call_names = [name for name, _, _ in urls.mock_calls]
-    assert call("canonical_url", unique=True) in urls.create_index.call_args_list
-    assert call_names.index("create_index") < call_names.index("bulk_write")
-
-
-@patch("pipelines.db")
-def test_skips_index_creation_when_no_items(mock_db):
-    pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
-    pipeline.close_spider(None)
-
-    mock_db.get_collection.return_value.create_index.assert_not_called()

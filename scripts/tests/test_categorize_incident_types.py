@@ -33,7 +33,9 @@ def test_fetch_uncategorized_returns_empty_when_no_rows():
 from scripts.ingest.import_incident_categories import (
     parse_categories,
     upsert_categories,
+    validate_categories,
 )
+from scripts.models import IncidentCategoryRecord
 
 VALID_JSON = '[{"incident_type": "FD Alarm", "category": "Fire", "subcategory": "Alarm Activation"}, {"incident_type": "MV Accident", "category": "Traffic", "subcategory": "Accident"}]'
 MISSING_SUBCATEGORY_JSON = '[{"incident_type": "FD Alarm", "category": "Fire"}]'
@@ -49,32 +51,45 @@ MARKDOWN_FENCED_JSON = '```json\n[{"incident_type": "FD Alarm", "category": "Fir
 def test_parse_valid_json():
     rows = parse_categories(VALID_JSON)
     assert len(rows) == 2
-    assert rows[0] == {
+    assert rows[0].model_dump() == {
         "incident_type": "FD Alarm",
         "category": "Fire",
         "subcategory": "Alarm Activation",
     }
-    assert rows[1]["category"] == "Traffic"
+    assert rows[1].category == "Traffic"
 
 
 def test_parse_missing_subcategory_defaults_to_none():
     rows = parse_categories(MISSING_SUBCATEGORY_JSON)
-    assert rows[0]["subcategory"] is None
+    assert rows[0].subcategory is None
 
 
 def test_parse_invalid_category_raises():
-    with pytest.raises(ValueError, match="Invalid category"):
+    with pytest.raises(ValueError, match="category"):
         parse_categories(INVALID_CATEGORY_JSON)
 
 
 def test_parse_strips_markdown_fences():
     rows = parse_categories(MARKDOWN_FENCED_JSON)
     assert len(rows) == 1
-    assert rows[0]["category"] == "Fire"
+    assert rows[0].category == "Fire"
 
 
 def test_parse_empty_list():
     assert parse_categories("[]") == []
+
+
+# --- validate_categories ---
+
+
+def test_validate_categories_rejects_non_list():
+    with pytest.raises(ValueError, match="Expected a JSON array"):
+        validate_categories({"incident_type": "FD Alarm", "category": "Fire"})
+
+
+def test_validate_categories_rejects_unknown_category():
+    with pytest.raises(ValueError, match="category"):
+        validate_categories([{"incident_type": "FD Alarm", "category": "Unknown"}])
 
 
 # --- upsert_categories ---
@@ -83,16 +98,12 @@ def test_parse_empty_list():
 def test_upsert_executes_for_each_row():
     session = MagicMock()
     rows = [
-        {
-            "incident_type": "FD Alarm",
-            "category": "Fire",
-            "subcategory": "Alarm Activation",
-        },
-        {
-            "incident_type": "MV Accident",
-            "category": "Traffic",
-            "subcategory": "Accident",
-        },
+        IncidentCategoryRecord(
+            incident_type="FD Alarm", category="Fire", subcategory="Alarm Activation"
+        ),
+        IncidentCategoryRecord(
+            incident_type="MV Accident", category="Traffic", subcategory="Accident"
+        ),
     ]
     upsert_categories(session, rows)
     assert session.execute.call_count == 2

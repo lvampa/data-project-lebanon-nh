@@ -12,6 +12,15 @@ import contextlib
 import io
 from datetime import UTC, datetime
 
+import logfire
+from postgres.models.planning_document import PlanningDocument
+from postgres.models.planning_meeting import PlanningMeeting
+from pydantic import ValidationError
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from scripts.models import PlanningDocumentRecord, PlanningMeetingRecord
+
 PORTAL_BASE = "https://lebanonh.portal.civicclerk.com"
 API_BASE = "https://lebanonh.api.civicclerk.com/v1"
 FILE_TYPE_MAP = {1: "Agenda", 2: "Minutes", 3: "Attachment"}
@@ -65,7 +74,8 @@ def extract_text_from_pdf(data: bytes) -> str | None:
 
         reader = PdfReader(io.BytesIO(data))
         return "\n".join(page.extract_text() or "" for page in reader.pages) or None
-    except Exception:
+    except Exception as exc:
+        logfire.warning("pdf text extraction failed", error=str(exc))
         return None
 
 
@@ -108,17 +118,86 @@ async def fetch_events(request_ctx, group_id: int, limit: int) -> list[dict]:
     return events
 
 
+def upsert_meeting(session, meeting: PlanningMeetingRecord) -> None:
+    values = meeting.model_dump()
+    with logfire.span("upsert meeting", event_id=meeting.civicclerk_event_id):
+        session.execute(
+            pg_insert(PlanningMeeting)
+            .values(**values)
+            .on_conflict_do_update(
+                index_elements=["civicclerk_event_id"],
+                set_={k: v for k, v in values.items() if k != "civicclerk_event_id"},
+            )
+        )
+
+
+def upsert_document(session, document: PlanningDocumentRecord) -> None:
+    values = document.model_dump()
+    updates = {k: v for k, v in values.items() if k != "civicclerk_file_id"}
+    # A failed download or extraction yields no text; keep whatever was saved.
+    if document.raw_text is None:
+        del updates["raw_text"]
+    with logfire.span("upsert document", file_id=document.civicclerk_file_id):
+        session.execute(
+            pg_insert(PlanningDocument)
+            .values(**values)
+            .on_conflict_do_update(index_elements=["civicclerk_file_id"], set_=updates)
+        )
+
+
+def file_ids_with_text(session, file_ids: list[int]) -> set[int]:
+    if not file_ids:
+        return set()
+    return set(
+        session.scalars(
+            select(PlanningDocument.civicclerk_file_id).where(
+                PlanningDocument.civicclerk_file_id.in_(file_ids),
+                PlanningDocument.raw_text.isnot(None),
+            )
+        ).all()
+    )
+
+
+async def download_text(request_ctx, download_url: str, file_id: int) -> str | None:
+    try:
+        file_resp = await request_ctx.get(download_url)
+        raw_bytes = await file_resp.body()
+    except Exception as exc:
+        logfire.warning("file download failed", file_id=file_id, error=str(exc))
+        return None
+    return extract_text_from_pdf(raw_bytes)
+
+
+async def save_event(
+    session, request_ctx, raw_event: dict, category_name: str, now: datetime
+) -> None:
+    meeting = PlanningMeetingRecord.model_validate(
+        {**parse_event(raw_event, category_name), "scraped_at": now}
+    )
+    upsert_meeting(session, meeting)
+
+    raw_files = raw_event.get("publishedFiles") or []
+    already_extracted = file_ids_with_text(session, [f["id"] for f in raw_files])
+    for raw_file in raw_files:
+        doc = parse_file(raw_file, meeting.civicclerk_event_id)
+        file_id = doc["civicclerk_file_id"]
+        raw_text = None
+        if file_id not in already_extracted:
+            raw_text = await download_text(request_ctx, doc["download_url"], file_id)
+        document = PlanningDocumentRecord.model_validate(
+            {**doc, "raw_text": raw_text, "scraped_at": now}
+        )
+        upsert_document(session, document)
+
+
 async def run(limit: int) -> None:
     from dotenv import load_dotenv
 
     load_dotenv()
+    logfire.configure()
 
-    import logfire
     from playwright.async_api import async_playwright
     from postgres import SessionLocal
-    from postgres.models.planning_document import PlanningDocument
-    from postgres.models.planning_meeting import PlanningMeeting
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
 
     now = datetime.now(UTC).replace(tzinfo=None)
 
@@ -140,56 +219,18 @@ async def run(limit: int) -> None:
 
         session = SessionLocal()
         try:
+            # Commit per meeting so one bad event or a crash late in a full
+            # run does not throw away the downloads that already finished.
             for raw in raw_events:
-                event_id = raw["id"]
-                meeting = parse_event(raw, category_name)
-                meeting["scraped_at"] = now
-
-                with logfire.span("upsert meeting", event_id=event_id):
-                    session.execute(
-                        pg_insert(PlanningMeeting)
-                        .values(**meeting)
-                        .on_conflict_do_update(
-                            index_elements=["civicclerk_event_id"],
-                            set_={
-                                k: v
-                                for k, v in meeting.items()
-                                if k != "civicclerk_event_id"
-                            },
-                        )
+                try:
+                    await save_event(session, request_ctx, raw, category_name, now)
+                except ValidationError as exc:
+                    session.rollback()
+                    logfire.warning(
+                        "skipping invalid event", event_id=raw.get("id"), error=str(exc)
                     )
-
-                for raw_file in raw.get("publishedFiles") or []:
-                    doc = parse_file(raw_file, event_id)
-                    try:
-                        file_resp = await request_ctx.get(doc["download_url"])
-                        raw_bytes = await file_resp.body()
-                    except Exception as exc:
-                        logfire.warning(
-                            "file download failed",
-                            file_id=doc["civicclerk_file_id"],
-                            error=str(exc),
-                        )
-                        raw_bytes = b""
-                    doc["raw_text"] = extract_text_from_pdf(raw_bytes)
-                    doc["scraped_at"] = now
-                    with logfire.span(
-                        "upsert document", file_id=doc["civicclerk_file_id"]
-                    ):
-                        session.execute(
-                            pg_insert(PlanningDocument)
-                            .values(**doc)
-                            .on_conflict_do_update(
-                                index_elements=["civicclerk_file_id"],
-                                set_={
-                                    k: v
-                                    for k, v in doc.items()
-                                    if k != "civicclerk_file_id"
-                                },
-                            )
-                        )
-
-            session.commit()
+                    continue
+                session.commit()
             logfire.info("civicclerk scrape complete", events=len(raw_events))
         except Exception:
             session.rollback()

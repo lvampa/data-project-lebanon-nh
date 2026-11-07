@@ -4,7 +4,7 @@ The process job calls this for a fresh download and the reprocess job for stored
 text, so both write entries the same way.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -40,6 +40,8 @@ class IngestCounts:
     skipped: int
     missing: int
     header_lines: int
+    # The valid entries this parse cut, so the caller can archive their texts.
+    records: tuple[PoliceLogRecord, ...] = field(default=(), compare=False)
 
     @property
     def stored(self) -> int:
@@ -103,6 +105,7 @@ def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCount
         skipped=len(parsed_entries) - len(records),
         missing=missing,
         header_lines=count_header_lines(text),
+        records=tuple(records),
     )
     _warn_on_unread_headers(pdf_url, counts)
     return counts

@@ -1,5 +1,6 @@
 import re
 from datetime import UTC, datetime
+from typing import Self
 
 import logfire
 from ingest import ingest_pdf_url
@@ -12,8 +13,12 @@ from items.property import PropertyItem
 from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
+from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
+from mongo.archive import RawArchive, archive_collection
+from mongo.client import MongoDB
+from mongo.raw_text import ENTRY_TEXT_SOURCE, entry_text
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
@@ -22,6 +27,7 @@ from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
+from scrapy.crawler import Crawler
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -64,6 +70,20 @@ class UrlRecordPipeline:
 
 
 class PoliceLogPipeline:
+    def __init__(
+        self, entry_texts: RawArchive | None = None, spider_name: str = "process_urls"
+    ) -> None:
+        # None while the raw archive is off.
+        self._entry_texts = entry_texts
+        self._spider_name = spider_name
+
+    @classmethod
+    def from_crawler(cls, crawler: Crawler) -> Self:
+        if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
+            return cls(spider_name=crawler.spidercls.name)
+        archive = RawArchive(archive_collection(MongoDB()))
+        return cls(archive, spider_name=crawler.spidercls.name)
+
     def open_spider(self, spider) -> None:
         self._session = SessionLocal()
 
@@ -100,7 +120,26 @@ class PoliceLogPipeline:
             self._session.commit()
             raise
 
+        # After the commit and outside the error handling: the archive is a side
+        # copy, and its own failures are logged and counted, never raised.
+        self._archive_entry_texts(counts.records)
         return item
+
+    def _archive_entry_texts(self, records: tuple[PoliceLogRecord, ...]) -> None:
+        if self._entry_texts is None:
+            return
+        fetched_at = datetime.now(UTC)
+        for record in records:
+            version = entry_text(
+                source_url=record.source_url,
+                raw_text=record.raw_text,
+                raw_reason_action=record.raw_reason_action,
+                parser_version=record.parser_version,
+                fetched_at=fetched_at,
+                spider=self._spider_name,
+            )
+            self._entry_texts.add(ENTRY_TEXT_SOURCE, record.case_number, version)
+        self._entry_texts.flush()
 
     def close_spider(self, spider) -> None:
         self._session.close()

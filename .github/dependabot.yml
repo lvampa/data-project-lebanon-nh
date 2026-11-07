@@ -28,5 +28,14 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # Majors come as their own PRs, since they can need code changes.
       frontend:
         patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # typescript-eslint supports TypeScript below 6.1 as of 8.72.1. Drop this once it supports 7.
+      - dependency-name: typescript
+        versions: [">=7"]
+      # Dependabot can't read frontend/.nvmrc. Bump this with the Node version.
+      - dependency-name: "@types/node"
+        versions: [">=27"]

@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 revision: str = "3f1a9c7e2b54"
 down_revision: str | Sequence[str] | None = "ddaee8540ca5"
@@ -28,6 +29,10 @@ def upgrade() -> None:
 def _add_log_entry_columns() -> None:
     op.add_column("log_entries", sa.Column("log_date", sa.Date(), nullable=True))
     op.add_column("log_entries", sa.Column("place_code", sa.Text(), nullable=True))
+    op.add_column("log_entries", sa.Column("officer_code", sa.Text(), nullable=True))
+    op.add_column(
+        "log_entries", sa.Column("refer_to", postgresql.JSONB(), nullable=True)
+    )
     op.add_column(
         "log_entries",
         sa.Column(
@@ -42,6 +47,9 @@ def _add_log_entry_columns() -> None:
         sa.Column(
             "missing_from_parse", sa.Boolean(), server_default="false", nullable=False
         ),
+    )
+    op.add_column(
+        "log_entries", sa.Column("parser_version", sa.Integer(), nullable=True)
     )
     op.add_column("log_entries", sa.Column("created_at", sa.DateTime(), nullable=True))
     op.add_column("log_entries", sa.Column("updated_at", sa.DateTime(), nullable=True))
@@ -132,8 +140,11 @@ def downgrade() -> None:
     for column in (
         "updated_at",
         "created_at",
+        "parser_version",
         "missing_from_parse",
         "disposition_unmatched",
+        "refer_to",
+        "officer_code",
         "place_code",
         "log_date",
     ):

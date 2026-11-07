@@ -2,14 +2,11 @@ import gzip
 import socket
 from datetime import date, datetime
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from items import PoliceLogPdfItem
 from middlewares.raw_archive import (
-    ARCHIVE_DOWN_STAT,
     RawArchiveMiddleware,
-    originals_are_archived,
 )
 from models import PdfUrlClaim
 from mongo.archive import RawArchive, archive_collection
@@ -17,6 +14,7 @@ from mongo.client import MongoDB
 from pipelines import PoliceLogPipeline
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
+from pymongo.errors import OperationFailure
 from scrapy.downloadermiddlewares.httpcompression import HttpCompressionMiddleware
 from scrapy.exceptions import NotConfigured
 from scrapy.http import HtmlResponse, Request, Response
@@ -244,12 +242,7 @@ def closed_port() -> int:
         return probe.getsockname()[1]
 
 
-def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch):
-    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
-    monkeypatch.setenv("MONGO_PORT", str(closed_port()))
-    archive = RawArchive(archive_collection(MongoDB()))
-    crawler = fake_crawler(process_spider())
-    middleware = RawArchiveMiddleware(crawler, archive)
+def add_claimed_url(db_session) -> PdfUrlClaim:
     url = PdfUrl(
         canonical_url=CITY_URL,
         log_date=date(2026, 5, 11),
@@ -258,35 +251,66 @@ def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch)
     )
     db_session.add(url)
     db_session.commit()
-    log_text = (
-        "For Date: 05/11/2026  -  Monday\n"
-        "26-13339        0106 Phone - Noise Complaint Log Information\n"
-        "  Location/Address:    MAIN ST\n"
-    )
+    return PdfUrlClaim(id=url.id, canonical_url=CITY_URL, archive_url=WAYBACK_URL)
 
-    response = pdf_response()
-    middleware.process_response(response.request, response)
+
+def crawl_one_pdf(middleware: RawArchiveMiddleware, claim: PdfUrlClaim, text: str):
+    """Download, callback and pipeline for one PDF, as the process job runs them."""
+    request = Request(CITY_URL, cb_kwargs={"pdf_url": claim})
+    response = Response(url=CITY_URL, body=PDF, request=request)
+    middleware.process_response(request, response)
+    with patch("spiders.process_url_records.PdfReader") as pdf_reader:
+        page = MagicMock()
+        page.extract_text.return_value = text
+        pdf_reader.return_value.pages = [page]
+        [item] = list(process_spider().parse(response, pdf_url=claim))
     pipeline = PoliceLogPipeline()
     pipeline.open_spider(None)
-    pipeline.process_item(
-        PoliceLogPdfItem(url_id=url.id, raw_text=log_text, content_hash="ab" * 32),
-        None,
-    )
+    try:
+        pipeline.process_item(item, None)
+    finally:
+        pipeline.close_spider(None)
+
+
+LOG_TEXT = (
+    "For Date: 05/11/2026  -  Monday\n"
+    "26-13339        0106 Phone - Noise Complaint Log Information\n"
+    "  Location/Address:    MAIN ST\n"
+)
+
+
+def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch):
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", str(closed_port()))
+    archive = RawArchive(archive_collection(MongoDB()), batch_size=1)
+    middleware = RawArchiveMiddleware(fake_crawler(process_spider()), archive)
+
+    crawl_one_pdf(middleware, add_claimed_url(db_session), LOG_TEXT)
     middleware.spider_closed()
 
     assert archive.is_down is True
-    assert originals_are_archived(crawler) is False
     stored = db_session.scalars(select(LogEntry.case_number)).all()
     assert stored == ["26-13339"]
 
 
-def test_originals_count_as_archived_only_while_it_is_on_and_up():
-    crawler = fake_crawler(process_spider())
-    assert originals_are_archived(crawler) is True
+class FailingCollection:
+    """A collection whose writes fail without a timeout, as on a full disk."""
 
-    crawler.stats.set_value(ARCHIVE_DOWN_STAT, True)
-    assert originals_are_archived(crawler) is False
+    def bulk_write(self, operations, ordered: bool):
+        raise OperationFailure("disk full")
 
-    assert (
-        originals_are_archived(fake_crawler(None, RAW_ARCHIVE_ENABLED=False)) is False
-    )
+
+def test_a_pdf_whose_write_failed_is_downloaded_again_after_a_parse_error(
+    db_session,
+):
+    archive = RawArchive(FailingCollection(), batch_size=1)
+    middleware = RawArchiveMiddleware(fake_crawler(process_spider()), archive)
+    claim = add_claimed_url(db_session)
+
+    crawl_one_pdf(middleware, claim, "not a police log")
+
+    # The write failed but the archive is not down, so only the flag can tell.
+    assert archive.is_down is False
+    db_session.expire_all()
+    url = db_session.get(PdfUrl, claim.id)
+    assert (url.state, url.error_kind) == ("error", "download")

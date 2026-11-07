@@ -7,5 +7,8 @@ class PoliceLogPdfItem(scrapy.Item):
     url_id = scrapy.Field()
     raw_text = scrapy.Field()
     # The SHA-256 of the downloaded bytes, so the pipeline can record which archived
-    # original it read without waiting for the archive's batch write.
+    # original it read.
     content_hash = scrapy.Field()
+    # Whether the raw archive kept the downloaded bytes. Without them, a parse or
+    # save error has to download the PDF again.
+    original_archived = scrapy.Field()

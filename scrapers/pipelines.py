@@ -1,7 +1,5 @@
 import re
-from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Self
 
 import logfire
 from ingest import ingest_pdf_url
@@ -11,7 +9,6 @@ from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
 from items.officer import OfficerItem
 from items.property import PropertyItem
-from middlewares.raw_archive import originals_are_archived
 from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
@@ -25,7 +22,6 @@ from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
-from scrapy.crawler import Crawler
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -68,14 +64,6 @@ class UrlRecordPipeline:
 
 
 class PoliceLogPipeline:
-    def __init__(self, originals_archived: Callable[[], bool] = lambda: True) -> None:
-        # Asked per PDF, because the archive can go down partway through a run.
-        self._originals_archived = originals_archived
-
-    @classmethod
-    def from_crawler(cls, crawler: Crawler) -> Self:
-        return cls(originals_archived=lambda: originals_are_archived(crawler))
-
     def open_spider(self, spider) -> None:
         self._session = SessionLocal()
 
@@ -92,7 +80,7 @@ class PoliceLogPipeline:
                     pdf_url,
                     item["raw_text"],
                     content_hash=item["content_hash"],
-                    original_archived=self._originals_archived(),
+                    original_archived=item["original_archived"],
                 )
                 # One commit, so the URL is never complete without its entries.
                 self._session.commit()
@@ -105,7 +93,7 @@ class PoliceLogPipeline:
                 )
         except Exception as exc:
             self._session.rollback()
-            kind = kept_for_reprocess("save", self._originals_archived())
+            kind = kept_for_reprocess("save", item["original_archived"])
             self._session.execute(
                 mark_error(url_id, kind, f"Saving entries failed: {exc}")
             )

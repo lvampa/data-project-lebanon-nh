@@ -135,7 +135,7 @@ class ProcessUrlsSpider(scrapy.Spider):
                 )
             return
 
-        yield from self._process_pdf(response.body, response.url, pdf_url)
+        yield from self._process_pdf(response, response.url, pdf_url)
 
     def parse_archive(
         self, response: Response, pdf_url: PdfUrlClaim, **kwargs: Any
@@ -144,11 +144,12 @@ class ProcessUrlsSpider(scrapy.Spider):
             logfire.error("archive url also not a pdf", url=response.url)
             self._mark_error(pdf_url, "download", "Archive URL also not a PDF")
             return
-        yield from self._process_pdf(response.body, pdf_url.canonical_url, pdf_url)
+        yield from self._process_pdf(response, pdf_url.canonical_url, pdf_url)
 
     def _process_pdf(
-        self, pdf_bytes: bytes, source_url: str, pdf_url: PdfUrlClaim
+        self, response: Response, source_url: str, pdf_url: PdfUrlClaim
     ) -> Any:
+        pdf_bytes = response.body
         try:
             with logfire.span("extract pdf text", url=source_url):
                 reader = PdfReader(io.BytesIO(pdf_bytes))
@@ -168,6 +169,8 @@ class ProcessUrlsSpider(scrapy.Spider):
             url_id=pdf_url.id,
             raw_text=raw_text,
             content_hash=content_hash("police_log_pdf", pdf_bytes),
+            # Set by the raw archive middleware. Missing means the archive is off.
+            original_archived=response.meta.get("archived", False),
         )
 
     def _mark_error(self, pdf_url: PdfUrlClaim, kind: ErrorKind, message: str) -> None:

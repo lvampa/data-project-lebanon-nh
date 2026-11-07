@@ -22,9 +22,16 @@ def entry_text(case_number: str) -> str:
     )
 
 
-def make_pdf(url_id: int, *case_numbers: str) -> PoliceLogPdfItem:
+def make_pdf(
+    url_id: int, *case_numbers: str, original_archived: bool = True
+) -> PoliceLogPdfItem:
     text = HEADER + "".join(entry_text(case_number) for case_number in case_numbers)
-    return PoliceLogPdfItem(url_id=url_id, raw_text=text, content_hash="ab" * 32)
+    return PoliceLogPdfItem(
+        url_id=url_id,
+        raw_text=text,
+        content_hash="ab" * 32,
+        original_archived=original_archived,
+    )
 
 
 def add_claimed_url(session, canonical_url="https://example.com/a.pdf") -> int:
@@ -40,8 +47,8 @@ def add_claimed_url(session, canonical_url="https://example.com/a.pdf") -> int:
     return url.id
 
 
-def open_pipeline(originals_archived: bool = True) -> PoliceLogPipeline:
-    pipeline = PoliceLogPipeline(originals_archived=lambda: originals_archived)
+def open_pipeline() -> PoliceLogPipeline:
+    pipeline = PoliceLogPipeline()
     pipeline.open_spider(None)
     return pipeline
 
@@ -111,13 +118,15 @@ def test_a_save_error_is_downloaded_again_when_the_original_is_not_archived(
     db_session, monkeypatch
 ):
     url_id = add_claimed_url(db_session)
-    pipeline = open_pipeline(originals_archived=False)
+    pipeline = open_pipeline()
     monkeypatch.setattr(
         "pipelines.ingest_pdf_url", MagicMock(side_effect=RuntimeError("bad pdf"))
     )
 
     with pytest.raises(RuntimeError):
-        pipeline.process_item(make_pdf(url_id, "26-1001"), None)
+        pipeline.process_item(
+            make_pdf(url_id, "26-1001", original_archived=False), None
+        )
 
     assert stored_url(db_session, url_id).error_kind == "download"
 
@@ -157,7 +166,10 @@ def test_pdf_with_no_entries_becomes_a_parse_error(db_session):
 
     open_pipeline().process_item(
         PoliceLogPdfItem(
-            url_id=url_id, raw_text="not a police log", content_hash="cd" * 32
+            url_id=url_id,
+            raw_text="not a police log",
+            content_hash="cd" * 32,
+            original_archived=True,
         ),
         None,
     )

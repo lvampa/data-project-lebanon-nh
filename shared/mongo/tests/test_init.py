@@ -26,6 +26,20 @@ def test_the_archive_gets_its_three_indexes(raw_sources):
         ("last_seen_at", 1),
     )
     raw_sources.database["urls"].drop()
+    raw_sources.database["ai_calls"].drop()
+
+
+def test_the_ai_call_log_gets_its_two_indexes(raw_sources, ai_calls):
+    init_indexes()
+
+    indexes = index_keys(ai_calls)
+    assert indexes["field_1_prompt_version_1_called_at_-1"][0] == (
+        ("field", 1),
+        ("prompt_version", 1),
+        ("called_at", -1),
+    )
+    assert indexes["accepted.raw_1"][0] == (("accepted.raw", 1),)
+    raw_sources.database["urls"].drop()
 
 
 def test_running_it_twice_is_harmless(raw_sources):
@@ -34,3 +48,4 @@ def test_running_it_twice_is_harmless(raw_sources):
 
     assert len(raw_sources.index_information()) == 4
     raw_sources.database["urls"].drop()
+    raw_sources.database["ai_calls"].drop()

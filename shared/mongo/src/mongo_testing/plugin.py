@@ -20,6 +20,7 @@ TEST_DATABASE = os.environ.get("TEST_MONGO_DB", "scraped_data_test")
 os.environ["MONGO_DB"] = TEST_DATABASE
 
 ARCHIVE_COLLECTION = "raw_sources"
+AI_CALLS_COLLECTION = "ai_calls"
 
 
 def is_test_database(name: str | None) -> bool:
@@ -78,6 +79,17 @@ def mongo_test_db() -> Database:
 def raw_sources(mongo_test_db: Database) -> Iterator[Collection]:
     """The archive collection, dropped after the test so the database stays empty."""
     collection = mongo_test_db[ARCHIVE_COLLECTION]
+    collection.drop()
+    try:
+        yield collection
+    finally:
+        collection.drop()
+
+
+@pytest.fixture
+def ai_calls(mongo_test_db: Database) -> Iterator[Collection]:
+    """The AI call log collection, dropped after the test."""
+    collection = mongo_test_db[AI_CALLS_COLLECTION]
     collection.drop()
     try:
         yield collection

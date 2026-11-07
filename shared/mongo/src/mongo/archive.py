@@ -39,6 +39,8 @@ class ArchivedResponse:
     body: bytes
     fetched_at: datetime
     spider: str
+    # Text extracted from the body in a separate step, kept beside it. Budget PDFs.
+    text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -55,7 +57,12 @@ def content_hash(source: str, body: bytes) -> str:
 
 
 def archive_collection(settings: MongoDB) -> Collection:
-    """The archive collection, on a client that gives up quickly.
+    """The archive collection, on a client that gives up quickly."""
+    return quick_collection(settings, COLLECTION)
+
+
+def quick_collection(settings: MongoDB, name: str) -> Collection:
+    """A collection on a client that gives up quickly.
 
     Two seconds to find and connect to a server, and five for any one read or write
     on the socket, so a server that accepts the connection and then hangs cannot
@@ -71,7 +78,12 @@ def archive_collection(settings: MongoDB) -> Collection:
         connectTimeoutMS=2000,
         socketTimeoutMS=5000,
     )
-    return client[settings.default_db][COLLECTION]
+    return client[settings.default_db][name]
+
+
+def is_unreachable(exc: PyMongoError) -> bool:
+    """Whether an error means the server is gone, so later writes would only wait."""
+    return isinstance(exc, ServerSelectionTimeoutError) or exc.timeout
 
 
 class RawArchive:
@@ -114,7 +126,7 @@ class RawArchive:
             result = self._collection.bulk_write(batch, ordered=False)
         except PyMongoError as exc:
             self._failed += len(batch)
-            if isinstance(exc, ServerSelectionTimeoutError) or exc.timeout:
+            if is_unreachable(exc):
                 self.is_down = True
                 logfire.error(
                     "raw archive unreachable; dropping its writes for this run",
@@ -126,6 +138,37 @@ class RawArchive:
         self._stored += result.upserted_count
         self._seen_again += result.matched_count
         return True
+
+    # Reads are for operator commands and reprocess, not the crawl, so a MongoDB
+    # error is raised to the caller instead of counted.
+
+    def versions(self, source: str, source_key: str) -> list[dict[str, Any]]:
+        """Every version of one source key, newest first."""
+        return list(
+            self._collection.find({"source": source, "source_key": source_key}).sort(
+                "first_fetched_at", -1
+            )
+        )
+
+    def newest(self, source: str, source_key: str) -> dict[str, Any] | None:
+        return self._collection.find_one(
+            {"source": source, "source_key": source_key},
+            sort=[("first_fetched_at", -1)],
+        )
+
+    def by_hash(
+        self, source: str, source_key: str, content_hash: str
+    ) -> dict[str, Any] | None:
+        return self._collection.find_one(
+            {"source": source, "source_key": source_key, "content_hash": content_hash}
+        )
+
+
+def stored_body(version: dict[str, Any]) -> bytes | None:
+    """A version's body as downloaded, or None when it was too large to keep."""
+    if version.get("truncated"):
+        return None
+    return gzip.decompress(version["body_gzip"])
 
 
 def _upsert_version(
@@ -141,6 +184,8 @@ def _upsert_version(
         "spider": response.spider,
         **_compressed_body(source_key, response.body),
     }
+    if response.text is not None:
+        first_fetch["text_gzip"] = Binary(gzip.compress(response.text.encode()))
     return UpdateOne(
         {
             "source": source,

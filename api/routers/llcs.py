@@ -1,13 +1,12 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from postgres.models.llc import Llc as LlcModel
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.auth import require_admin
 from api.deps import Paging, get_db, get_paging
 from api.schemas import Llc, LlcStatusUpdate, LookupStatus, Page
+from api.services import llcs
 
 router = APIRouter()
 
@@ -18,17 +17,7 @@ def list_llcs(
     paging: Annotated[Paging, Depends(get_paging)],
     lookup_status: LookupStatus | None = None,
 ) -> Page[Llc]:
-    stmt = select(LlcModel)
-    if lookup_status:
-        stmt = stmt.where(LlcModel.lookup_status == lookup_status)
-    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    rows = db.scalars(paging.apply(stmt.order_by(LlcModel.name))).all()
-    return Page[Llc](
-        total=total,
-        page=paging.page,
-        per_page=paging.per_page,
-        items=[Llc.model_validate(r) for r in rows],
-    )
+    return llcs.list_llcs(db, paging, lookup_status)
 
 
 @router.patch(
@@ -39,10 +28,7 @@ def update_llc_status(
     body: LlcStatusUpdate,
     db: Annotated[Session, Depends(get_db)],
 ) -> Llc:
-    row = db.get(LlcModel, llc_id)
+    row = llcs.update_llc_status(db, llc_id, body.lookup_status)
     if row is None:
         raise HTTPException(status_code=404, detail="LLC not found")
-    row.lookup_status = body.lookup_status
-    db.commit()
-    db.refresh(row)
     return Llc.model_validate(row)

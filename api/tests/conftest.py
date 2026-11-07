@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from api.config import get_settings
 from api.deps import get_db
 from api.main import app
 
@@ -12,6 +13,9 @@ ADMIN_TOKEN = "test-token"
 @pytest.fixture(autouse=True)
 def admin_token(monkeypatch):
     monkeypatch.setenv("ADMIN_API_TOKEN", ADMIN_TOKEN)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture

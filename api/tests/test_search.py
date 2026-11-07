@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.deps import get_db
-from api.main import ES_HOST, app
+from api.main import app, settings
 from api.routers.search import get_es
 
 
@@ -145,7 +145,7 @@ def test_search_requires_q_param():
 
 def test_lifespan_builds_es_client_with_timeout_and_closes_it():
     with patch("api.main.Elasticsearch") as MockES, TestClient(app):
-        MockES.assert_called_once_with(ES_HOST, request_timeout=10)
+        MockES.assert_called_once_with(settings.elasticsearch_host, request_timeout=10)
         assert app.state.es is MockES.return_value
     MockES.return_value.close.assert_called_once()
 

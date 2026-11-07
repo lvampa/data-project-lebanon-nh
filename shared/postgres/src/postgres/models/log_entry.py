@@ -27,7 +27,9 @@ class LogEntry(Base):
     response_seconds: Mapped[int | None] = mapped_column(Integer)
     scene_seconds: Mapped[int | None] = mapped_column(Integer)
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
-    parse_error: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    parse_error: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     scraped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     __table_args__ = (

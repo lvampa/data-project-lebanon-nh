@@ -5,13 +5,6 @@ from mongo.client import MongoDB
 
 
 @pytest.fixture(autouse=True)
-def reset_client():
-    MongoDB._client = None
-    yield
-    MongoDB._client = None
-
-
-@pytest.fixture(autouse=True)
 def no_mongo_env(monkeypatch):
     # The defaults are under test, so settings from the shell or CI must not leak in.
     for name in (

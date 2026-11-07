@@ -23,21 +23,16 @@ def test_geocode_returns_none_when_no_results():
     assert lng is None
 
 
-def test_geocode_user_agent_includes_contact(monkeypatch):
-    monkeypatch.setenv("NOMINATIM_CONTACT", "ops@example.com")
+def test_geocode_user_agent_includes_contact():
     with patch("api.geocoding.httpx.get") as get:
-        geocode_nominatim("Main Street")
+        geocode_nominatim("Main Street", contact="ops@example.com")
     assert "ops@example.com" in get.call_args.kwargs["headers"]["User-Agent"]
 
 
 @pytest.mark.parametrize("contact", [None, ""])
-def test_geocode_user_agent_falls_back_to_repo(monkeypatch, contact):
-    if contact is None:
-        monkeypatch.delenv("NOMINATIM_CONTACT", raising=False)
-    else:
-        monkeypatch.setenv("NOMINATIM_CONTACT", contact)
+def test_geocode_user_agent_falls_back_to_repo(contact):
     with patch("api.geocoding.httpx.get") as get:
-        geocode_nominatim("Main Street")
+        geocode_nominatim("Main Street", contact=contact)
     user_agent = get.call_args.kwargs["headers"]["User-Agent"]
     assert "github.com/" in user_agent
 

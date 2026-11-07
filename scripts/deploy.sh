@@ -4,6 +4,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+bash "$SCRIPT_DIR/generate_report.sh"
+
 echo "→ Building web..."
 cd "$REPO_ROOT/frontend/web"
 bun run build

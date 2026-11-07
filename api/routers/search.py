@@ -2,12 +2,12 @@ from typing import Annotated
 
 import logfire
 from elasticsearch import Elasticsearch
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
+from api.deps import get_db, get_es
 from api.schemas import SearchResponse, SearchResult
 
 router = APIRouter()
@@ -42,10 +42,6 @@ ES_INDICES = list(SEARCH_FIELDS)
 
 # raw_text is large and owner_address is a resident mailing address. Neither is shown.
 HIDDEN_FIELDS = ["raw_text", "owner_address"]
-
-
-def get_es(request: Request) -> Elasticsearch:
-    return request.app.state.es
 
 
 def _normalize_query(q: str, db: Session) -> str | None:

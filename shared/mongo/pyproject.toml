@@ -1,7 +1,7 @@
 [project]
 name = "mongo"
 version = "0.1.0"
-description = "Add your description here"
+description = "Shared MongoDB client"
 authors = [
     { name = "Connor Abdelnoor", email = "connor.abd@gmail.com" }
 ]

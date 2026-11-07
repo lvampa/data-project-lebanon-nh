@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock, patch
 
+from api.config import Settings, get_settings
+from api.main import app
+from api.tests.conftest import ADMIN_TOKEN
 from api.tests.sql import compile_pg, executed_stmt, upsert_set_columns
 
 
@@ -51,7 +54,9 @@ def _stored(mock_db, lat=None, lng=None, geocoded_via=None):
 
 def test_patch_address_upserts_on_raw_address(mock_db, client):
     _stored(mock_db, 43.64, -72.25, "nominatim")
-    with patch("api.routers.addresses.geocode_nominatim", return_value=(43.64, -72.25)):
+    with patch(
+        "api.services.addresses.geocode_nominatim", return_value=(43.64, -72.25)
+    ):
         resp = client.patch(
             "/api/addresses/EAGLE%20RIDGE%20RD",
             json={"normalized_address": "Eagle Ridge Road", "notes": "typo"},
@@ -71,7 +76,7 @@ def test_patch_address_upserts_on_raw_address(mock_db, client):
 
 def test_patch_address_without_geocode_keeps_existing_coords(mock_db, client):
     _stored(mock_db, 43.64, -72.25, "nominatim")
-    with patch("api.routers.addresses.geocode_nominatim") as geocode:
+    with patch("api.services.addresses.geocode_nominatim") as geocode:
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={"normalized_address": "Timberwood Drive", "geocode": False},
@@ -88,7 +93,7 @@ def test_patch_address_without_geocode_keeps_existing_coords(mock_db, client):
 
 def test_patch_address_geocode_miss_keeps_existing_coords(mock_db, client):
     _stored(mock_db, 43.64, -72.25, "nominatim")
-    with patch("api.routers.addresses.geocode_nominatim", return_value=(None, None)):
+    with patch("api.services.addresses.geocode_nominatim", return_value=(None, None)):
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={"normalized_address": "Timberwood Drive", "geocode": True},
@@ -102,7 +107,7 @@ def test_patch_address_geocode_miss_keeps_existing_coords(mock_db, client):
 
 def test_patch_address_geocode_hit_sets_coords(mock_db, client):
     _stored(mock_db, 43.7, -72.3, "nominatim")
-    with patch("api.routers.addresses.geocode_nominatim", return_value=(43.7, -72.3)):
+    with patch("api.services.addresses.geocode_nominatim", return_value=(43.7, -72.3)):
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={"normalized_address": "Timberwood Drive", "geocode": True},
@@ -118,7 +123,7 @@ def test_patch_address_geocode_hit_sets_coords(mock_db, client):
 
 def test_patch_address_manual_coords_skip_geocoding(mock_db, client):
     _stored(mock_db, 43.65, -72.26, "manual")
-    with patch("api.routers.addresses.geocode_nominatim") as geocode:
+    with patch("api.services.addresses.geocode_nominatim") as geocode:
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={
@@ -146,3 +151,20 @@ def test_patch_address_lat_without_lng_returns_422(mock_db, client):
 
     assert resp.status_code == 422
     mock_db.execute.assert_not_called()
+
+
+def test_patch_address_geocodes_with_configured_contact(mock_db, client):
+    _stored(mock_db)
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        admin_api_token=ADMIN_TOKEN, nominatim_contact="ops@example.com"
+    )
+    with patch(
+        "api.services.addresses.geocode_nominatim", return_value=(None, None)
+    ) as geocode:
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={"normalized_address": "Timberwood Drive"},
+        )
+
+    assert resp.status_code == 200
+    geocode.assert_called_once_with("Timberwood Drive", contact="ops@example.com")

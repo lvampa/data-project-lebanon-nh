@@ -2,18 +2,19 @@
 
 **Status:** Done
 **Created:** 2026-06-10
-**Updated:** 2026-10-16
+**Updated:** 2026-10-31
 
 ## Introduction
 
-The static frontend reads its data from JSON files in `frontend/web/public/data/`, and CI cannot reach the database to build them.
-The operator needs one command that exports the current PostgreSQL data to those files and commits them, so a push deploys fresh data.
+The static frontend reads its data from JSON files in `frontend/web/public/data/`.
+The operator needs one command that exports the current PostgreSQL data to those files right before the site is built and deployed.
 Success means a single Rust binary replaces the Python generators and produces the five files the frontend reads.
 
 ## Glossary
 
 - **Report generator:** The `report-gen` binary in `tools/report-gen/`.
-- **Publish script:** `scripts/generate_report.sh`, which runs the report generator and commits the output.
+- **Publish script:** `scripts/generate_report.sh`, which runs the report generator.
+- **Deploy script:** `scripts/deploy.sh`, which runs the publish script, builds the site, and deploys it.
 - **Log entry:** One row in `log_entries`, parsed from the police daily log.
 - **Valid log entry:** A log entry with `parse_error = false`.
 - **Output directory:** The folder the report generator writes JSON files into.
@@ -33,7 +34,7 @@ Success means a single Rust binary replaces the Python generators and produces t
 
 ### Requirement 2: Choose where files go
 
-**User story:** As an operator, I want to set the output directory, so that I can test a run without touching the committed data.
+**User story:** As an operator, I want to set the output directory, so that I can test a run without touching the data the site builds from.
 
 #### Acceptance criteria
 
@@ -64,7 +65,7 @@ Success means a single Rust binary replaces the Python generators and produces t
 #### Acceptance criteria
 
 1. THE report generator SHALL write `incidents.json` as an array of at most 2000 valid log entries.
-2. THE report generator SHALL order the entries by `reported_at`, newest first.
+2. THE report generator SHALL order the entries by `reported_at`, newest first, with entries that have no `reported_at` last.
 3. THE report generator SHALL include for each entry `case_number`, `reported_at`, `call_source`, `incident_type`, `disposition`, `location`, `officer`, `reference_number`, and `source_url`.
 4. IF a field is null in the database, THEN THE report generator SHALL write it as JSON `null`.
 5. IF there are no valid log entries, THEN THE report generator SHALL write an empty array.
@@ -75,7 +76,7 @@ Success means a single Rust binary replaces the Python generators and produces t
 
 #### Acceptance criteria
 
-1. THE report generator SHALL write `addresses.json` as an array with one row per distinct log entry location that has a geocoded match in `address_normalizations`.
+1. THE report generator SHALL write `addresses.json` as an array with one row per distinct valid log entry location that has a geocoded match in `address_normalizations`.
 2. THE report generator SHALL include for each row `raw_address`, `normalized_address`, `count`, `lat`, and `lng`.
 3. THE report generator SHALL order the rows by `count`, highest first.
 4. IF a location has no match or its match has a null `lat` or `lng`, THEN THE report generator SHALL leave that location out.
@@ -115,23 +116,25 @@ Success means a single Rust binary replaces the Python generators and produces t
 3. IF a query or a file write fails, THEN THE report generator SHALL stop, print the error, and exit with a non-zero status.
 4. IF a run stops partway, THEN THE report generator SHALL leave the files it already wrote in place.
 5. WHEN all five files are written, THE report generator SHALL exit with status 0.
+6. WHEN the report generator writes `incidents.json`, THE report generator SHALL print the total number of valid log entries and the 2000-row cap next to the row count.
 
 ### Requirement 9: Publish the data
 
-**User story:** As an operator, I want one command that regenerates and commits the data, so that a push deploys it without CI touching the database.
+**User story:** As an operator, I want deploys to regenerate the data, so that the site always ships what is in the database and the data never lands in git.
 
 #### Acceptance criteria
 
 1. WHEN the publish script runs, THE publish script SHALL run the report generator in release mode with the output directory set to `frontend/web/public/data` under the repo root.
-2. WHEN the report generator succeeds, THE publish script SHALL stage `frontend/web/public/data/`.
-3. IF the staged data has no changes, THEN THE publish script SHALL print `(no changes)` and exit with status 0 without committing.
-4. WHEN the staged data has changes, THE publish script SHALL commit them with the message `chore: update public data YYYY-MM-DD`, using the UTC date.
-5. IF the report generator fails, THEN THE publish script SHALL stop without staging or committing.
+2. IF `DATABASE_URL` is set in the environment or in `.env`, THEN THE publish script SHALL pass it to the report generator unchanged.
+3. IF `DATABASE_URL` is not set, THEN THE publish script SHALL build it from `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, and `POSTGRES_DB`, percent-encoding the user and password.
+4. THE publish script SHALL not stage or commit any file.
+5. IF the report generator fails, THEN THE publish script SHALL exit with a non-zero status.
 6. THE publish script SHALL work from any working directory, by resolving the repo root from its own location.
+7. WHEN the deploy script runs, THE deploy script SHALL run the publish script before building the site, and SHALL stop without building or deploying if it fails.
+8. THE repository SHALL gitignore `frontend/web/public/data/`.
 
 ## Out of scope
 
-- Pushing the commit or deploying. The operator pushes, and CI deploys.
+- CI. The operator runs the deploy script locally.
 - A live API. The frontend stays static for the MVP.
 - Incremental exports. Every run rewrites all five files.
-- Filtering parse errors out of `addresses.json` counts. See Open questions in the design.

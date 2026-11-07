@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from postgres.base import Base
@@ -14,7 +14,14 @@ class PlanningDocument(Base):
     civicclerk_file_id: Mapped[int] = mapped_column(
         Integer, unique=True, nullable=False
     )
-    civicclerk_event_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    civicclerk_event_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey(
+            "planning_meetings.civicclerk_event_id",
+            name="fk_planning_documents_civicclerk_event_id",
+        ),
+        nullable=False,
+    )
     file_name: Mapped[str | None] = mapped_column(Text)
     file_type: Mapped[str | None] = mapped_column(Text)
     download_url: Mapped[str | None] = mapped_column(Text)

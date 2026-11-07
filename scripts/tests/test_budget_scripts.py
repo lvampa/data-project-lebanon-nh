@@ -1,13 +1,18 @@
+import gzip
+import socket
 from types import SimpleNamespace
 
 import httpx
 import pytest
+from mongo.archive import RawArchive, archive_collection
+from mongo.client import MongoDB
 
 from scripts.scrape import download_budget_pdfs
 from scripts.scrape.download_budget_pdfs import (
     documents_needing_text,
     download_pdf,
     extract_text,
+    fetch_document,
     make_client,
     output_path,
 )
@@ -317,3 +322,80 @@ def test_upsert_capital_projects_noop_on_empty():
     count = upsert_capital_projects(session, 2026, [])
     assert count == 0
     session.execute.assert_not_called()
+
+
+# --- fetch_document: the raw archive ---
+
+
+def blank_pdf() -> bytes:
+    from io import BytesIO
+
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
+BUDGET_URL = "https://lebanonnh.gov/DocumentCenter/View/100/FY27-Budget"
+
+
+def pdf_client(body: bytes) -> httpx.Client:
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, content=body, headers={"Content-Type": "application/pdf"}
+        )
+    )
+    return httpx.Client(transport=transport)
+
+
+def budget_row() -> SimpleNamespace:
+    return SimpleNamespace(
+        fiscal_year=2027, document_type="budget_book", source_url=BUDGET_URL
+    )
+
+
+def test_fetch_document_archives_the_pdf_and_its_text(
+    tmp_path, monkeypatch, raw_sources
+):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(download_budget_pdfs, "extract_text", lambda path: "FY27")
+    archive = RawArchive(raw_sources)
+    body = blank_pdf()
+
+    with pdf_client(body) as client:
+        text = fetch_document(client, budget_row(), archive)
+    archive.flush()
+
+    [version] = list(raw_sources.find({"source": "budget_pdf"}))
+    assert version["source_key"] == BUDGET_URL
+    assert (version["status"], version["content_type"]) == (200, "application/pdf")
+    assert gzip.decompress(version["body_gzip"]) == body
+    assert gzip.decompress(version["text_gzip"]) == b"FY27"
+    assert version["spider"] == "download_budget_pdfs"
+    assert text == "FY27"
+
+
+def closed_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def test_fetch_document_writes_its_text_file_when_mongodb_is_unreachable(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(download_budget_pdfs, "extract_text", lambda path: "FY27")
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", str(closed_port()))
+    archive = RawArchive(archive_collection(MongoDB()))
+
+    with pdf_client(blank_pdf()) as client:
+        fetch_document(client, budget_row(), archive)
+    counts = archive.flush()
+
+    assert (tmp_path / "2027-budget_book.txt").read_text() == "FY27"
+    assert counts.failed == 1

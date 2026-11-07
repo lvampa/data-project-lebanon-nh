@@ -61,6 +61,8 @@ def _utc_now() -> datetime:
 class ProcessUrlsSpider(scrapy.Spider):
     name = "process_urls"
     archive_source = "police_log_pdf"
+    # One at a time, so each PDF's callback knows whether its original was kept.
+    archive_batch_size = 1
 
     def archive_key(self, response: Response) -> str | None:
         # The city sometimes answers 200 with an HTML page; that is not the original.

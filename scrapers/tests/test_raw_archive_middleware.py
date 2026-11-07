@@ -34,6 +34,7 @@ STREET_URL = "https://gis.vgsi.com/LebanonNH/Streets.aspx?Name=MAIN"
 def fake_crawler(spider: object, **settings: object) -> SimpleNamespace:
     return SimpleNamespace(
         spider=spider,
+        spidercls=type(spider),
         settings=Settings({"RAW_ARCHIVE_ENABLED": True, **settings}),
         signals=MagicMock(),
     )
@@ -174,6 +175,51 @@ def test_it_flushes_when_the_spider_closes():
 
     crawler.signals.connect.assert_called_once()
     assert crawler.signals.connect.call_args.args[0] == middleware.spider_closed
+
+
+def test_each_police_pdf_is_written_before_its_callback_and_flagged(raw_sources):
+    middleware = RawArchiveMiddleware.from_crawler(fake_crawler(process_spider()))
+    response = pdf_response()
+
+    run = middleware.process_response(response.request, response)
+
+    # Not flushed: the write already happened in process_response.
+    assert raw_sources.count_documents({"source": "police_log_pdf"}) == 1
+    assert run.meta["archived"] is True
+
+
+def test_a_police_pdf_the_archive_could_not_write_is_flagged(monkeypatch):
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", str(closed_port()))
+    middleware = RawArchiveMiddleware.from_crawler(fake_crawler(process_spider()))
+    response = pdf_response()
+
+    middleware.process_response(response.request, response)
+
+    assert response.meta["archived"] is False
+
+
+def test_a_pdf_that_is_not_an_original_is_not_flagged(raw_sources):
+    middleware = RawArchiveMiddleware.from_crawler(fake_crawler(process_spider()))
+    response = pdf_response(body=b"<html>not a pdf</html>")
+
+    middleware.process_response(response.request, response)
+
+    assert "archived" not in response.meta
+
+
+def test_parcel_pages_are_batched_and_not_flagged(raw_sources):
+    middleware = RawArchiveMiddleware.from_crawler(fake_crawler(VgsiPropertySpider()))
+    response = HtmlResponse(
+        PARCEL_URL, body=b"<html>parcel</html>", request=Request(PARCEL_URL)
+    )
+
+    middleware.process_response(response.request, response)
+
+    assert raw_sources.count_documents({}) == 0
+    assert "archived" not in response.meta
+    middleware.spider_closed()
+    assert raw_sources.count_documents({"source": "vgsi_parcel"}) == 1
 
 
 def closed_port() -> int:

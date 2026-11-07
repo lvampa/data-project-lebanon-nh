@@ -9,13 +9,17 @@ A spider opts in with two attributes:
 
     def archive_key(self, response: Response) -> str | None:
         # The source key, or None for a response that is not an original.
+
+A spider may also set `archive_batch_size`, which defaults to 50. At 1, each original
+is written before its callback runs, and `response.meta["archived"]` says whether
+the write worked.
 """
 
 from datetime import UTC, datetime
 from typing import Protocol, Self
 
 import logfire
-from mongo.archive import ArchivedResponse, RawArchive, archive_collection
+from mongo.archive import BATCH_SIZE, ArchivedResponse, RawArchive, archive_collection
 from mongo.client import MongoDB
 from scrapy import Spider, signals
 from scrapy.crawler import Crawler
@@ -39,7 +43,9 @@ class RawArchiveMiddleware:
     def from_crawler(cls, crawler: Crawler) -> Self:
         if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
             raise NotConfigured("RAW_ARCHIVE_ENABLED is off")
-        middleware = cls(crawler, RawArchive(archive_collection(MongoDB())))
+        batch_size = getattr(crawler.spidercls, "archive_batch_size", BATCH_SIZE)
+        archive = RawArchive(archive_collection(MongoDB()), batch_size=batch_size)
+        middleware = cls(crawler, archive)
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
         return middleware
 
@@ -48,9 +54,11 @@ class RawArchiveMiddleware:
         if _is_archived(spider, response):
             source_key = spider.archive_key(response)
             if source_key is not None:
-                self._archive.add(
+                written = self._archive.add(
                     spider.archive_source, source_key, _archived(spider, response)
                 )
+                if written is not None:
+                    response.meta["archived"] = written
         return response
 
     def spider_closed(self) -> None:

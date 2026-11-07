@@ -134,6 +134,21 @@ def test_a_full_batch_is_written_without_waiting_for_flush(raw_sources):
     assert raw_sources.count_documents({}) == 2
 
 
+def test_add_says_whether_the_write_worked_once_the_batch_is_full(raw_sources):
+    archive = RawArchive(raw_sources, batch_size=2)
+
+    assert archive.add("police_log_pdf", "https://example.com/a", response()) is None
+    assert archive.add("police_log_pdf", "https://example.com/b", response()) is True
+
+
+def test_with_a_batch_of_one_each_add_is_written_and_reported(raw_sources):
+    archive = RawArchive(FailingCollection(raw_sources), batch_size=1)
+
+    assert archive.add("police_log_pdf", "https://example.com/a", response()) is False
+    assert archive.add("police_log_pdf", "https://example.com/b", response()) is True
+    assert raw_sources.count_documents({}) == 1
+
+
 class FailingCollection:
     """Stands in for a collection whose writes fail, as on a full disk."""
 
@@ -189,6 +204,16 @@ def test_an_unreachable_server_marks_the_archive_down_after_one_try(monkeypatch)
     # Once down, later batches are dropped without waiting on the server again.
     assert time.monotonic() - second_try < 0.5
     assert counts == ArchiveCounts(stored=0, seen_again=0, failed=2)
+
+
+def test_once_down_a_batch_of_one_reports_each_write_failed(monkeypatch):
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", str(unused_port()))
+    archive = RawArchive(archive_collection(MongoDB()), batch_size=1)
+
+    assert archive.add("police_log_pdf", "https://example.com/a", response()) is False
+    assert archive.add("police_log_pdf", "https://example.com/b", response()) is False
+    assert archive.flush().failed == 2
 
 
 @pytest.fixture

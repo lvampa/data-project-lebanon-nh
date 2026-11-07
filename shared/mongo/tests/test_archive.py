@@ -326,3 +326,13 @@ def test_no_text_field_without_extracted_text(raw_sources):
 
     [version] = stored(raw_sources)
     assert "text_gzip" not in version
+
+
+def test_keys_lists_each_source_key_once(raw_sources):
+    archive = RawArchive(raw_sources)
+    for key, body in (("2000", b"a"), ("1000", b"b"), ("1000", b"c")):
+        archive.add("vgsi_parcel", key, response(body))
+    archive.add("police_log_pdf", "https://example.com/a", response())
+    archive.flush()
+
+    assert archive.keys("vgsi_parcel") == ["1000", "2000"]

@@ -142,6 +142,10 @@ class RawArchive:
     # Reads are for operator commands and reprocess, not the crawl, so a MongoDB
     # error is raised to the caller instead of counted.
 
+    def keys(self, source: str) -> list[str]:
+        """Every source key with at least one version, in sorted order."""
+        return sorted(self._collection.distinct("source_key", {"source": source}))
+
     def versions(self, source: str, source_key: str) -> list[dict[str, Any]]:
         """Every version of one source key, newest first."""
         return list(

@@ -69,7 +69,7 @@ errors = { implicit-any = false, missing-override-decorator = false }
 # Not yet strict: code written before type checking. Remove a block once its file
 # passes the strict checks. Each block takes one glob; `matches` does not accept a
 # list. Ruff's ANN ignores cover the same paths, less four that already pass them:
-# shared/mongo, llc.py, scrapers/settings.py and scrapers/maintenance.
+# the mongo client, llc.py, scrapers/settings.py and the incident categorizer.
 [[tool.pyrefly.sub-config]]
 matches = "api/**"
 errors = { implicit-any = false, missing-override-decorator = false }
@@ -79,7 +79,7 @@ matches = "scripts/**"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
-matches = "shared/mongo/**"
+matches = "shared/mongo/src/mongo/client.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
@@ -95,7 +95,7 @@ matches = "scrapers/settings.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
-matches = "scrapers/maintenance/**"
+matches = "scrapers/maintenance/categorize_incident_types.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]

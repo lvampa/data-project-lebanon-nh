@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Created:** 2026-11-06
-**Updated:** 2026-11-06
+**Updated:** 2026-11-07
 
 The work ships as three pull requests of 10 to 40 files each.
 PR 1a ships between police log pipeline PR 1 and PR 2; PRs 1b and 1c ship before police PR 2b, which drops the raw text columns and waits for the gate below.
@@ -20,23 +20,23 @@ File counts are estimates and include tests.
 About 20 files.
 The three spec files ride along in this pull request.
 
-- [ ] 1. Add the MongoDB test harness
+- [x] 1. Add the MongoDB test harness
   - A pytest plugin in `shared/mongo`, loaded through a `pytest11` entry point: set `MONGO_DB=scraped_data_test`, stop if the name does not end in `_test`, drop the archive collection after each test.
   - A healthcheck on the `mongo` compose service, and CI starting `mongo` next to `postgres`.
   - Install `mongodb-database-tools` in `docker/Dockerfile.airflow`, for the backup DAG.
   - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 2. Add the archive class and indexes
+- [x] 2. Add the archive class and indexes
   - `RawArchive` with hashing, page-state removal, gzip, the 15 MB limit, batched upserts, counts, and the 2 second selection and 5 second operation timeouts that mark it down.
   - The three indexes in `init_indexes`, and the `migrate` service running it after Alembic.
   - Tests for every row in design.md's error table that belongs to writing.
   - _Requirements: 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3_
 
-- [ ] 3. Add the middleware and opt in the two spiders
+- [x] 3. Add the middleware and opt in the two spiders
   - `RawArchiveMiddleware` at downloader priority 50, `RAW_ARCHIVE_ENABLED`, and `archive_source` and `archive_key` on the process and VGSI spiders.
   - Batch size 1 for the process spider, with `response.meta["archived"]` set from the write result; 50 for VGSI.
   - Tests: both spiders archive their pages; street pages, non-200 responses, cached responses, and other spiders do not; a gzip-encoded response is archived decompressed; the setting turns it off.
-  - Test with MongoDB unreachable: the police entries are still stored and the exit code is unchanged.
+  - Test with MongoDB unreachable: the police entries are still stored. The exit-code half lands in police log PR 2, with the runner.
   - _Requirements: 1.1, 1.2, 1.7, 1.8, 3.3, 3.4, 3.5, 3.7, 3.8, 5.4_
 
 ## PR 1b: Read, extend, and replay the archive

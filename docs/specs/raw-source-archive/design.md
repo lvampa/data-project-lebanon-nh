@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Created:** 2026-11-06
-**Updated:** 2026-11-06
+**Updated:** 2026-11-07
 
 ## Overview
 
@@ -45,7 +45,7 @@ For police log PDFs it is the only copy of the parser's input, which is why requ
 ```python
 class RawArchive:
     def __init__(self, collection: Collection, batch_size: int = 50) -> None   # 1 for police log PDFs
-    def add(self, source: str, source_key: str, response: ArchivedResponse) -> None
+    def add(self, source: str, source_key: str, response: ArchivedResponse) -> bool | None
     def flush(self) -> ArchiveCounts          # stored, seen_again, failed
     def versions(self, source: str, source_key: str) -> list[dict]
 ```
@@ -79,6 +79,8 @@ Scrapy calls `process_response` from the highest number to the lowest, so at 50 
 - `process_response(request, response)` takes no `spider` argument, which Scrapy 2.16 warns about here as it does for pipelines; the spider comes from the crawler.
 - It adds the response when the spider opted in, the status is 200, the key is not `None`, and the response's `flags` do not contain `cached`, then returns the response unchanged (1.7).
 - For the process spider the write happens right there, and the middleware sets `response.meta["archived"]` to whether it succeeded (3.8).
+  `add` returns whether the write it triggered worked, or `None` while the version is still buffered, so the flag is set only when a write happened; a parcel page mid-batch, or a response that is not an original, gets none.
+  The spider sets `archive_batch_size = 1`; the middleware reads it from the spider class, and the default is 50.
   The police pipeline reads that flag: a parse or save error on a PDF that was not archived becomes kind `download`, so it is downloaded again.
 - On `spider_closed` it flushes and logs the counts (3.4).
 - `RAW_ARCHIVE_ENABLED` in Scrapy settings, default true, and a per-spider `custom_settings` override turn it off (3.7).

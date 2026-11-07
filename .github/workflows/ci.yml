@@ -42,8 +42,8 @@ jobs:
           uv run --no-sync ruff check .
           uv run --no-sync ruff format --check .
 
-      - name: Start Postgres
-        run: docker compose --env-file .github/ci.env up --detach --wait postgres
+      - name: Start Postgres and MongoDB
+        run: docker compose --env-file .github/ci.env up --detach --wait postgres mongo
 
       # Same command as the pre-push hook in .pre-commit-config.yaml.
       - name: Pytest

@@ -17,7 +17,6 @@ class LogEntry(Base):
     call_source: Mapped[str | None] = mapped_column(Text)
     incident_type: Mapped[str | None] = mapped_column(Text)
     disposition: Mapped[str | None] = mapped_column(Text)
-    raw_reason_action: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(Text)
     place_code: Mapped[str | None] = mapped_column(Text)
     officer: Mapped[str | None] = mapped_column(Text)
@@ -28,7 +27,6 @@ class LogEntry(Base):
     cleared_at: Mapped[datetime | None] = mapped_column(DateTime)
     response_seconds: Mapped[int | None] = mapped_column(Integer)
     scene_seconds: Mapped[int | None] = mapped_column(Integer)
-    raw_text: Mapped[str] = mapped_column(Text, nullable=False)
     parse_error: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -38,7 +36,6 @@ class LogEntry(Base):
     missing_from_parse: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
-    scraped_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     # Moves only when a parsed value changes, not on every reprocess.
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

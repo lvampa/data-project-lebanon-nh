@@ -131,7 +131,6 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
             entry_matches[i + 1].start() if i + 1 < len(entry_matches) else len(clean)
         )
         block = clean[m.end() : block_end]
-        raw_text = clean[m.start() : block_end].strip()
 
         disp_match = _DISPOSITION_RE.search(reason_action)
         if disp_match:
@@ -186,11 +185,9 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
                 "call_source": call_source,
                 "incident_type": incident_type,
                 "disposition": disposition,
-                "raw_reason_action": reason_action,
                 "location": location,
                 "officer": officer,
                 "reference_number": reference_number,
-                "raw_text": raw_text,
                 "parse_error": parse_error,
                 "dispatched_at": dispatched_at,
                 "enroute_at": enroute_at,

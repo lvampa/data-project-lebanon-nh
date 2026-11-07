@@ -101,9 +101,11 @@ def test_build_incident_doc_maps_fields():
     row.officer = "Jones"
     row.disposition = "Report Taken"
     row.reported_at = datetime(2026, 1, 1, 10, 0)
-    row.raw_text = "some raw text"
 
     doc = build_incident_doc(row, {})
+
+    # An entry's raw text now lives in the raw archive, not in Postgres.
+    assert "raw_text" not in doc
 
     assert doc["id"] == 10
     assert doc["entity_type"] == "incidents"

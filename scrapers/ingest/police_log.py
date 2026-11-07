@@ -26,10 +26,6 @@ from sqlalchemy.orm import Session
 
 from ingest.pdf_urls import kept_for_reprocess
 
-# Bookkeeping about the write, not values read from the PDF. A change in these
-# alone does not make an entry "updated".
-_BOOKKEEPING_FIELDS = {"scraped_at"}
-
 
 @dataclass(frozen=True)
 class IngestCounts:
@@ -71,7 +67,7 @@ def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCount
     log_date = pdf_url.log_date or parse_log_date(text)
     parsed_entries = parse_log_entries(text)
 
-    records = _valid_records(parsed_entries, pdf_url, log_date, scraped_at=now)
+    records = _valid_records(parsed_entries, pdf_url, log_date)
     stored = _stored_entries(session, [record.case_number for record in records])
 
     inserted = updated = unchanged = 0
@@ -117,7 +113,6 @@ def _valid_records(
     parsed_entries: list[dict[str, Any]],
     pdf_url: PdfUrl,
     log_date: date | None,
-    scraped_at: datetime,
 ) -> list[PoliceLogRecord]:
     records = []
     for entry in parsed_entries:
@@ -127,7 +122,6 @@ def _valid_records(
                     **entry,
                     "source_url": pdf_url.canonical_url,
                     "log_date": log_date,
-                    "scraped_at": scraped_at,
                 }
             )
         except ValidationError as exc:
@@ -154,10 +148,7 @@ def _is_from_an_older_log(values: dict[str, Any], existing: Any) -> bool:
 
 
 def _parsed_values_differ(values: dict[str, Any], existing: Any) -> bool:
-    return any(
-        values[field] != _stored_value(existing, field)
-        for field in values.keys() - _BOOKKEEPING_FIELDS
-    )
+    return any(values[field] != _stored_value(existing, field) for field in values)
 
 
 def _stored_value(existing: Any, field: str) -> Any:
@@ -167,9 +158,7 @@ def _stored_value(existing: Any, field: str) -> Any:
 
 def _upsert_entry(session: Session, values: dict[str, Any], now: datetime) -> None:
     insert = pg_insert(LogEntry).values(**values, created_at=now, updated_at=now)
-    parsed_values = {
-        field: insert.excluded[field] for field in values if field != "scraped_at"
-    }
+    parsed_values = {field: insert.excluded[field] for field in values}
     session.execute(
         insert.on_conflict_do_update(
             index_elements=["case_number"],

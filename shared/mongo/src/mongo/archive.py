@@ -83,7 +83,7 @@ class RawArchive:
         self.is_down = False
 
     def add(self, source: str, source_key: str, response: ArchivedResponse) -> None:
-        self._buffer.append(_upsert_version(source, source_key, response))
+        self._buffer.append(version_upsert(source, source_key, response))
         if len(self._buffer) >= self._batch_size:
             self.flush()
 
@@ -114,7 +114,7 @@ class RawArchive:
         self._seen_again += result.matched_count
 
 
-def _upsert_version(
+def version_upsert(
     source: str, source_key: str, response: ArchivedResponse
 ) -> UpdateOne:
     """One write that stores a new version, or records a repeat of a stored one."""

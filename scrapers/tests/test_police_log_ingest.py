@@ -72,7 +72,6 @@ def test_stores_each_entry_with_its_source_and_log_date(db_session):
     assert harassment.source_url == "https://example.com/2026-05-11"
     assert harassment.log_date == date(2026, 5, 11)
     assert harassment.incident_type == "Telephone Harassment"
-    assert harassment.raw_text.startswith("26-13339")
     assert harassment.created_at == harassment.updated_at
 
 
@@ -123,8 +122,6 @@ def test_entry_stored_before_these_columns_existed_is_updated(db_session):
             source_url=url.canonical_url,
             log_date=date(2026, 5, 11),
             incident_type="Telephone Harassment Incident Report Taken",
-            raw_text="old text",
-            scraped_at=old,
             created_at=old,
             updated_at=old,
         )
@@ -187,10 +184,10 @@ def test_invalid_entry_is_skipped_and_the_rest_are_stored(db_session, monkeypatc
     monkeypatch.setattr(
         "ingest.police_log.parse_log_entries",
         lambda text: [
-            {"case_number": "26-13339", "raw_text": "26-13339 ..."},
-            {"case_number": "26-13340", "raw_text": None},
-            {"case_number": None, "raw_text": "no case number"},
-            {"case_number": "26-13342", "raw_text": "26-13342 ..."},
+            {"case_number": "26-13339"},
+            {"case_number": "26-13340", "reported_at": "not a time"},
+            {"case_number": None},
+            {"case_number": "26-13342"},
         ],
     )
 
@@ -279,8 +276,6 @@ def test_url_is_completed_with_its_counts_and_where_its_text_came_from(db_sessio
     assert url.parser_version == PARSER_VERSION
     assert url.content_hash == "ab" * 32
     assert url.extractor_version == pypdf.__version__
-    # The original is in the raw archive, so its text is not copied into Postgres.
-    assert url.raw_text is None
     assert url.completed_at is not None
 
 

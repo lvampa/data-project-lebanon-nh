@@ -72,7 +72,6 @@ def test_stores_each_entry_with_its_source_and_log_date(db_session):
     assert harassment.log_date == date(2026, 5, 11)
     assert harassment.incident_type == "Telephone Harassment"
     assert harassment.raw_text.startswith("26-13339")
-    assert harassment.parser_version == PARSER_VERSION
     assert harassment.created_at == harassment.updated_at
 
 
@@ -136,13 +135,10 @@ def test_entry_stored_before_these_columns_existed_is_updated(db_session):
     assert counts.updated == 1
     entry = entries(db_session)["26-13339"]
     assert entry.incident_type == "Telephone Harassment"
-    assert entry.parser_version == PARSER_VERSION
     assert entry.created_at == old
 
 
-def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(
-    db_session, monkeypatch
-):
+def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(db_session):
     newer = add_url(
         db_session, "https://example.com/2026-05-12", log_date=date(2026, 5, 12)
     )
@@ -152,7 +148,7 @@ def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(
     corrected = HARASSMENT.replace("TIMBERWOOD DR", "HANOVER ST")
     ingest_log_text(db_session, newer, log_text(corrected, log_date="05/12/2026"))
     db_session.commit()
-    monkeypatch.setattr("ingest.police_log.PARSER_VERSION", PARSER_VERSION + 1)
+    updated_at = entries(db_session)["26-13339"].updated_at
 
     counts = ingest_log_text(db_session, older, log_text(HARASSMENT))
 
@@ -161,8 +157,7 @@ def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(
     assert entry.location == "HANOVER ST"
     assert entry.source_url == "https://example.com/2026-05-12"
     assert entry.log_date == date(2026, 5, 12)
-    # The row's values came from the newer PDF, so this parse does not vouch for them.
-    assert entry.parser_version == PARSER_VERSION
+    assert entry.updated_at == updated_at
 
 
 def test_later_log_date_replaces_the_older_pdfs_values(db_session):
@@ -251,9 +246,7 @@ def test_parser_version_bump_alone_does_not_move_updated_at(db_session, monkeypa
     counts = ingest_log_text(db_session, url, log_text(HARASSMENT))
 
     assert counts.unchanged == 1
-    entry = entries(db_session)["26-13339"]
-    assert entry.parser_version == PARSER_VERSION + 1
-    assert entry.updated_at == updated_at
+    assert entries(db_session)["26-13339"].updated_at == updated_at
 
 
 # --- ingest_pdf_url: the outcome on the URL record ---

@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 # Bookkeeping about the write, not values read from the PDF. A change in these
 # alone does not make an entry "updated".
-_BOOKKEEPING_FIELDS = {"scraped_at", "parser_version"}
+_BOOKKEEPING_FIELDS = {"scraped_at"}
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,6 @@ def _valid_records(
                     "source_url": pdf_url.canonical_url,
                     "log_date": log_date,
                     "scraped_at": scraped_at,
-                    "parser_version": PARSER_VERSION,
                 }
             )
         except ValidationError as exc:
@@ -170,15 +169,11 @@ def _upsert_entry(session: Session, values: dict[str, Any], now: datetime) -> No
 
 
 def _confirm_entry(session: Session, case_number: str) -> None:
-    """Note that this parser version still reads the entry, without touching updated_at."""
+    """Clear `missing_from_parse` on an unchanged entry, without touching updated_at."""
     session.execute(
         update(LogEntry)
-        .where(
-            LogEntry.case_number == case_number,
-            LogEntry.parser_version.is_distinct_from(PARSER_VERSION)
-            | LogEntry.missing_from_parse,
-        )
-        .values(parser_version=PARSER_VERSION, missing_from_parse=False)
+        .where(LogEntry.case_number == case_number, LogEntry.missing_from_parse)
+        .values(missing_from_parse=False)
     )
 
 

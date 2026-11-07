@@ -1,5 +1,6 @@
 from datetime import date, datetime
 
+import pypdf
 import pytest
 from ingest.police_log import IngestCounts, ingest_log_text, ingest_pdf_url
 from parsers.police_log import PARSER_VERSION
@@ -252,11 +253,21 @@ def test_parser_version_bump_alone_does_not_move_updated_at(db_session, monkeypa
 # --- ingest_pdf_url: the outcome on the URL record ---
 
 
-def test_url_is_completed_with_its_counts_and_text(db_session):
+def ingest_archived(session, url, text: str, original_archived: bool = True):
+    return ingest_pdf_url(
+        session,
+        url,
+        text,
+        content_hash="ab" * 32,
+        original_archived=original_archived,
+    )
+
+
+def test_url_is_completed_with_its_counts_and_where_its_text_came_from(db_session):
     url = add_url(db_session)
     text = log_text(HARASSMENT, PATROL)
 
-    ingest_pdf_url(db_session, url, text)
+    ingest_archived(db_session, url, text)
     db_session.commit()
 
     db_session.refresh(url)
@@ -266,28 +277,43 @@ def test_url_is_completed_with_its_counts_and_text(db_session):
     assert (url.parsed_count, url.stored_count, url.skipped_count) == (2, 2, 0)
     assert url.header_lines == 2
     assert url.parser_version == PARSER_VERSION
-    assert url.raw_text == text
+    assert url.content_hash == "ab" * 32
+    assert url.extractor_version == pypdf.__version__
+    # The original is in the raw archive, so its text is not copied into Postgres.
+    assert url.raw_text is None
     assert url.completed_at is not None
 
 
-def test_pdf_with_no_entries_is_a_parse_error_that_keeps_its_text(db_session):
+def test_pdf_with_no_entries_is_a_parse_error_while_its_original_is_archived(
+    db_session,
+):
     url = add_url(db_session)
 
-    ingest_pdf_url(db_session, url, "No date header here, will not parse")
+    ingest_archived(db_session, url, "No date header here, will not parse")
     db_session.commit()
 
     db_session.refresh(url)
     assert url.state == "error"
     assert url.error_kind == "parse"
     assert url.error_message == "No entries stored from PDF"
-    assert url.raw_text == "No date header here, will not parse"
     assert (url.parsed_count, url.stored_count) == (0, 0)
+
+
+def test_pdf_with_no_entries_is_downloaded_again_when_not_archived(db_session):
+    # With no original to reprocess, the only way back to the PDF is downloading it.
+    url = add_url(db_session)
+
+    ingest_archived(db_session, url, "No date header", original_archived=False)
+    db_session.commit()
+
+    db_session.refresh(url)
+    assert (url.state, url.error_kind) == ("error", "download")
 
 
 def test_error_url_is_completed_once_it_stores_an_entry(db_session):
     url = add_url(db_session, state="error", error_kind="parse", error_message="x")
 
-    ingest_pdf_url(db_session, url, log_text(HARASSMENT))
+    ingest_archived(db_session, url, log_text(HARASSMENT))
     db_session.commit()
 
     db_session.refresh(url)

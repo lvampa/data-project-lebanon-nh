@@ -22,6 +22,16 @@ from scrapy.crawler import Crawler
 from scrapy.exceptions import NotConfigured
 from scrapy.http import Request, Response
 
+# Set once the archive gives up for the run, so other components can tell.
+ARCHIVE_DOWN_STAT = "raw_archive/down"
+
+
+def originals_are_archived(crawler: Crawler) -> bool:
+    """Whether this run is keeping the originals it downloads."""
+    return crawler.settings.getbool("RAW_ARCHIVE_ENABLED") and not (
+        crawler.stats is not None and crawler.stats.get_value(ARCHIVE_DOWN_STAT)
+    )
+
 
 class ArchivedSpider(Protocol):
     name: str
@@ -51,16 +61,22 @@ class RawArchiveMiddleware:
                 self._archive.add(
                     spider.archive_source, source_key, _archived(spider, response)
                 )
+                self._record_if_down()
         return response
 
     def spider_closed(self) -> None:
         counts = self._archive.flush()
+        self._record_if_down()
         logfire.info(
             "raw archive flushed",
             stored=counts.stored,
             seen_again=counts.seen_again,
             failed=counts.failed,
         )
+
+    def _record_if_down(self) -> None:
+        if self._archive.is_down and self._crawler.stats is not None:
+            self._crawler.stats.set_value(ARCHIVE_DOWN_STAT, True)
 
 
 def _is_archived(spider: Spider | None, response: Response) -> bool:

@@ -7,6 +7,7 @@ import scrapy
 from ingest.pdf_urls import ErrorKind, mark_error, utc_now
 from items import PoliceLogPdfItem
 from models import PdfUrlClaim
+from mongo.archive import content_hash
 from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
 from pypdf import PdfReader
@@ -161,7 +162,11 @@ class ProcessUrlsSpider(scrapy.Spider):
 
         # One item per PDF. The pipeline parses the text, saves the entries, and
         # completes the URL in one commit.
-        yield PoliceLogPdfItem(url_id=pdf_url.id, raw_text=raw_text)
+        yield PoliceLogPdfItem(
+            url_id=pdf_url.id,
+            raw_text=raw_text,
+            content_hash=content_hash("police_log_pdf", pdf_bytes),
+        )
 
     def _mark_error(self, pdf_url: PdfUrlClaim, kind: ErrorKind, message: str) -> None:
         with SessionLocal() as session:

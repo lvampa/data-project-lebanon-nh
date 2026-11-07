@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from items import PoliceLogPdfItem
 from models import PdfUrlClaim
+from mongo.archive import content_hash
 from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
 from scrapy.http import Request, Response
@@ -92,7 +93,13 @@ def test_parse_yields_one_item_with_the_pdf_text(pdf_reader):
     response = make_response("https://example.com/a.pdf", FAKE_PDF)
     items = list(make_spider().parse(response, pdf_url=pdf_url))
 
-    assert items == [PoliceLogPdfItem(url_id=pdf_url.id, raw_text=SAMPLE_TEXT)]
+    assert items == [
+        PoliceLogPdfItem(
+            url_id=pdf_url.id,
+            raw_text=SAMPLE_TEXT,
+            content_hash=content_hash("police_log_pdf", FAKE_PDF),
+        )
+    ]
 
 
 def test_parse_leaves_url_completion_to_pipeline(db_session, claimed_url, pdf_reader):

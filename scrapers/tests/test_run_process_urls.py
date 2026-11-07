@@ -1,14 +1,26 @@
+import logging
 import os
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 import run_process_urls
 from ingest.lock import police_log_lock
 from ingest.pdf_urls import utc_now
+from mongo.archive import ArchivedResponse, RawArchive, archive_collection
+from mongo.client import MongoDB
 from postgres.models.pdf_url import PdfUrl
+
+ARCHIVED_PDF = ArchivedResponse(
+    url="https://example.com/a",
+    status=200,
+    content_type="application/pdf",
+    body=b"%PDF-1.4",
+    fetched_at=datetime(2026, 11, 6, tzinfo=UTC),
+    spider="process_urls",
+)
 
 
 def add_url(session, canonical_url: str, **columns) -> None:
@@ -133,3 +145,18 @@ def test_real_crawl_that_cannot_claim_urls_exits_non_zero(test_engine):
     assert result.returncode == 1
     assert "database is down" in result.stderr
     assert "did not finish cleanly" in result.stderr
+
+
+def test_the_archive_going_down_is_not_a_crawl_error(caplog, monkeypatch):
+    # The runner fails a crawl that logged any ERROR record, and an unreachable
+    # archive must not change the exit code.
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", "1")
+    archive = RawArchive(archive_collection(MongoDB()))
+    archive.add("police_log_pdf", "https://example.com/a", ARCHIVED_PDF)
+
+    with caplog.at_level(logging.ERROR):
+        archive.flush()
+
+    assert archive.is_down is True
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []

@@ -6,7 +6,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from items import PoliceLogPdfItem
-from middlewares.raw_archive import RawArchiveMiddleware
+from middlewares.raw_archive import (
+    ARCHIVE_DOWN_STAT,
+    RawArchiveMiddleware,
+    originals_are_archived,
+)
 from models import PdfUrlClaim
 from mongo.archive import RawArchive, archive_collection
 from mongo.client import MongoDB
@@ -31,11 +35,23 @@ PARCEL_URL = "https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=1000"
 STREET_URL = "https://gis.vgsi.com/LebanonNH/Streets.aspx?Name=MAIN"
 
 
+class FakeStats:
+    def __init__(self) -> None:
+        self.values: dict[str, object] = {}
+
+    def get_value(self, key: str) -> object:
+        return self.values.get(key)
+
+    def set_value(self, key: str, value: object) -> None:
+        self.values[key] = value
+
+
 def fake_crawler(spider: object, **settings: object) -> SimpleNamespace:
     return SimpleNamespace(
         spider=spider,
         settings=Settings({"RAW_ARCHIVE_ENABLED": True, **settings}),
         signals=MagicMock(),
+        stats=FakeStats(),
     )
 
 
@@ -186,7 +202,8 @@ def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch)
     monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
     monkeypatch.setenv("MONGO_PORT", str(closed_port()))
     archive = RawArchive(archive_collection(MongoDB()))
-    middleware = RawArchiveMiddleware(fake_crawler(process_spider()), archive)
+    crawler = fake_crawler(process_spider())
+    middleware = RawArchiveMiddleware(crawler, archive)
     url = PdfUrl(
         canonical_url=CITY_URL,
         log_date=date(2026, 5, 11),
@@ -205,9 +222,25 @@ def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch)
     middleware.process_response(response.request, response)
     pipeline = PoliceLogPipeline()
     pipeline.open_spider(None)
-    pipeline.process_item(PoliceLogPdfItem(url_id=url.id, raw_text=log_text), None)
+    pipeline.process_item(
+        PoliceLogPdfItem(url_id=url.id, raw_text=log_text, content_hash="ab" * 32),
+        None,
+    )
     middleware.spider_closed()
 
     assert archive.is_down is True
+    assert originals_are_archived(crawler) is False
     stored = db_session.scalars(select(LogEntry.case_number)).all()
     assert stored == ["26-13339"]
+
+
+def test_originals_count_as_archived_only_while_it_is_on_and_up():
+    crawler = fake_crawler(process_spider())
+    assert originals_are_archived(crawler) is True
+
+    crawler.stats.set_value(ARCHIVE_DOWN_STAT, True)
+    assert originals_are_archived(crawler) is False
+
+    assert (
+        originals_are_archived(fake_crawler(None, RAW_ARCHIVE_ENABLED=False)) is False
+    )

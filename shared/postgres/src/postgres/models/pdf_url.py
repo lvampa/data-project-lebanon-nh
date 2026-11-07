@@ -40,5 +40,9 @@ class PdfUrl(Base):
     skipped_count: Mapped[int | None] = mapped_column(Integer)
     header_lines: Mapped[int | None] = mapped_column(Integer)
     parser_version: Mapped[int | None] = mapped_column(Integer)
+    # The SHA-256 of the PDF that was ingested, the key of its copy in the raw
+    # archive, and the pypdf version that pulled its text out.
+    content_hash: Mapped[str | None] = mapped_column(Text)
+    extractor_version: Mapped[str | None] = mapped_column(Text)
     raw_text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

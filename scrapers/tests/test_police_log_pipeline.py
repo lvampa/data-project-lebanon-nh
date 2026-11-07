@@ -24,7 +24,7 @@ def entry_text(case_number: str) -> str:
 
 def make_pdf(url_id: int, *case_numbers: str) -> PoliceLogPdfItem:
     text = HEADER + "".join(entry_text(case_number) for case_number in case_numbers)
-    return PoliceLogPdfItem(url_id=url_id, raw_text=text)
+    return PoliceLogPdfItem(url_id=url_id, raw_text=text, content_hash="ab" * 32)
 
 
 def add_claimed_url(session, canonical_url="https://example.com/a.pdf") -> int:
@@ -40,8 +40,8 @@ def add_claimed_url(session, canonical_url="https://example.com/a.pdf") -> int:
     return url.id
 
 
-def open_pipeline() -> PoliceLogPipeline:
-    pipeline = PoliceLogPipeline()
+def open_pipeline(originals_archived: bool = True) -> PoliceLogPipeline:
+    pipeline = PoliceLogPipeline(originals_archived=lambda: originals_archived)
     pipeline.open_spider(None)
     return pipeline
 
@@ -82,7 +82,7 @@ def test_completes_url_with_its_entries(db_session):
     url = stored_url(db_session, url_id)
     assert url.state == "complete"
     assert (url.parsed_count, url.stored_count) == (2, 2)
-    assert url.raw_text.startswith("For Date: 05/11/2026")
+    assert url.content_hash == "ab" * 32
     assert url.completed_at is not None
 
 
@@ -105,8 +105,21 @@ def test_entries_are_not_stored_when_the_commit_fails(db_session, monkeypatch):
     url = stored_url(db_session, url_id)
     assert (url.state, url.error_kind) == ("error", "save")
     assert "database error" in url.error_message
-    # Kept so a reprocess can store the entries without downloading again.
-    assert url.raw_text.startswith("For Date: 05/11/2026")
+
+
+def test_a_save_error_is_downloaded_again_when_the_original_is_not_archived(
+    db_session, monkeypatch
+):
+    url_id = add_claimed_url(db_session)
+    pipeline = open_pipeline(originals_archived=False)
+    monkeypatch.setattr(
+        "pipelines.ingest_pdf_url", MagicMock(side_effect=RuntimeError("bad pdf"))
+    )
+
+    with pytest.raises(RuntimeError):
+        pipeline.process_item(make_pdf(url_id, "26-1001"), None)
+
+    assert stored_url(db_session, url_id).error_kind == "download"
 
 
 def test_first_pdf_stays_committed_when_second_fails(db_session, monkeypatch):
@@ -143,9 +156,11 @@ def test_pdf_with_no_entries_becomes_a_parse_error(db_session):
     url_id = add_claimed_url(db_session)
 
     open_pipeline().process_item(
-        PoliceLogPdfItem(url_id=url_id, raw_text="not a police log"), None
+        PoliceLogPdfItem(
+            url_id=url_id, raw_text="not a police log", content_hash="cd" * 32
+        ),
+        None,
     )
 
     url = stored_url(db_session, url_id)
     assert (url.state, url.error_kind) == ("error", "parse")
-    assert url.raw_text == "not a police log"

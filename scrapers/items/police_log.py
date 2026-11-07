@@ -6,3 +6,6 @@ class PoliceLogPdfItem(scrapy.Item):
 
     url_id = scrapy.Field()
     raw_text = scrapy.Field()
+    # The SHA-256 of the downloaded bytes, so the pipeline can record which archived
+    # original it read without waiting for the archive's batch write.
+    content_hash = scrapy.Field()

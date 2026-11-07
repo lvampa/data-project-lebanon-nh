@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 import logfire
+import pypdf
 from models.police_log import PoliceLogRecord
 from parsers.police_log import (
     PARSER_VERSION,
@@ -22,6 +23,8 @@ from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
+
+from ingest.pdf_urls import kept_for_reprocess
 
 # Bookkeeping about the write, not values read from the PDF. A change in these
 # alone does not make an entry "updated".
@@ -43,13 +46,22 @@ class IngestCounts:
         return self.inserted + self.updated + self.unchanged
 
 
-def ingest_pdf_url(session: Session, pdf_url: PdfUrl, text: str) -> IngestCounts:
+def ingest_pdf_url(
+    session: Session,
+    pdf_url: PdfUrl,
+    text: str,
+    *,
+    content_hash: str,
+    original_archived: bool,
+) -> IngestCounts:
     """Ingest one PDF's text and record the outcome on its URL record.
 
+    `content_hash` names the PDF's original in the raw archive. `original_archived`
+    says whether that original can be reprocessed, which decides how an error waits.
     The caller commits, so the entries and the URL's new state land together.
     """
     counts = ingest_log_text(session, pdf_url, text)
-    _record_outcome(pdf_url, text, counts)
+    _record_outcome(pdf_url, content_hash, counts, original_archived)
     return counts
 
 
@@ -209,8 +221,14 @@ def _warn_on_unread_headers(pdf_url: PdfUrl, counts: IngestCounts) -> None:
         )
 
 
-def _record_outcome(pdf_url: PdfUrl, text: str, counts: IngestCounts) -> None:
-    pdf_url.raw_text = text
+def _record_outcome(
+    pdf_url: PdfUrl,
+    content_hash: str,
+    counts: IngestCounts,
+    original_archived: bool,
+) -> None:
+    pdf_url.content_hash = content_hash
+    pdf_url.extractor_version = pypdf.__version__
     pdf_url.parsed_count = counts.parsed
     pdf_url.stored_count = counts.stored
     pdf_url.skipped_count = counts.skipped
@@ -222,7 +240,8 @@ def _record_outcome(pdf_url: PdfUrl, text: str, counts: IngestCounts) -> None:
         pdf_url.error_kind = None
         pdf_url.error_message = None
     else:
-        # A parse error is not retried: downloading again gives the same text.
+        # A parse error waits for a parser fix and a reprocess, which reads the
+        # archived original; downloading again would give the same text.
         pdf_url.state = "error"
-        pdf_url.error_kind = "parse"
+        pdf_url.error_kind = kept_for_reprocess("parse", original_archived)
         pdf_url.error_message = "No entries stored from PDF"

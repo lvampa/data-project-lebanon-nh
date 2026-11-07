@@ -84,6 +84,8 @@ def _replace_pdf_url_entry_count() -> None:
     for column in ("parsed_count", "stored_count", "skipped_count", "header_lines"):
         op.add_column("pdf_urls", sa.Column(column, sa.Integer(), nullable=True))
     op.add_column("pdf_urls", sa.Column("parser_version", sa.Integer(), nullable=True))
+    op.add_column("pdf_urls", sa.Column("content_hash", sa.Text(), nullable=True))
+    op.add_column("pdf_urls", sa.Column("extractor_version", sa.Text(), nullable=True))
     # Until now every parsed entry was stored, so one count stood for both.
     op.execute(
         "UPDATE pdf_urls SET parsed_count = entry_count, stored_count = entry_count"
@@ -115,6 +117,8 @@ def downgrade() -> None:
     op.add_column("pdf_urls", sa.Column("entry_count", sa.Integer(), nullable=True))
     op.execute("UPDATE pdf_urls SET entry_count = stored_count")
     for column in (
+        "extractor_version",
+        "content_hash",
         "parser_version",
         "header_lines",
         "skipped_count",

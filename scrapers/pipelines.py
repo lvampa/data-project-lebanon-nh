@@ -1,14 +1,17 @@
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Self
 
 import logfire
 from ingest import ingest_pdf_url
-from ingest.pdf_urls import mark_error
+from ingest.pdf_urls import kept_for_reprocess, mark_error
 from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
 from items.officer import OfficerItem
 from items.property import PropertyItem
+from middlewares.raw_archive import originals_are_archived
 from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
@@ -22,6 +25,7 @@ from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
+from scrapy.crawler import Crawler
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -64,6 +68,14 @@ class UrlRecordPipeline:
 
 
 class PoliceLogPipeline:
+    def __init__(self, originals_archived: Callable[[], bool] = lambda: True) -> None:
+        # Asked per PDF, because the archive can go down partway through a run.
+        self._originals_archived = originals_archived
+
+    @classmethod
+    def from_crawler(cls, crawler: Crawler) -> Self:
+        return cls(originals_archived=lambda: originals_are_archived(crawler))
+
     def open_spider(self, spider) -> None:
         self._session = SessionLocal()
 
@@ -75,7 +87,13 @@ class PoliceLogPipeline:
         try:
             with logfire.span("ingest police log pdf", url_id=url_id):
                 pdf_url = self._session.get(PdfUrl, url_id)
-                counts = ingest_pdf_url(self._session, pdf_url, item["raw_text"])
+                counts = ingest_pdf_url(
+                    self._session,
+                    pdf_url,
+                    item["raw_text"],
+                    content_hash=item["content_hash"],
+                    original_archived=self._originals_archived(),
+                )
                 # One commit, so the URL is never complete without its entries.
                 self._session.commit()
                 logfire.info(
@@ -87,15 +105,9 @@ class PoliceLogPipeline:
                 )
         except Exception as exc:
             self._session.rollback()
-            # A save error is not downloaded again, so the text has to be kept here
-            # for a reprocess to work from.
+            kind = kept_for_reprocess("save", self._originals_archived())
             self._session.execute(
-                mark_error(
-                    url_id,
-                    "save",
-                    f"Saving entries failed: {exc}",
-                    raw_text=item["raw_text"],
-                )
+                mark_error(url_id, kind, f"Saving entries failed: {exc}")
             )
             self._session.commit()
             raise

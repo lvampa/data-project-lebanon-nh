@@ -15,6 +15,16 @@ repos:
         types: [python]
         stages: [pre-push]
 
+      # Checks the whole project, not the pushed files: a change in one module can
+      # break the types of another, and the baseline is project-wide.
+      - id: pyrefly
+        name: pyrefly
+        language: system
+        entry: uv run pyrefly check
+        files: (\.pyi?|^pyproject\.toml|^pyrefly-baseline\.json)$
+        pass_filenames: false
+        stages: [pre-push]
+
       - id: pytest
         name: pytest
         language: system

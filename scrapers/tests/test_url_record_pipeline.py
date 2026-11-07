@@ -18,10 +18,10 @@ def make_item(**kwargs) -> UrlRecordItem:
 
 def run_pipeline(*items) -> None:
     pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     for item in items:
-        pipeline.process_item(item, None)
-    pipeline.close_spider(None)
+        pipeline.process_item(item)
+    pipeline.close_spider()
 
 
 def compile_pg(statement):
@@ -65,11 +65,11 @@ def test_inserts_archive_url_and_log_date(mock_session_local, fake_session):
 @patch("pipelines.SessionLocal")
 def test_passes_through_non_url_record_items(mock_session_local):
     pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     item = PoliceLogItem(source_url="x", raw_text="x", scraped_at=datetime(2026, 5, 1))
 
-    result = pipeline.process_item(item, None)
-    pipeline.close_spider(None)
+    result = pipeline.process_item(item)
+    pipeline.close_spider()
 
     assert result is item
     mock_session_local.assert_not_called()

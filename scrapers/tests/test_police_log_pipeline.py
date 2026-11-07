@@ -64,9 +64,9 @@ def test_pipeline_opens_session_and_commits(mock_session_local):
     mock_session_local.return_value = mock_session
 
     pipeline = PoliceLogPipeline()
-    pipeline.open_spider(None)
-    pipeline.process_item(make_pdf(), None)
-    pipeline.close_spider(None)
+    pipeline.open_spider()
+    pipeline.process_item(make_pdf())
+    pipeline.close_spider()
 
     mock_session.commit.assert_called_once()
     mock_session.close.assert_called_once()
@@ -77,12 +77,12 @@ def test_pipeline_passes_through_non_police_log_items(mock_session_local):
     mock_session_local.return_value = MagicMock()
 
     pipeline = PoliceLogPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
 
     item = UrlRecordItem(
         canonical_url="x", state="pending", created_at=datetime.now(UTC)
     )
-    result = pipeline.process_item(item, None)
+    result = pipeline.process_item(item)
 
     assert result is item
     mock_session_local.return_value.execute.assert_not_called()
@@ -96,8 +96,7 @@ def test_completes_url_in_same_transaction_as_entries(fake_session):
             make_entry(case_number="2024-1001"),
             make_entry(case_number="2024-1002"),
             url_id=7,
-        ),
-        None,
+        )
     )
 
     [transaction] = fake_session.transactions
@@ -120,10 +119,10 @@ def test_first_pdf_stays_committed_when_second_fails(fake_session):
     # Calls 1 and 2 are the first PDF's entry and URL update; call 3 is the second entry.
     fake_session.fail_on_call = 3
 
-    pipeline.process_item(make_pdf(make_entry(case_number="2024-1001")), None)
+    pipeline.process_item(make_pdf(make_entry(case_number="2024-1001")))
     with pytest.raises(RuntimeError):
-        pipeline.process_item(make_pdf(make_entry(case_number="2024-1002")), None)
-    pipeline.close_spider(None)
+        pipeline.process_item(make_pdf(make_entry(case_number="2024-1002")))
+    pipeline.close_spider()
 
     assert committed_case_numbers(fake_session) == ["2024-1001"]
 
@@ -138,8 +137,7 @@ def test_failed_entry_rolls_back_pdf_and_marks_url_error(fake_session):
                 make_entry(case_number="2024-1001"),
                 make_entry(case_number="2024-1002"),
                 url_id=7,
-            ),
-            None,
+            )
         )
 
     [[url_update]] = fake_session.transactions

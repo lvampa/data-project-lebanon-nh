@@ -24,4 +24,6 @@ def test_archive_url_optional():
 
 def test_requires_canonical_url():
     with pytest.raises(ValidationError):
+        # Leaving it out on purpose is the point of this test.
+        # pyrefly: ignore[missing-argument]
         PdfUrlClaim(id=7)

@@ -48,7 +48,7 @@ def add_claimed_url(session, canonical_url="https://example.com/a.pdf") -> int:
 
 def open_pipeline() -> PoliceLogPipeline:
     pipeline = PoliceLogPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     return pipeline
 
 
@@ -63,12 +63,12 @@ def test_pipeline_passes_through_non_police_log_items(mock_session_local):
     mock_session_local.return_value = MagicMock()
 
     pipeline = PoliceLogPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
 
     item = UrlRecordItem(
         canonical_url="x", state="pending", created_at=datetime.now(UTC)
     )
-    result = pipeline.process_item(item, None)
+    result = pipeline.process_item(item)
 
     assert result is item
     mock_session_local.return_value.execute.assert_not_called()
@@ -82,8 +82,7 @@ def test_completes_url_with_its_entries(db_session):
             make_entry(case_number="2024-1001"),
             make_entry(case_number="2024-1002"),
             url_id=url_id,
-        ),
-        None,
+        )
     )
 
     assert stored_case_numbers(db_session) == ["2024-1001", "2024-1002"]
@@ -108,8 +107,7 @@ def test_entries_are_not_stored_when_completing_the_url_fails(
                 make_entry(case_number="2024-1001"),
                 make_entry(case_number="2024-1002"),
                 url_id=url_id,
-            ),
-            None,
+            )
         )
 
     assert stored_case_numbers(db_session) == []
@@ -124,13 +122,13 @@ def test_first_pdf_stays_committed_when_second_fails(db_session, fail_on_execute
     fail_on_execute(pipeline._session, 3)
 
     pipeline.process_item(
-        make_pdf(make_entry(case_number="2024-1001"), url_id=first_url), None
+        make_pdf(make_entry(case_number="2024-1001"), url_id=first_url)
     )
     with pytest.raises(RuntimeError):
         pipeline.process_item(
-            make_pdf(make_entry(case_number="2024-1002"), url_id=second_url), None
+            make_pdf(make_entry(case_number="2024-1002"), url_id=second_url)
         )
-    pipeline.close_spider(None)
+    pipeline.close_spider()
 
     assert stored_case_numbers(db_session) == ["2024-1001"]
     assert db_session.get(PdfUrl, first_url).state == "complete"
@@ -147,8 +145,7 @@ def test_failed_entry_rolls_back_pdf_and_marks_url_error(db_session, fail_on_exe
                 make_entry(case_number="2024-1001"),
                 make_entry(case_number="2024-1002"),
                 url_id=url_id,
-            ),
-            None,
+            )
         )
 
     assert stored_case_numbers(db_session) == []
@@ -163,10 +160,10 @@ def test_same_case_number_twice_gives_one_row(db_session):
     pipeline = open_pipeline()
 
     pipeline.process_item(
-        make_pdf(make_entry(case_number="2024-1001"), url_id=first_url), None
+        make_pdf(make_entry(case_number="2024-1001"), url_id=first_url)
     )
     pipeline.process_item(
-        make_pdf(make_entry(case_number="2024-1001"), url_id=second_url), None
+        make_pdf(make_entry(case_number="2024-1001"), url_id=second_url)
     )
 
     assert stored_case_numbers(db_session) == ["2024-1001"]

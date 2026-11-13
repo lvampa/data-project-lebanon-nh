@@ -63,7 +63,9 @@ def claimed_url(db_session) -> PdfUrlClaim:
 
 def stored_url(session: Session, claim: PdfUrlClaim) -> PdfUrl:
     session.expire_all()
-    return session.get(PdfUrl, claim.id)
+    url = session.get(PdfUrl, claim.id)
+    assert url is not None
+    return url
 
 
 def make_spider() -> ProcessUrlsSpider:
@@ -134,7 +136,7 @@ def test_parse_non_pdf_without_archive_url_marks_url_error(db_session, claimed_u
     assert results == []
     url = stored_url(db_session, claimed_url)
     assert url.state == "error"
-    assert "no archive URL" in url.error_message
+    assert url.error_message is not None and "no archive URL" in url.error_message
 
 
 def test_parse_no_entries_marks_url_error_and_yields_nothing(
@@ -157,7 +159,12 @@ def test_archive_request_failure_marks_url_error(db_session, claimed_url):
     response = make_response("https://example.com/a.pdf", b"<html>not a pdf</html>")
     claim = claimed_url.model_copy(update={"archive_url": ARCHIVE_URL})
     [request] = list(make_spider().parse(response, pdf_url=claim))
+    assert isinstance(request, Request)
+    assert request.errback is not None
     failure = Failure(DNSLookupError("no such host"))
+    # Scrapy sets `request` on the Failure it passes to an errback; Twisted's
+    # types do not declare it.
+    # pyrefly: ignore[missing-attribute]
     failure.request = request
     request.errback(failure)
 
@@ -173,7 +180,7 @@ def test_unreadable_pdf_marks_url_error(db_session, claimed_url, pdf_reader):
     assert items == []
     url = stored_url(db_session, claimed_url)
     assert url.state == "error"
-    assert "EOF marker not found" in url.error_message
+    assert url.error_message is not None and "EOF marker not found" in url.error_message
 
 
 # --- claim statement ---
@@ -196,6 +203,11 @@ def test_claim_skips_rows_locked_by_other_runs():
 
 
 # --- start: requeue and claim against the pdf_urls table ---
+
+
+def test_limit_from_the_command_line_is_read_as_a_number():
+    # `scrapy crawl process_urls -a limit=3` passes the limit as a string.
+    assert ProcessUrlsSpider(limit="3").limit == 3
 
 
 @pytest.fixture
@@ -247,6 +259,7 @@ def test_claim_records_time_and_counts_attempt(queue_db):
     assert request.cb_kwargs["pdf_url"].id == url_id
     assert row.state == "in_progress"
     assert row.attempts == 1
+    assert row.claimed_at is not None
     assert utc_now() - row.claimed_at < timedelta(minutes=1)
 
 
@@ -332,12 +345,15 @@ def test_request_failure_marks_url_error(queue_db):
     [request] = run_start(ProcessUrlsSpider(limit=10))
 
     failure = Failure(DNSLookupError("no such host"))
+    # Scrapy sets `request` on the Failure it passes to an errback; Twisted's
+    # types do not declare it.
+    # pyrefly: ignore[missing-attribute]
     failure.request = request
     request.errback(failure)
 
     row = get_url(queue_db, url_id)
     assert row.state == "error"
-    assert "no such host" in row.error_message
+    assert row.error_message is not None and "no such host" in row.error_message
     assert row.completed_at is not None
 
 

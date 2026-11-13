@@ -3,13 +3,16 @@ import socket
 import threading
 import time
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
 from mongo.archive import (
     ArchiveCounts,
     ArchivedResponse,
     RawArchive,
+    RawCollection,
     archive_collection,
     content_hash,
     stored_body,
@@ -21,17 +24,16 @@ from pymongo.errors import OperationFailure
 PDF = b"%PDF-1.4 a police log"
 
 
-def response(body: bytes = PDF, **overrides: object) -> ArchivedResponse:
-    values: dict[str, object] = {
-        "url": "https://www.lebanonnh.gov/DocumentCenter/View/23007/2026-05-11",
-        "status": 200,
-        "content_type": "application/pdf",
-        "body": body,
-        "fetched_at": datetime(2026, 11, 6, 12, 0, tzinfo=UTC),
-        "spider": "process_urls",
-    }
-    values.update(overrides)
-    return ArchivedResponse(**values)
+def response(body: bytes = PDF, **overrides: Any) -> ArchivedResponse:
+    original = ArchivedResponse(
+        url="https://www.lebanonnh.gov/DocumentCenter/View/23007/2026-05-11",
+        status=200,
+        content_type="application/pdf",
+        body=body,
+        fetched_at=datetime(2026, 11, 6, 12, 0, tzinfo=UTC),
+        spider="process_urls",
+    )
+    return replace(original, **overrides)
 
 
 def parcel_page(view_state: str) -> bytes:
@@ -144,7 +146,9 @@ def test_add_says_whether_the_write_worked_once_the_batch_is_full(raw_sources):
 
 
 def test_with_a_batch_of_one_each_add_is_written_and_reported(raw_sources):
-    archive = RawArchive(FailingCollection(raw_sources), batch_size=1)
+    archive = RawArchive(
+        cast(RawCollection, FailingCollection(raw_sources)), batch_size=1
+    )
 
     assert archive.add("police_log_pdf", "https://example.com/a", response()) is False
     assert archive.add("police_log_pdf", "https://example.com/b", response()) is True
@@ -166,7 +170,7 @@ class FailingCollection:
 
 
 def test_a_failed_batch_is_counted_and_later_batches_still_try(raw_sources):
-    archive = RawArchive(FailingCollection(raw_sources))
+    archive = RawArchive(cast(RawCollection, FailingCollection(raw_sources)))
 
     archive.add("police_log_pdf", "https://example.com/a", response(PDF + b"1"))
     archive.flush()

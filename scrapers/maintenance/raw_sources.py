@@ -19,14 +19,13 @@ from pathlib import Path
 from typing import Any
 
 import logfire
-from mongo.archive import RawArchive, archive_collection, stored_body
+from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB
 from pipelines import PropertyPipeline
 from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
-from pymongo.collection import Collection
 from scrapy.http import HtmlResponse
 from spiders.vgsi_property import VgsiPropertySpider
 from sqlalchemy import select
@@ -76,7 +75,7 @@ def replay_parcels(
     keys = parcel_ids or archive.keys(PARCEL_SOURCE)
     spider = VgsiPropertySpider()
     pipeline = PropertyPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     replayed = inserted = updated = unchanged = no_body = 0
     try:
         for parcel_id in keys:
@@ -86,7 +85,7 @@ def replay_parcels(
                 continue
             before = _stored_parcel(parcel_id)
             for item in spider.parse_parcel(response):
-                pipeline.process_item(item, None)
+                pipeline.process_item(item)
             after = _stored_parcel(parcel_id)
             replayed += 1
             if before is None:
@@ -96,7 +95,7 @@ def replay_parcels(
             else:
                 unchanged += 1
     finally:
-        pipeline.close_spider(None)
+        pipeline.close_spider()
     counts = ReplayCounts(replayed, inserted, updated, unchanged, no_body)
     logfire.info(
         "parcels replayed",
@@ -167,7 +166,7 @@ class CheckReport:
         return not self.pdfs_with_neither
 
 
-def check(collection: Collection, session: Session) -> CheckReport:
+def check(collection: RawCollection, session: Session) -> CheckReport:
     """What the archive holds, and which Postgres records it has no original for."""
     sources = [
         SourceSize(row["_id"], row["versions"], row["size_bytes"])
@@ -214,7 +213,7 @@ def check(collection: Collection, session: Session) -> CheckReport:
     return report
 
 
-def _storage_bytes(collection: Collection) -> int:
+def _storage_bytes(collection: RawCollection) -> int:
     stats = next(collection.aggregate([{"$collStats": {"storageStats": {}}}]), None)
     return stats["storageStats"]["storageSize"] if stats else 0
 

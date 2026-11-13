@@ -6,7 +6,7 @@ text, so both write entries the same way.
 
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, cast
 
 import logfire
 import pypdf
@@ -25,6 +25,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from ingest.pdf_urls import kept_for_reprocess
+
+# A stored row, or the values just written for a case number seen earlier in this PDF.
+StoredEntry = LogEntry | dict[str, Any]
 
 # Bookkeeping about the write, not values read from the PDF. A change in it
 # alone does not make an entry "updated".
@@ -167,25 +170,27 @@ def _valid_records(
     return records, entry_texts
 
 
-def _stored_entries(session: Session, case_numbers: list[str]) -> dict[str, Any]:
+def _stored_entries(
+    session: Session, case_numbers: list[str]
+) -> dict[str, StoredEntry]:
     rows = session.scalars(
         select(LogEntry).where(LogEntry.case_number.in_(case_numbers))
     )
     return {row.case_number: row for row in rows}
 
 
-def _is_from_an_older_log(values: dict[str, Any], existing: Any) -> bool:
-    return values["log_date"] < _stored_value(existing, "log_date")
+def _is_from_an_older_log(values: dict[str, Any], existing: StoredEntry) -> bool:
+    return values["log_date"] < cast(date, _stored_value(existing, "log_date"))
 
 
-def _parsed_values_differ(values: dict[str, Any], existing: Any) -> bool:
+def _parsed_values_differ(values: dict[str, Any], existing: StoredEntry) -> bool:
     return any(
         values[field] != _stored_value(existing, field)
         for field in values.keys() - _BOOKKEEPING_FIELDS
     )
 
 
-def _stored_value(existing: Any, field: str) -> Any:
+def _stored_value(existing: StoredEntry, field: str) -> object:
     # A case number repeated inside one PDF is compared with the values just written.
     return existing[field] if isinstance(existing, dict) else getattr(existing, field)
 

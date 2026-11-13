@@ -21,6 +21,9 @@ from postgres.models.property_sale import PropertySale
 from scrapy.http import HtmlResponse
 from spiders.vgsi_property import VgsiPropertySpider
 from sqlalchemy import delete, select
+
+# The tests folder is not a package pyrefly can follow; pytest imports it from scrapers/.
+# pyrefly: ignore[missing-import]
 from tests.test_vgsi_property_spider import PARCEL_HTML
 
 PARCEL_URL = "https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=10001"
@@ -53,11 +56,11 @@ def stored_parcel(session) -> tuple:
 
 def ingest_live(session) -> tuple:
     pipeline = PropertyPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     response = HtmlResponse(url=PARCEL_URL, body=PARCEL_HTML)
     for item in VgsiPropertySpider().parse_parcel(response):
-        pipeline.process_item(item, None)
-    pipeline.close_spider(None)
+        pipeline.process_item(item)
+    pipeline.close_spider()
     return stored_parcel(session)
 
 

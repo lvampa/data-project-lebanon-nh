@@ -1,11 +1,13 @@
 import gzip
 import socket
 from types import SimpleNamespace
+from typing import cast
 
 import httpx
 import pytest
 from mongo.archive import RawArchive, archive_collection
 from mongo.client import MongoDB
+from postgres.models.budget_document import BudgetDocument
 
 from scripts.scrape import download_budget_pdfs
 from scripts.scrape.download_budget_pdfs import (
@@ -351,10 +353,11 @@ def pdf_client(body: bytes) -> httpx.Client:
     return httpx.Client(transport=transport)
 
 
-def budget_row() -> SimpleNamespace:
-    return SimpleNamespace(
+def budget_row() -> BudgetDocument:
+    row = SimpleNamespace(
         fiscal_year=2027, document_type="budget_book", source_url=BUDGET_URL
     )
+    return cast(BudgetDocument, row)
 
 
 def test_fetch_document_archives_the_pdf_and_its_text(

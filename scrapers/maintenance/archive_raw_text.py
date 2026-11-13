@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 
 from mongo.archive import (
     ArchivedResponse,
+    RawCollection,
     archive_collection,
     content_hash,
     version_insert,
@@ -31,7 +32,6 @@ from mongo.client import MongoDB
 from mongo.raw_text import ENTRY_TEXT_SOURCE, PDF_TEXT_SOURCE, entry_text
 from postgres import SessionLocal
 from pymongo import UpdateOne
-from pymongo.collection import Collection
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
@@ -93,7 +93,7 @@ def main() -> int:
     return 1
 
 
-def copy_raw_text(session: Session, collection: Collection) -> list[CopyResult]:
+def copy_raw_text(session: Session, collection: RawCollection) -> list[CopyResult]:
     """Archive every raw text value, then check each one arrived."""
     copied_at = datetime.now(UTC)
     origins = {
@@ -111,7 +111,7 @@ def copy_raw_text(session: Session, collection: Collection) -> list[CopyResult]:
     return [_check(origin, copies, collection) for origin, copies in origins.items()]
 
 
-def _check(origin: str, copies: list[_Copy], collection: Collection) -> CopyResult:
+def _check(origin: str, copies: list[_Copy], collection: RawCollection) -> CopyResult:
     """Count the copies whose exact version is in the archive."""
     stored: set[tuple[str, str]] = set()
     for source in {copy.source for copy in copies}:
@@ -135,7 +135,7 @@ def _pdf_texts(session: Session, copied_at: datetime) -> Iterator[_Copy]:
         yield _pdf_text(row.canonical_url, row.raw_text, copied_at)
 
 
-def _legacy_texts(urls: Collection, copied_at: datetime) -> Iterator[_Copy]:
+def _legacy_texts(urls: RawCollection, copied_at: datetime) -> Iterator[_Copy]:
     for doc in urls.find(_LEGACY_TEXT, {"canonical_url": 1, "raw_text": 1}):
         yield _pdf_text(doc["canonical_url"], doc["raw_text"], copied_at)
 
@@ -168,7 +168,7 @@ def _entry_texts(session: Session, copied_at: datetime) -> Iterator[_Copy]:
         yield _Copy(ENTRY_TEXT_SOURCE, row.case_number, response)
 
 
-def _write(collection: Collection, writes: Iterable[UpdateOne]) -> None:
+def _write(collection: RawCollection, writes: Iterable[UpdateOne]) -> None:
     # Unlike the crawl's archive, a failure here has to stop the run, so errors are
     # not caught.
     batch: list[UpdateOne] = []

@@ -1,0 +1,222 @@
+{
+  "min_severity": "error",
+  "errors": [
+    {
+      "column": 26,
+      "path": "api/routers/search.py",
+      "name": "bad-assignment",
+      "concise_description": "`dict[str, dict[str, list[str] | str]]` is not assignable to dict value type `str`",
+      "severity": "error"
+    },
+    {
+      "column": 28,
+      "path": "api/routers/search.py",
+      "name": "bad-assignment",
+      "concise_description": "`dict[str, list[str]]` is not assignable to dict value type `str`",
+      "severity": "error"
+    },
+    {
+      "column": 25,
+      "path": "api/routers/search.py",
+      "name": "bad-assignment",
+      "concise_description": "`int` is not assignable to dict value type `str`",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "api/services/addresses.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `int | None` is not assignable to parameter `total` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.Page.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 23,
+      "path": "api/services/addresses.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.AddressRecord.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "api/services/categories.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `int | None` is not assignable to parameter `total` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.Page.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 23,
+      "path": "api/services/categories.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.CategoryRecord.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "api/services/incidents.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `int | None` is not assignable to parameter `total` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.Page.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "api/services/llcs.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `int | None` is not assignable to parameter `total` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.Page.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 59,
+      "path": "api/services/stats.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.TypeStat.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 46,
+      "path": "api/services/stats.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.HourStat.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 54,
+      "path": "api/services/stats.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.WeekdayStat.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 19,
+      "path": "scrapers/extensions.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `StatsCollector | None` is not assignable to parameter `stats` with type `StatsCollector` in function `LogfireExtension.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 12,
+      "path": "scrapers/maintenance/categorize_incident_types.py",
+      "name": "bad-return",
+      "concise_description": "Returned type `Sequence[str | None]` is not assignable to declared return type `list[str]`",
+      "severity": "error"
+    },
+    {
+      "column": 25,
+      "path": "scrapers/maintenance/categorize_incident_types.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[IncidentCategoryRecord]` is not assignable to parameter `iterable` with type `Iterable[dict[Unknown, Unknown]]` in function `list.extend`",
+      "severity": "error"
+    },
+    {
+      "column": 32,
+      "path": "scrapers/maintenance/categorize_incident_types.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[dict[Unknown, Unknown]]` is not assignable to parameter `rows` with type `list[IncidentCategoryRecord]` in function `scripts.ingest.import_incident_categories.upsert_categories`",
+      "severity": "error"
+    },
+    {
+      "column": 9,
+      "path": "scrapers/spiders/budget_discovery.py",
+      "name": "bad-override-mutable-attribute",
+      "concise_description": "Class member `BudgetDiscoverySpider.parse` overrides parent class `Spider` in an inconsistent manner",
+      "severity": "error"
+    },
+    {
+      "column": 15,
+      "path": "scrapers/spiders/city_staff.py",
+      "name": "bad-override",
+      "concise_description": "Class member `CityStaffSpider.start` overrides parent class `Spider` in an inconsistent manner",
+      "severity": "error"
+    },
+    {
+      "column": 30,
+      "path": "scrapers/spiders/city_staff.py",
+      "name": "bad-return",
+      "concise_description": "Async generator function should return `AsyncGenerator`",
+      "severity": "error"
+    },
+    {
+      "column": 46,
+      "path": "scrapers/spiders/city_staff.py",
+      "name": "not-iterable",
+      "concise_description": "`in` is not supported between `Literal['@']` and `None`",
+      "severity": "error"
+    },
+    {
+      "column": 45,
+      "path": "scrapers/spiders/city_staff.py",
+      "name": "no-matching-overload",
+      "concise_description": "No matching overload found for function `re.match` called with arguments: (Literal['\\\\(?\\\\d{3}\\\\)?[\\\\s\\\\-]\\\\d{3}[\\\\s\\\\-]\\\\d{4}'], str | None)",
+      "severity": "error"
+    },
+    {
+      "column": 9,
+      "path": "scrapers/spiders/create_url_records.py",
+      "name": "bad-override-mutable-attribute",
+      "concise_description": "Class member `BuildDailyUrlsSpider.parse` overrides parent class `Spider` in an inconsistent manner",
+      "severity": "error"
+    },
+    {
+      "column": 9,
+      "path": "scrapers/spiders/officer_roster.py",
+      "name": "bad-override-mutable-attribute",
+      "concise_description": "Class member `OfficerRosterSpider.parse` overrides parent class `Spider` in an inconsistent manner",
+      "severity": "error"
+    },
+    {
+      "column": 9,
+      "path": "scrapers/spiders/vgsi_property.py",
+      "name": "bad-override-mutable-attribute",
+      "concise_description": "Class member `VgsiPropertySpider.parse` overrides parent class `Spider` in an inconsistent manner",
+      "severity": "error"
+    },
+    {
+      "column": 39,
+      "path": "scripts/scrape/download_budget_pdfs.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `Sequence[BudgetDocument]` is not assignable to parameter `docs` with type `list[BudgetDocument]` in function `documents_needing_text`",
+      "severity": "error"
+    },
+    {
+      "column": 20,
+      "path": "scripts/scrape/scrape_llcs.py",
+      "name": "missing-attribute",
+      "concise_description": "Object of class `Result` has no attribute `rowcount`",
+      "severity": "error"
+    },
+    {
+      "column": 47,
+      "path": "scripts/sync/sync_es.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `Sequence[BudgetCapitalProject] | Sequence[BudgetLineItem] | Sequence[CityStaff] | Sequence[Llc] | Sequence[LogEntry] | Sequence[Officer] | Sequence[PlanningDocument] | Sequence[PlanningMeeting] | Sequence[Property]` is not assignable to parameter `rows` with type `list[Unknown]` in function `sync_index`",
+      "severity": "error"
+    },
+    {
+      "column": 35,
+      "path": "scripts/tests/test_budget_scripts.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[SimpleNamespace]` is not assignable to parameter `docs` with type `list[BudgetDocument]` in function `scripts.scrape.download_budget_pdfs.documents_needing_text`",
+      "severity": "error"
+    },
+    {
+      "column": 35,
+      "path": "scripts/tests/test_budget_scripts.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[SimpleNamespace]` is not assignable to parameter `docs` with type `list[BudgetDocument]` in function `scripts.scrape.download_budget_pdfs.documents_needing_text`",
+      "severity": "error"
+    },
+    {
+      "column": 35,
+      "path": "scripts/tests/test_budget_scripts.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `list[SimpleNamespace]` is not assignable to parameter `docs` with type `list[BudgetDocument]` in function `scripts.scrape.download_budget_pdfs.documents_needing_text`",
+      "severity": "error"
+    },
+    {
+      "column": 16,
+      "path": "shared/mongo/src/mongo/client.py",
+      "name": "unsupported-operation",
+      "concise_description": "`None` is not subscriptable",
+      "severity": "error"
+    }
+  ]
+}

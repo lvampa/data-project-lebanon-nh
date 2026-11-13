@@ -20,6 +20,7 @@ from pymongo.errors import PyMongoError, ServerSelectionTimeoutError
 from .client import MongoDB
 
 COLLECTION = "raw_sources"
+RawCollection = Collection[dict[str, Any]]
 BATCH_SIZE = 50
 # Bodies are compressed in the application; MongoDB's document limit is 16 MB.
 MAX_COMPRESSED_BYTES = 15 * 1024 * 1024
@@ -56,12 +57,12 @@ def content_hash(source: str, body: bytes) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
-def archive_collection(settings: MongoDB) -> Collection:
+def archive_collection(settings: MongoDB) -> RawCollection:
     """The archive collection, on a client that gives up quickly."""
     return quick_collection(settings, COLLECTION)
 
 
-def quick_collection(settings: MongoDB, name: str) -> Collection:
+def quick_collection(settings: MongoDB, name: str) -> RawCollection:
     """A collection on a client that gives up quickly.
 
     Two seconds to find and connect to a server, and five for any one read or write
@@ -87,7 +88,7 @@ def is_unreachable(exc: PyMongoError) -> bool:
 
 
 class RawArchive:
-    def __init__(self, collection: Collection, batch_size: int = BATCH_SIZE) -> None:
+    def __init__(self, collection: RawCollection, batch_size: int = BATCH_SIZE) -> None:
         self._collection = collection
         self._batch_size = batch_size
         self._buffer: list[UpdateOne] = []
@@ -113,7 +114,8 @@ class RawArchive:
         return ArchiveCounts(self._stored, self._seen_again, self._failed)
 
     def _write_buffer(self) -> bool:
-        batch, self._buffer = self._buffer, []
+        batch = self._buffer
+        self._buffer = []
         if not batch:
             return True
         if self.is_down:

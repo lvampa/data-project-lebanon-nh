@@ -9,10 +9,9 @@ from datetime import datetime
 from typing import Any, Literal
 
 import logfire
-from pymongo.collection import Collection
 from pymongo.errors import PyMongoError
 
-from .archive import is_unreachable, quick_collection
+from .archive import RawCollection, is_unreachable, quick_collection
 from .client import MongoDB
 
 COLLECTION = "ai_calls"
@@ -37,12 +36,12 @@ class AiCall:
     called_at: datetime
 
 
-def ai_calls_collection(settings: MongoDB) -> Collection:
+def ai_calls_collection(settings: MongoDB) -> RawCollection:
     return quick_collection(settings, COLLECTION)
 
 
 class AiCallLog:
-    def __init__(self, collection: Collection) -> None:
+    def __init__(self, collection: RawCollection) -> None:
         self._collection = collection
         self.is_down = False
 

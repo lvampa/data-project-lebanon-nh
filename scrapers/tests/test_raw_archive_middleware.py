@@ -2,6 +2,7 @@ import gzip
 import socket
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ from mongo.client import MongoDB
 from pipelines import PoliceLogPipeline
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
+from scrapy.crawler import Crawler
 from scrapy.downloadermiddlewares.httpcompression import HttpCompressionMiddleware
 from scrapy.exceptions import NotConfigured
 from scrapy.http import HtmlResponse, Request, Response
@@ -31,19 +33,25 @@ PARCEL_URL = "https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=1000"
 STREET_URL = "https://gis.vgsi.com/LebanonNH/Streets.aspx?Name=MAIN"
 
 
-def fake_crawler(spider: object, **settings: object) -> SimpleNamespace:
-    return SimpleNamespace(
+def fake_crawler(spider: object, **settings: object) -> Crawler:
+    stand_in = SimpleNamespace(
         spider=spider,
         spidercls=type(spider),
         settings=Settings({"RAW_ARCHIVE_ENABLED": True, **settings}),
         signals=MagicMock(),
     )
+    return cast(Crawler, stand_in)
 
 
-def pdf_response(url: str = CITY_URL, body: bytes = PDF, **kwargs: object) -> Response:
+def pdf_response(url: str = CITY_URL, body: bytes = PDF, **kwargs: Any) -> Response:
     claim = PdfUrlClaim(id=7, canonical_url=CITY_URL, archive_url=WAYBACK_URL)
     request = Request(url, cb_kwargs={"pdf_url": claim})
     return Response(url=url, body=body, request=request, **kwargs)
+
+
+def request_of(response: Response) -> Request:
+    assert response.request is not None
+    return response.request
 
 
 def middleware_for(spider: object, raw_sources) -> RawArchiveMiddleware:
@@ -63,7 +71,7 @@ def test_a_police_log_pdf_is_archived_under_its_city_url(raw_sources):
     middleware = middleware_for(process_spider(), raw_sources)
     response = pdf_response(headers={"Content-Type": "application/pdf"})
 
-    assert middleware.process_response(response.request, response) is response
+    assert middleware.process_response(request_of(response), response) is response
 
     [version] = archived(middleware, raw_sources)
     assert (version["source"], version["source_key"]) == ("police_log_pdf", CITY_URL)
@@ -76,7 +84,7 @@ def test_a_pdf_fetched_from_its_wayback_copy_keeps_the_city_url_as_key(raw_sourc
     middleware = middleware_for(process_spider(), raw_sources)
     response = pdf_response(WAYBACK_URL)
 
-    middleware.process_response(response.request, response)
+    middleware.process_response(request_of(response), response)
 
     [version] = archived(middleware, raw_sources)
     assert version["source_key"] == CITY_URL
@@ -87,7 +95,7 @@ def test_an_html_page_where_a_pdf_was_expected_is_not_archived(raw_sources):
     middleware = middleware_for(process_spider(), raw_sources)
     response = pdf_response(body=b"<html>not a pdf</html>")
 
-    middleware.process_response(response.request, response)
+    middleware.process_response(request_of(response), response)
 
     assert archived(middleware, raw_sources) == []
 
@@ -122,7 +130,7 @@ def test_a_street_index_page_is_not_archived(raw_sources):
 def test_only_fresh_200_responses_are_archived(raw_sources, response):
     middleware = middleware_for(process_spider(), raw_sources)
 
-    middleware.process_response(response.request, response)
+    middleware.process_response(request_of(response), response)
 
     assert archived(middleware, raw_sources) == []
 
@@ -154,8 +162,9 @@ def test_a_gzip_encoded_response_is_archived_decompressed(raw_sources):
         body=gzip.compress(PDF), headers={"Content-Encoding": "gzip"}
     )
 
-    decoded = HttpCompressionMiddleware().process_response(encoded.request, encoded)
-    middleware.process_response(encoded.request, decoded)
+    decoded = HttpCompressionMiddleware().process_response(request_of(encoded), encoded)
+    assert isinstance(decoded, Response)
+    middleware.process_response(request_of(encoded), decoded)
 
     [version] = archived(middleware, raw_sources)
     assert gzip.decompress(version["body_gzip"]) == PDF
@@ -173,15 +182,16 @@ def test_it_flushes_when_the_spider_closes():
 
     middleware = RawArchiveMiddleware.from_crawler(crawler)
 
-    crawler.signals.connect.assert_called_once()
-    assert crawler.signals.connect.call_args.args[0] == middleware.spider_closed
+    connect = cast(MagicMock, crawler.signals).connect
+    connect.assert_called_once()
+    assert connect.call_args.args[0] == middleware.spider_closed
 
 
 def test_each_police_pdf_is_written_before_its_callback_and_flagged(raw_sources):
     middleware = RawArchiveMiddleware.from_crawler(fake_crawler(process_spider()))
     response = pdf_response()
 
-    run = middleware.process_response(response.request, response)
+    run = middleware.process_response(request_of(response), response)
 
     # Not flushed: the write already happened in process_response.
     assert raw_sources.count_documents({"source": "police_log_pdf"}) == 1
@@ -194,7 +204,7 @@ def test_a_police_pdf_the_archive_could_not_write_is_flagged(monkeypatch):
     middleware = RawArchiveMiddleware.from_crawler(fake_crawler(process_spider()))
     response = pdf_response()
 
-    middleware.process_response(response.request, response)
+    middleware.process_response(request_of(response), response)
 
     assert response.meta["archived"] is False
 
@@ -203,7 +213,7 @@ def test_a_pdf_that_is_not_an_original_is_not_flagged(raw_sources):
     middleware = RawArchiveMiddleware.from_crawler(fake_crawler(process_spider()))
     response = pdf_response(body=b"<html>not a pdf</html>")
 
-    middleware.process_response(response.request, response)
+    middleware.process_response(request_of(response), response)
 
     assert "archived" not in response.meta
 
@@ -214,7 +224,7 @@ def test_parcel_pages_are_batched_and_not_flagged(raw_sources):
         PARCEL_URL, body=b"<html>parcel</html>", request=Request(PARCEL_URL)
     )
 
-    middleware.process_response(response.request, response)
+    middleware.process_response(request_of(response), response)
 
     assert raw_sources.count_documents({}) == 0
     assert "archived" not in response.meta
@@ -246,11 +256,11 @@ def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch)
     )
 
     response = pdf_response()
-    middleware.process_response(response.request, response)
+    middleware.process_response(request_of(response), response)
     pipeline = PoliceLogPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     pipeline.process_item(
-        PoliceLogPdfItem(url_id=url.id, raw_text="text", entries=[entry]), None
+        PoliceLogPdfItem(url_id=url.id, raw_text="text", entries=[entry])
     )
     middleware.spider_closed()
 

@@ -16,7 +16,7 @@ the write worked.
 """
 
 from datetime import UTC, datetime
-from typing import Protocol, Self
+from typing import Protocol, Self, cast
 
 import logfire
 from mongo.archive import BATCH_SIZE, ArchivedResponse, RawArchive, archive_collection
@@ -51,14 +51,18 @@ class RawArchiveMiddleware:
 
     def process_response(self, request: Request, response: Response) -> Response:
         spider = self._crawler.spider
-        if _is_archived(spider, response):
-            source_key = spider.archive_key(response)
-            if source_key is not None:
-                written = self._archive.add(
-                    spider.archive_source, source_key, _archived(spider, response)
-                )
-                if written is not None:
-                    response.meta["archived"] = written
+        if spider is None or not _is_archived(spider, response):
+            return response
+        archived_spider = cast(ArchivedSpider, spider)
+        source_key = archived_spider.archive_key(response)
+        if source_key is not None:
+            written = self._archive.add(
+                archived_spider.archive_source,
+                source_key,
+                _archived(archived_spider, response),
+            )
+            if written is not None:
+                response.meta["archived"] = written
         return response
 
     def spider_closed(self) -> None:

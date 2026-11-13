@@ -48,48 +48,48 @@ def test_ignores_non_property_items(pipeline):
     other = PoliceLogItem(
         raw_text="x", source_url="http://x", scraped_at=datetime.now()
     )
-    result = pipeline.process_item(other, MagicMock())
+    result = pipeline.process_item(other)
     assert result is other
 
 
 def test_process_item_returns_item(pipeline):
-    result = pipeline.process_item(SAMPLE_ITEM, MagicMock())
+    result = pipeline.process_item(SAMPLE_ITEM)
     assert result is SAMPLE_ITEM
 
 
 def test_upserts_property(pipeline):
-    pipeline.process_item(SAMPLE_ITEM, MagicMock())
+    pipeline.process_item(SAMPLE_ITEM)
     assert pipeline._session.execute.called
 
 
 def test_inserts_sale_after_delete(pipeline):
-    pipeline.process_item(SAMPLE_ITEM, MagicMock())
+    pipeline.process_item(SAMPLE_ITEM)
     # Multiple execute calls: upsert + id lookup + delete + sale insert
     assert pipeline._session.execute.call_count >= 3
 
 
 def test_parses_sale_date(pipeline):
     """Sale date '01/15/2019' must not cause an exception."""
-    pipeline.process_item(SAMPLE_ITEM, MagicMock())
+    pipeline.process_item(SAMPLE_ITEM)
 
 
 def test_close_spider_closes_session(pipeline):
-    pipeline.close_spider(MagicMock())
+    pipeline.close_spider()
     pipeline._session.close.assert_called_once()
 
 
 def test_first_property_stays_committed_when_second_fails(db_session, fail_on_execute):
     pipeline = PropertyPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     # SAMPLE_ITEM runs upsert, id lookup, sales delete, one sale insert.
     # Failing on call 8 breaks the second run's sale insert, after its delete.
     fail_on_execute(pipeline._session, 8)
     rescrape = PropertyItem(SAMPLE_ITEM, owner="NEW OWNER")
 
-    pipeline.process_item(SAMPLE_ITEM, None)
+    pipeline.process_item(SAMPLE_ITEM)
     with pytest.raises(RuntimeError):
-        pipeline.process_item(rescrape, None)
-    pipeline.close_spider(None)
+        pipeline.process_item(rescrape)
+    pipeline.close_spider()
 
     # The failed rescrape is rolled back whole: the owner and the sale are the first run's.
     assert db_session.scalars(select(Property.owner)).all() == ["SMITH, JOHN"]

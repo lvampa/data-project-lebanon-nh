@@ -1,6 +1,7 @@
 import io
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast, override
 
 import logfire
 import scrapy
@@ -11,7 +12,7 @@ from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
 from pypdf import PdfReader
 from scrapy.http import Request, Response
-from sqlalchemy import Update, select, update
+from sqlalchemy import CursorResult, Update, select, update
 from twisted.python.failure import Failure
 
 CLAIM_LEASE = timedelta(hours=2)
@@ -69,14 +70,17 @@ class ProcessUrlsSpider(scrapy.Spider):
         if not response.body.startswith(b"%PDF"):
             return None
         # Keyed by the city URL, even when the PDF came from its Wayback copy.
+        assert response.request is not None
         pdf_url: PdfUrlClaim = response.request.cb_kwargs["pdf_url"]
         return pdf_url.canonical_url
 
-    def __init__(self, limit: int = 10, *args, **kwargs) -> None:
+    # `scrapy crawl -a limit=10` passes the value as a string.
+    def __init__(self, limit: int | str = 10, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.limit = int(limit)
 
-    async def start(self):
+    @override
+    async def start(self) -> AsyncIterator[Request]:
         claimed = self._claim_urls()
         logfire.info("queued urls for processing", count=len(claimed), limit=self.limit)
         for pdf_url in claimed:
@@ -93,21 +97,34 @@ class ProcessUrlsSpider(scrapy.Spider):
             logfire.span("claim pdf urls", limit=self.limit),
             SessionLocal() as session,
         ):
-            expired = session.execute(expire_stale_claims(now)).rowcount
-            retried = session.execute(retry_failed_urls()).rowcount
+            # UPDATEs return a CursorResult; Session.execute is typed for SELECTs.
+            expired = cast(
+                CursorResult[Any], session.execute(expire_stale_claims(now))
+            ).rowcount
+            retried = cast(
+                CursorResult[Any], session.execute(retry_failed_urls())
+            ).rowcount
             rows = session.execute(claim_statement(self.limit, now)).all()
             session.commit()
             logfire.info("requeued failed urls", expired=expired, retried=retried)
         return [PdfUrlClaim.model_validate(row, from_attributes=True) for row in rows]
 
     def _on_request_error(self, failure: Failure) -> None:
-        pdf_url = failure.request.cb_kwargs["pdf_url"]
-        logfire.error(
-            "request failed", url=failure.request.url, error=repr(failure.value)
-        )
+        # Scrapy sets `request` on the Failure it passes to an errback; Twisted's
+        # types do not declare it.
+        # pyrefly: ignore[missing-attribute]
+        request: Request = failure.request
+        pdf_url = request.cb_kwargs["pdf_url"]
+        logfire.error("request failed", url=request.url, error=repr(failure.value))
         self._mark_error(pdf_url, f"Request failed: {failure.value!r}")
 
-    def parse(self, response: Response, pdf_url: PdfUrlClaim, **kwargs: Any) -> Any:
+    # Scrapy types Spider.parse as a callback attribute, which any method override
+    # trips; callbacks are meant to be overridden like this.
+    @override
+    # pyrefly: ignore[bad-override-mutable-attribute]
+    def parse(
+        self, response: Response, pdf_url: PdfUrlClaim, **kwargs: Any
+    ) -> Iterator[Request | PoliceLogPdfItem]:
         if not response.body.startswith(b"%PDF"):
             if pdf_url.archive_url:
                 logfire.warning(
@@ -130,7 +147,7 @@ class ProcessUrlsSpider(scrapy.Spider):
 
     def parse_archive(
         self, response: Response, pdf_url: PdfUrlClaim, **kwargs: Any
-    ) -> Any:
+    ) -> Iterator[PoliceLogPdfItem]:
         if not response.body.startswith(b"%PDF"):
             logfire.error("archive url also not a pdf", url=response.url)
             self._mark_error(pdf_url, "Archive URL also not a PDF")
@@ -139,7 +156,7 @@ class ProcessUrlsSpider(scrapy.Spider):
 
     def _process_pdf(
         self, pdf_bytes: bytes, source_url: str, pdf_url: PdfUrlClaim
-    ) -> Any:
+    ) -> Iterator[PoliceLogPdfItem]:
         try:
             with logfire.span("extract pdf text", url=source_url):
                 reader = PdfReader(io.BytesIO(pdf_bytes))

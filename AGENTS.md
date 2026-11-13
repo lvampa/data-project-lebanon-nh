@@ -131,6 +131,7 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 - Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
 - CI (`.github/workflows/ci.yml`) runs the pre-push checks plus Rust and, when Docker inputs change, the image builds; `ci-ok` is the one required check.
+- Use Pyrefly for Python type checking (`uv run pyrefly check`). New code is strict; files on the not-yet-strict list in `pyproject.toml` are not, and only come off it.
 
 ## 7. Frontend
 

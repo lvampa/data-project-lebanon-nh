@@ -29,30 +29,30 @@ def test_ignores_non_officer_items(pipeline):
     from items.police_log import PoliceLogPdfItem
 
     other = PoliceLogPdfItem(url_id=1, raw_text="x")
-    result = pipeline.process_item(other, MagicMock())
+    result = pipeline.process_item(other)
     assert result is other
     pipeline._session.execute.assert_not_called()
 
 
 def test_upserts_officer(pipeline):
-    pipeline.process_item(SAMPLE_ITEM, MagicMock())
+    pipeline.process_item(SAMPLE_ITEM)
     pipeline._session.execute.assert_called_once()
 
 
 def test_close_spider_closes_session(pipeline):
-    pipeline.close_spider(MagicMock())
+    pipeline.close_spider()
     pipeline._session.close.assert_called_once()
 
 
 def test_first_item_stays_committed_when_second_fails(db_session, fail_on_execute):
     pipeline = OfficerPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     fail_on_execute(pipeline._session, 2)
     second = OfficerItem(SAMPLE_ITEM, name="Jane Doe")
 
-    pipeline.process_item(SAMPLE_ITEM, None)
+    pipeline.process_item(SAMPLE_ITEM)
     with pytest.raises(RuntimeError):
-        pipeline.process_item(second, None)
-    pipeline.close_spider(None)
+        pipeline.process_item(second)
+    pipeline.close_spider()
 
     assert db_session.scalars(select(Officer.name)).all() == ["John Smith"]

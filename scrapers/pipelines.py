@@ -1,6 +1,6 @@
 import re
 from datetime import UTC, datetime
-from typing import Self
+from typing import Any, Self, cast
 
 import logfire
 from ingest import ingest_pdf_url
@@ -27,8 +27,9 @@ from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
+from scrapy import Item
 from scrapy.crawler import Crawler
-from sqlalchemy import delete, select
+from sqlalchemy import CursorResult, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 _LLC_PATTERN = re.compile(
@@ -38,17 +39,17 @@ _LLC_PATTERN = re.compile(
 
 
 class UrlRecordPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._records: list[UrlRecord] = []
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, UrlRecordItem):
             return item
 
         self._records.append(UrlRecord.model_validate(dict(item)))
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         # Every spider runs this pipeline, so only open a session when there are URLs.
         if not self._records:
             return
@@ -62,7 +63,8 @@ class UrlRecordPipeline:
             logfire.span("insert pdf urls", found=len(self._records)),
             SessionLocal() as session,
         ):
-            result = session.execute(statement)
+            # An INSERT returns a CursorResult; Session.execute is typed for SELECTs.
+            result = cast(CursorResult[Any], session.execute(statement))
             session.commit()
             logfire.info(
                 "pdf urls flushed", found=len(self._records), inserted=result.rowcount
@@ -84,10 +86,10 @@ class PoliceLogPipeline:
         archive = RawArchive(archive_collection(MongoDB()))
         return cls(archive, spider_name=crawler.spidercls.name)
 
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, PoliceLogPdfItem):
             return item
 
@@ -95,6 +97,7 @@ class PoliceLogPipeline:
         try:
             with logfire.span("ingest police log pdf", url_id=url_id):
                 pdf_url = self._session.get(PdfUrl, url_id)
+                assert pdf_url is not None, f"pdf_urls row {url_id} is gone"
                 counts = ingest_pdf_url(
                     self._session,
                     pdf_url,
@@ -141,15 +144,15 @@ class PoliceLogPipeline:
             self._entry_texts.add(ENTRY_TEXT_SOURCE, record.case_number, version)
         self._entry_texts.flush()
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
 class PropertyPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, PropertyItem):
             return item
 
@@ -249,15 +252,15 @@ class PropertyPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
 class CityStaffPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, CityStaffItem):
             return item
 
@@ -299,15 +302,15 @@ class CityStaffPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
 class OfficerPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, OfficerItem):
             return item
 
@@ -346,15 +349,15 @@ class OfficerPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
 class BudgetDocumentPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, BudgetDocumentItem):
             return item
 
@@ -387,5 +390,5 @@ class BudgetDocumentPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()

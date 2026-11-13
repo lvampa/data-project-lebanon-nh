@@ -13,7 +13,8 @@ dependencies = [
     "pypdf>=6.9.1",
     "scripts",
     "python-dotenv>=1.2.2",
-    "scrapy>=2.14.2",
+    # 2.16 calls pipeline methods without `spider` when they do not ask for it.
+    "scrapy>=2.16",
 ]
 
 

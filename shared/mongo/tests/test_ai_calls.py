@@ -1,13 +1,14 @@
 import socket
 from datetime import UTC, datetime
+from typing import Any
 
 from bson import ObjectId
 from mongo.ai_calls import AiCall, AiCallLog, ai_calls_collection
 from mongo.client import MongoDB
 
 
-def call(**overrides) -> AiCall:
-    values = {
+def call(**overrides: Any) -> AiCall:
+    values: dict[str, Any] = {
         "field": "incident_type",
         "raw_values": ["MV Complaint"],
         "prompt": "Normalize these incident types.",

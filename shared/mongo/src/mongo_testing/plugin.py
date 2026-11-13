@@ -6,6 +6,7 @@ without a conftest.
 
 import os
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from pymongo import MongoClient
@@ -37,7 +38,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(scope="session")
-def mongo_test_db() -> Database:
+def mongo_test_db() -> Database[dict[str, Any]]:
     """The MongoDB test database, after checking the server answers."""
     from mongo import db
 
@@ -76,7 +77,9 @@ def mongo_test_db() -> Database:
 
 
 @pytest.fixture
-def raw_sources(mongo_test_db: Database) -> Iterator[Collection]:
+def raw_sources(
+    mongo_test_db: Database[dict[str, Any]],
+) -> Iterator[Collection[dict[str, Any]]]:
     """The archive collection, dropped after the test so the database stays empty."""
     collection = mongo_test_db[ARCHIVE_COLLECTION]
     collection.drop()
@@ -87,7 +90,9 @@ def raw_sources(mongo_test_db: Database) -> Iterator[Collection]:
 
 
 @pytest.fixture
-def ai_calls(mongo_test_db: Database) -> Iterator[Collection]:
+def ai_calls(
+    mongo_test_db: Database[dict[str, Any]],
+) -> Iterator[Collection[dict[str, Any]]]:
     """The AI call log collection, dropped after the test."""
     collection = mongo_test_db[AI_CALLS_COLLECTION]
     collection.drop()

@@ -29,6 +29,7 @@ def crawl(limit: int) -> dict[str, Any]:
     crawler = process.create_crawler("process_urls")
     process.crawl(crawler, limit=limit)
     process.start()
+    assert crawler.stats is not None
     return crawler.stats.get_stats()
 
 
@@ -44,11 +45,12 @@ def crawl_failed(stats: dict[str, Any]) -> bool:
 
 
 def count_errors_since(session: Session, started_at: datetime) -> int:
-    return session.scalar(
+    errors = session.scalar(
         select(func.count())
         .select_from(PdfUrl)
         .where(PdfUrl.state == "error", PdfUrl.completed_at >= started_at)
     )
+    return errors or 0
 
 
 def main(limit: int) -> int:

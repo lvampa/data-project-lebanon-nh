@@ -2,22 +2,26 @@
 Categorizes distinct incident_type values from log_entries that don't yet have
 a row in incident_type_categories.
 
+Run from scrapers/.
+
 Modes (--mode flag):
 
   dump    Print uncategorized types as JSON to stdout.
           Use for manual subagent runs in Claude Code:
-            uv run python scripts/categorize_incident_types.py --mode dump
+            uv run python -m maintenance.categorize_incident_types --mode dump
           Then ask Claude Code to categorize and pipe results to import mode.
 
-  import  Read categorized JSON from stdin, upsert to DB.
-            cat categories.json | uv run python scripts/categorize_incident_types.py --mode import
+  import  Read categorized JSON from stdin, validate it, upsert to DB.
+            cat categories.json | uv run python -m maintenance.categorize_incident_types --mode import
           JSON format: [{"incident_type": "...", "category": "...", "subcategory": "..."}, ...]
 
   cli     Categorize using the claude CLI (claude --print).
           Routes through Claude Code subscription auth — no separate API key needed.
           Use for Airflow DAGs or scheduled jobs:
-            uv run python scripts/categorize_incident_types.py --mode cli
+            uv run python -m maintenance.categorize_incident_types --mode cli
           Requires: claude CLI installed and authenticated on the machine.
+
+Validation and the upsert are shared with scripts/ingest/import_incident_categories.py.
 
 Idempotent — already-categorized types are skipped in all modes.
 """
@@ -27,7 +31,6 @@ import json
 import re
 import subprocess
 import sys
-from datetime import UTC, datetime
 
 from dotenv import load_dotenv
 
@@ -37,18 +40,22 @@ from postgres import SessionLocal
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-VALID_CATEGORIES = {"Fire", "EMS", "Police", "Traffic", "Administrative"}
+from scripts.ingest.import_incident_categories import (
+    upsert_categories,
+    validate_categories,
+)
+from scripts.models import INCIDENT_CATEGORIES, IncidentCategoryRecord
+
 BATCH_SIZE = 50
 
-_PROMPT_TEMPLATE = """\
+_PROMPT_TEMPLATE = f"""\
 You are categorizing Lebanon NH emergency dispatch incident types for a civic data product.
 
 Given the list of incident types below, return a JSON array where each element has:
 - "incident_type": the exact string from the input (no changes)
-- "category": exactly one of ["Fire", "EMS", "Police", "Traffic", "Administrative"]
+- "category": exactly one of {json.dumps(list(INCIDENT_CATEGORIES))}
 - "subcategory": a concise specific label (e.g. "Structure Fire", "Overdose", "Domestic Disturbance", "MV Accident", "Broadcast Log")
 
 Category guidance:
@@ -61,7 +68,7 @@ Category guidance:
 Return ONLY the JSON array with no additional text.
 
 Incident types to categorize:
-{incident_types}
+{{incident_types}}
 """
 
 
@@ -81,62 +88,17 @@ def fetch_uncategorized(session: Session) -> list[str]:
     return session.execute(stmt).scalars().all()
 
 
-def parse_claude_response(text: str) -> list[dict]:
+def parse_claude_response(text: str) -> list[IncidentCategoryRecord]:
     """
-    Parse Claude's JSON response into a list of category dicts.
-    Strips markdown fences if present. Validates category values.
-    Missing subcategory defaults to None.
+    Parse Claude's JSON response into validated category records.
+    Strips markdown fences and any text around the JSON array.
     """
     cleaned = re.sub(r"```(?:json)?\s*", "", text).strip()
     match = re.search(r"\[.*\]", cleaned, re.DOTALL)
     if not match:
         raise ValueError(f"No JSON array found in response: {cleaned[:200]}")
 
-    rows = json.loads(match.group())
-    result = []
-    for row in rows:
-        category = row.get("category", "")
-        if category not in VALID_CATEGORIES:
-            raise ValueError(
-                f"Invalid category {category!r} — must be one of {sorted(VALID_CATEGORIES)}"
-            )
-        result.append(
-            {
-                "incident_type": row["incident_type"],
-                "category": category,
-                "subcategory": row.get("subcategory") or None,
-            }
-        )
-    return result
-
-
-def upsert_categories(session: Session, rows: list[dict]) -> None:
-    """Upsert categorized rows into incident_type_categories."""
-    if not rows:
-        return
-
-    now = datetime.now(UTC).replace(tzinfo=None)
-    for row in rows:
-        stmt = (
-            pg_insert(IncidentTypeCategory)
-            .values(
-                raw_incident_type=row["incident_type"],
-                category=row["category"],
-                subcategory=row["subcategory"],
-                created_at=now,
-                updated_at=now,
-            )
-            .on_conflict_do_update(
-                index_elements=["raw_incident_type"],
-                set_={
-                    "category": row["category"],
-                    "subcategory": row["subcategory"],
-                    "updated_at": now,
-                },
-            )
-        )
-        session.execute(stmt)
-    session.commit()
+    return validate_categories(json.loads(match.group()))
 
 
 def dump_uncategorized(session: Session) -> None:
@@ -147,7 +109,7 @@ def dump_uncategorized(session: Session) -> None:
 
 def import_from_stdin(session: Session) -> None:
     """Read categorized JSON from stdin and upsert to DB."""
-    rows = json.loads(sys.stdin.read())
+    rows = validate_categories(json.loads(sys.stdin.read()))
     upsert_categories(session, rows)
     print(f"Upserted {len(rows)} categories.")
 

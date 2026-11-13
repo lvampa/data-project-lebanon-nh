@@ -1,6 +1,78 @@
+from types import SimpleNamespace
+
+import httpx
 import pytest
 
-from scripts.scrape.download_budget_pdfs import extract_text, output_path
+from scripts.scrape import download_budget_pdfs
+from scripts.scrape.download_budget_pdfs import (
+    documents_needing_text,
+    download_pdf,
+    extract_text,
+    make_client,
+    output_path,
+)
+
+# --- documents_needing_text ---
+
+
+def budget_doc(fiscal_year: int, text_extracted: bool) -> SimpleNamespace:
+    return SimpleNamespace(
+        fiscal_year=fiscal_year,
+        document_type="budget_book",
+        text_extracted=text_extracted,
+    )
+
+
+def test_documents_needing_text_includes_unextracted(tmp_path, monkeypatch):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    doc = budget_doc(2026, text_extracted=False)
+    assert documents_needing_text([doc]) == [doc]
+
+
+def test_documents_needing_text_redoes_extracted_doc_with_missing_file(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    doc = budget_doc(2026, text_extracted=True)
+    assert documents_needing_text([doc]) == [doc]
+
+
+def test_documents_needing_text_skips_extracted_doc_with_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(download_budget_pdfs, "DATA_DIR", tmp_path)
+    (tmp_path / "2026-budget_book.txt").write_text("budget text")
+    doc = budget_doc(2026, text_extracted=True)
+    assert documents_needing_text([doc]) == []
+
+
+# --- download_pdf ---
+
+
+def test_client_sends_user_agent_with_contact():
+    with make_client() as client:
+        assert "github.com/" in client.headers["User-Agent"]
+        assert client.timeout.read is not None
+
+
+def test_download_pdf_writes_response_body(tmp_path):
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=b"%PDF-1.7 body")
+    )
+    dest = tmp_path / "budget.pdf"
+    with httpx.Client(transport=transport) as client:
+        download_pdf(client, "https://lebanonnh.gov/budget.pdf", dest)
+    assert dest.read_bytes() == b"%PDF-1.7 body"
+
+
+def test_download_pdf_raises_on_http_error(tmp_path):
+    transport = httpx.MockTransport(lambda request: httpx.Response(404))
+    dest = tmp_path / "budget.pdf"
+    with (
+        httpx.Client(transport=transport) as client,
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        download_pdf(client, "https://lebanonnh.gov/budget.pdf", dest)
+    assert not dest.exists()
+
 
 # --- output_path ---
 
@@ -46,12 +118,14 @@ def test_extract_text_joins_pages(tmp_path):
 
 from unittest.mock import MagicMock
 
+from scripts.ingest import import_budget_data
 from scripts.ingest.import_budget_data import (
     parse_budget_data,
     upsert_capital_projects,
     upsert_line_items,
     validate_year_entry,
 )
+from scripts.models import BudgetCapitalProjectRecord, BudgetLineItemRecord
 
 VALID_JSON = """[
   {
@@ -128,7 +202,54 @@ def test_validate_fiscal_year_must_be_int():
 
 
 def test_validate_valid_entry():
-    validate_year_entry({"fiscal_year": 2026, "line_items": [], "capital_projects": []})
+    year = validate_year_entry(
+        {"fiscal_year": 2026, "line_items": [], "capital_projects": []}
+    )
+    assert year.fiscal_year == 2026
+
+
+def test_validate_rejects_line_item_missing_field():
+    with pytest.raises(ValueError, match="department"):
+        validate_year_entry(
+            {
+                "fiscal_year": 2026,
+                "line_items": [
+                    {
+                        "gl_number": "1100-4140-0000-1100-0000",
+                        "fund_code": "1100",
+                        "fund_name": "General Fund",
+                        "description": "FULL TIME WAGES",
+                    }
+                ],
+            }
+        )
+
+
+# --- main ---
+
+
+def test_main_fails_when_input_file_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(import_budget_data, "INPUT_FILE", tmp_path / "missing.json")
+    monkeypatch.setattr(import_budget_data.logfire, "configure", lambda: None)
+    session_factory = MagicMock()
+    monkeypatch.setattr(import_budget_data, "SessionLocal", session_factory)
+
+    with pytest.raises(FileNotFoundError, match="missing.json"):
+        import_budget_data.main()
+    session_factory.assert_not_called()
+
+
+def test_main_writes_nothing_when_any_year_is_invalid(tmp_path, monkeypatch):
+    input_file = tmp_path / "budget_data.json"
+    input_file.write_text('[{"fiscal_year": 2025}, {"fiscal_year": "2026"}]')
+    monkeypatch.setattr(import_budget_data, "INPUT_FILE", input_file)
+    monkeypatch.setattr(import_budget_data.logfire, "configure", lambda: None)
+    session_factory = MagicMock()
+    monkeypatch.setattr(import_budget_data, "SessionLocal", session_factory)
+
+    with pytest.raises(ValueError, match="fiscal_year"):
+        import_budget_data.main()
+    session_factory.assert_not_called()
 
 
 # --- upsert_line_items ---
@@ -136,7 +257,7 @@ def test_validate_valid_entry():
 
 def test_upsert_line_items_executes_per_item():
     session = MagicMock()
-    items = [
+    raw_items = [
         {
             "gl_number": "1100-4140-0000-1100-0000",
             "fund_code": "1100",
@@ -158,6 +279,7 @@ def test_upsert_line_items_executes_per_item():
             "year_approved": 44380.00,
         },
     ]
+    items = [BudgetLineItemRecord.model_validate(item) for item in raw_items]
     count = upsert_line_items(session, 2026, items)
     assert count == 2
     assert session.execute.call_count == 2
@@ -176,14 +298,14 @@ def test_upsert_line_items_noop_on_empty():
 def test_upsert_capital_projects_executes_per_project():
     session = MagicMock()
     projects = [
-        {
-            "gl_number": "1455-3359-4312-2009-7208-1455",
-            "project_name": "TRUES BROOK BRIDGE",
-            "fund_code": "1455",
-            "fund_name": "CIP",
-            "year_requested": 228070.00,
-            "year_approved": 228070.00,
-        },
+        BudgetCapitalProjectRecord(
+            gl_number="1455-3359-4312-2009-7208-1455",
+            project_name="TRUES BROOK BRIDGE",
+            fund_code="1455",
+            fund_name="CIP",
+            year_requested=228070.00,
+            year_approved=228070.00,
+        ),
     ]
     count = upsert_capital_projects(session, 2026, projects)
     assert count == 1

@@ -19,14 +19,13 @@ from pathlib import Path
 from typing import Any
 
 import logfire
-from mongo.archive import RawArchive, archive_collection, stored_body
+from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB
 from pipelines import PropertyPipeline
 from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
-from pymongo.collection import Collection
 from scrapy.http import HtmlResponse
 from spiders.vgsi_property import VgsiPropertySpider
 from sqlalchemy import select
@@ -167,7 +166,7 @@ class CheckReport:
         return not self.pdfs_with_neither
 
 
-def check(collection: Collection, session: Session) -> CheckReport:
+def check(collection: RawCollection, session: Session) -> CheckReport:
     """What the archive holds, and which Postgres records it has no original for."""
     sources = [
         SourceSize(row["_id"], row["versions"], row["size_bytes"])
@@ -214,7 +213,7 @@ def check(collection: Collection, session: Session) -> CheckReport:
     return report
 
 
-def _storage_bytes(collection: Collection) -> int:
+def _storage_bytes(collection: RawCollection) -> int:
     stats = next(collection.aggregate([{"$collStats": {"storageStats": {}}}]), None)
     return stats["storageStats"]["storageSize"] if stats else 0
 

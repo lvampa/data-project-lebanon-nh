@@ -2,8 +2,10 @@ import logging
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 import run_process_urls
@@ -30,18 +32,23 @@ def add_url(session, canonical_url: str, **columns) -> None:
     session.commit()
 
 
+class FakeCrawl:
+    def __init__(self) -> None:
+        self.limits: list[int] = []
+        self.during: Callable[[], None] = lambda: None
+        self.stats: dict[str, Any] = {"finish_reason": "finished"}
+
+    def __call__(self, limit: int) -> dict[str, Any]:
+        self.limits.append(limit)
+        self.during()
+        return self.stats
+
+
 @pytest.fixture
 def crawl(monkeypatch):
     """Stand in for the crawl. Tests set `crawl.during` to what a run would do."""
 
-    def fake_crawl(limit: int) -> dict:
-        fake_crawl.limits.append(limit)
-        fake_crawl.during()
-        return fake_crawl.stats
-
-    fake_crawl.limits = []
-    fake_crawl.during = lambda: None
-    fake_crawl.stats = {"finish_reason": "finished"}
+    fake_crawl = FakeCrawl()
     monkeypatch.setattr(run_process_urls, "crawl", fake_crawl)
     return fake_crawl
 

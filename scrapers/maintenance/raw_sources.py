@@ -76,7 +76,7 @@ def replay_parcels(
     keys = parcel_ids or archive.keys(PARCEL_SOURCE)
     spider = VgsiPropertySpider()
     pipeline = PropertyPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     replayed = inserted = updated = unchanged = no_body = 0
     try:
         for parcel_id in keys:
@@ -86,7 +86,7 @@ def replay_parcels(
                 continue
             before = _stored_parcel(parcel_id)
             for item in spider.parse_parcel(response):
-                pipeline.process_item(item, None)
+                pipeline.process_item(item)
             after = _stored_parcel(parcel_id)
             replayed += 1
             if before is None:
@@ -96,7 +96,7 @@ def replay_parcels(
             else:
                 unchanged += 1
     finally:
-        pipeline.close_spider(None)
+        pipeline.close_spider()
     counts = ReplayCounts(replayed, inserted, updated, unchanged, no_body)
     logfire.info(
         "parcels replayed",

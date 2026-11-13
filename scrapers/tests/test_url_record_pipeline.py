@@ -19,10 +19,10 @@ def make_item(**kwargs) -> UrlRecordItem:
 
 def run_pipeline(*items) -> None:
     pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     for item in items:
-        pipeline.process_item(item, None)
-    pipeline.close_spider(None)
+        pipeline.process_item(item)
+    pipeline.close_spider()
 
 
 def stored_urls(session) -> list[PdfUrl]:
@@ -55,6 +55,7 @@ def test_inserts_archive_url_and_log_date(db_session):
     )
 
     [url] = stored_urls(db_session)
+    assert url.archive_url is not None
     assert url.archive_url.startswith("https://web.archive.org/")
     assert url.log_date == date(2026, 5, 1)
     assert url.state == "pending"
@@ -63,11 +64,11 @@ def test_inserts_archive_url_and_log_date(db_session):
 @patch("pipelines.SessionLocal")
 def test_passes_through_non_url_record_items(mock_session_local):
     pipeline = UrlRecordPipeline()
-    pipeline.open_spider(None)
+    pipeline.open_spider()
     item = PoliceLogPdfItem(url_id=1, raw_text="x")
 
-    result = pipeline.process_item(item, None)
-    pipeline.close_spider(None)
+    result = pipeline.process_item(item)
+    pipeline.close_spider()
 
     assert result is item
     mock_session_local.assert_not_called()

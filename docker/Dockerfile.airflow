@@ -18,6 +18,13 @@ COPY --chown=airflow shared/mongo ./shared/mongo/
 COPY --chown=airflow shared/postgres ./shared/postgres/
 COPY --chown=airflow scripts ./scripts/
 
-RUN uv sync --frozen --package scrapers
+RUN uv sync --frozen --package scrapers --package scripts
+
+# scrape_llcs and scrape_civicclerk drive Chromium. The browser goes in the airflow
+# user's cache; its system libraries need root.
+RUN .venv/bin/playwright install chromium
+USER root
+RUN /opt/project/.venv/bin/playwright install-deps chromium
+USER airflow
 
 WORKDIR /opt/airflow

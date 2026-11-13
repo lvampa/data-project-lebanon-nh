@@ -26,5 +26,5 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 3.5, 4.8, 4.9, 4.10, 5.4_
 
 - [x] 4. Schedule the scraper
-  - Add the `civicclerk_planning` DAG in `dags/scrape/civicclerk_planning.py`, daily at 05:00 UTC, no catchup, one retry after 5 minutes.
+  - Add the `civicclerk_planning` DAG spec in `dags/specs.py`, daily at 05:00 UTC, no catchup, one retry after 5 minutes.
   - _Requirements: 5.1, 5.2, 5.3_

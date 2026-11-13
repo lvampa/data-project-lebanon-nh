@@ -53,7 +53,7 @@ The same API should be usable by the public web app later.
 
 #### Acceptance criteria
 
-1. THE Airflow scheduler SHALL run the `sync_elasticsearch` DAG every day at 03:00 UTC.
+1. WHEN a scraper DAG completes, THE Airflow scheduler SHALL trigger the `sync_elasticsearch` DAG.
 2. IF the sync task fails, THEN THE Airflow scheduler SHALL retry it once after 5 minutes.
 3. WHEN the DAG is first enabled, THE Airflow scheduler SHALL NOT backfill runs for past dates.
 

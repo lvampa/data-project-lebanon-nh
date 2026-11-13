@@ -19,8 +19,8 @@ Everything except result links and collapsible sections (6.11, 6.12) is built.
 ```
 Postgres ──► scripts/sync/sync_es.py ──► Elasticsearch (9 indices)
    ▲               ▲                            │
-   │      dags/sync/sync_elasticsearch.py       │
-   │           (03:00 UTC nightly)              │
+   │     sync_elasticsearch (dags/specs.py)     │
+   │          (triggered by scrapers)           │
    │                                            ▼
    └── address_normalizations ◄── api/routers/search.py  GET /api/search
                                                 │
@@ -50,7 +50,8 @@ Incidents come from the `LogEntry` model.
 
 ### Sync DAG
 
-Lives in `dags/sync/sync_elasticsearch.py`.
+Lives in `dags/specs.py` as the `sync_elasticsearch` spec, built by `dags/build_dags.py`.
+It has no schedule of its own; each scraper DAG triggers it when it finishes.
 
 | Setting | Value |
 |---|---|

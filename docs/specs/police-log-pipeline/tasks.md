@@ -188,7 +188,7 @@ Task 15 needs PR 4's columns, and task 16 needs PR 4's `shared/locations` packag
   - This needs task 11's `canonical.py`; build that first if it isn't merged.
   - _Requirements: 6.14, 6.15, 6.16, 6.17, 6.18, 6.19, 6.20_
 
-- [ ] 15. Add the normalization job
+- [x] 15. Add the normalization job
   - Waiting values, case and spacing groups for incident types, canonical groups for locations, the rule pass before any location call, batches of 50, 5 calls per field with spillover, per-value failed attempts, the review mark at 3.
   - No location AI calls when the street list is empty, with an error logged.
   - Rows store `source` and `prompt_version`. `--redo` skips rows already on the current prompt version.

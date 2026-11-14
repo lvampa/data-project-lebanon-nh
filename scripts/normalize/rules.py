@@ -41,12 +41,24 @@ class RuleNormalization:
     kind: LocationKind
     normalized_address: str
     geocode_query: str
+    # A street to fall back on when the full query finds nothing. None for a place.
+    street: str | None = None
 
 
 @dataclass(frozen=True)
 class RuleResult:
     settled: list[RuleNormalization]
     leftovers: list[CanonicalLocation]
+
+
+def display_form(text: str) -> str:
+    """How a rule row's address reads. Canonical form is upper case, so "12 MAIN ST".
+
+    The AI writes "12 Main St". To make the two match, return `text.title()` here,
+    or a smarter version that keeps ordinals and direction letters. Nothing else
+    needs to change.
+    """
+    return text
 
 
 def rules_prompt_version() -> str:
@@ -82,7 +94,7 @@ def _address_on_a_listed_street(
     house_number, street = split_house_number(address)
     if house_number is None or street not in streets:
         return None
-    return _rule(item, "address", address)
+    return _rule(item, "address", address, street=street)
 
 
 def _intersection_of_listed_streets(
@@ -92,7 +104,7 @@ def _intersection_of_listed_streets(
     parts = item.canonical.split(_INTERSECTION_JOINER)
     if len(parts) != 2 or not all(part in streets for part in parts):
         return None
-    return _rule(item, "intersection", " and ".join(parts))
+    return _rule(item, "intersection", " and ".join(parts), street=parts[0])
 
 
 def _known_place_code(
@@ -106,11 +118,16 @@ def _known_place_code(
 
 
 def _rule(
-    item: CanonicalLocation, kind: LocationKind, normalized_address: str
+    item: CanonicalLocation,
+    kind: LocationKind,
+    normalized_address: str,
+    street: str | None = None,
 ) -> RuleNormalization:
+    shown = display_form(normalized_address)
     return RuleNormalization(
         canonical=item.canonical,
         kind=kind,
-        normalized_address=normalized_address,
-        geocode_query=f"{normalized_address}, {_CITY}",
+        normalized_address=shown,
+        geocode_query=f"{shown}, {_CITY}",
+        street=street,
     )

@@ -89,6 +89,7 @@ def test_a_house_number_on_a_listed_street_is_an_address():
     assert rule.kind == "address"
     assert rule.normalized_address == "12 MAIN ST"
     assert rule.geocode_query == "12 MAIN ST, Lebanon, NH"
+    assert rule.street == "MAIN ST"
     assert leftovers(result) == []
 
 
@@ -120,6 +121,7 @@ def test_two_listed_streets_joined_by_and_are_an_intersection():
 
     rule = settled(result)["MAIN ST & ELM ST"]
     assert rule.kind == "intersection"
+    assert rule.street == "MAIN ST"
     assert rule.normalized_address == "MAIN ST and ELM ST"
     assert rule.geocode_query == "MAIN ST and ELM ST, Lebanon, NH"
 
@@ -164,6 +166,7 @@ def test_a_known_place_code_copies_its_address_and_kind():
 
     rule = settled(result)["HANNAFORDS MARKET - MARKET ST"]
     assert rule.kind == "place"
+    assert rule.street is None
     assert rule.normalized_address == "Hannaford, Market St"
     assert rule.geocode_query == "Hannaford, Market St, Lebanon, NH"
 
@@ -244,3 +247,15 @@ def test_every_location_is_either_settled_or_left_over_exactly_once():
 
 def test_a_rule_rows_prompt_version_names_the_rules_version():
     assert rules_prompt_version() == f"rules-{RULES_VERSION}"
+
+
+def test_the_display_helper_decides_how_a_rule_rows_address_reads(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.normalize.rules.display_form", lambda text: text.title()
+    )
+
+    result = apply_rules([location("12 Main St")], STREETS, places={})
+
+    rule = settled(result)["12 MAIN ST"]
+    assert rule.normalized_address == "12 Main St"
+    assert rule.geocode_query == "12 Main St, Lebanon, NH"

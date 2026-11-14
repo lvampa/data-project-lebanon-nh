@@ -4,27 +4,37 @@
 with window_start as (
     select max(log_date) - {{ var('public_window_days') }} as after_date
     from {{ ref('incidents') }}
+),
+
+in_window as (
+    select
+        i.*,
+        -- A location waiting for review is treated as not normalized, so the incident
+        -- is listed with no public location and no pin until it is reviewed (11.19).
+        case when i.location_needs_review then null else i.location_kind end
+            as public_kind
+    from {{ ref('incidents') }} as i
+    cross join window_start as w
+    where i.log_date > w.after_date
 )
 
 select
-    i.case_number,
-    i.log_date,
-    i.reported_at,
-    i.category,
-    i.normalized_type,
-    i.raw_incident_type as incident_type,
-    i.disposition,
-    i.call_source,
-    {{ public_location('i.location_kind', 'i.normalized_address') }} as location,
-    i.location_kind,
-    {{ public_coordinate('i.location_kind', 'i.lat') }} as lat,
-    {{ public_coordinate('i.location_kind', 'i.lng') }} as lng,
+    case_number,
+    log_date,
+    reported_at,
+    category,
+    normalized_type,
+    raw_incident_type as incident_type,
+    disposition,
+    call_source,
+    {{ public_location('public_kind', 'normalized_address') }} as location,
+    public_kind as location_kind,
+    {{ public_coordinate('public_kind', 'lat') }} as lat,
+    {{ public_coordinate('public_kind', 'lng') }} as lng,
     -- Not placed, or no normalization yet: empty, like the coordinates (11.8, 11.9).
-    case when i.location_kind is not null and i.lat is not null
-        then i.coordinate_precision end as coordinate_precision,
-    i.source_url,
+    case when public_kind is not null and lat is not null
+        then coordinate_precision end as coordinate_precision,
+    source_url,
     null::text as officer,
     null::text as reference_number
-from {{ ref('incidents') }} as i
-cross join window_start as w
-where i.log_date > w.after_date
+from in_window

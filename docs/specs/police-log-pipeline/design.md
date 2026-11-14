@@ -437,6 +437,7 @@ models/
 
 - `incidents` left-joins entries to both lookup tables, so an entry with no normalization has empty normalized columns (8.12).
 - `public_incidents` selects from `incidents`: the 90 day window from the newest log date, the public columns, the public location and coordinates, and empty values for the held-back fields (11.2 to 11.10).
+  A location with a review mark is treated as not normalized, so its incidents are listed with no location or pin until it's reviewed (11.19).
 - A dbt macro, `public_location`, is the one place that works out block level: for kind `address` it reads the leading house number from the normalized address, rounds it down to the hundred, drops it when under 100, and rounds coordinates to 3 places (6.11, 11.6, 11.7).
   Data check 14.5 tests its output.
 - The incidents and stats API and admin search read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
@@ -1004,3 +1005,6 @@ The agents don't touch the frontend.
 8. **The street list's real size.**
    It's measured in task 14.
    Past about 1,500 streets, choose between trimming it (for example, to streets that appear in the logs) and the `find_street` tool.
+9. **Locations waiting for review on the public site.**
+   Decided as the safe default on 2026-11-13, until Connor says otherwise: a location with `needs_review` set gives its incidents no public location and no pin (11.19).
+   The incident is still listed. Connor can relax this, for example to publish AI rows marked unsure, by dropping the one `case` in `public_incidents`.

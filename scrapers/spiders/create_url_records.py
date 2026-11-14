@@ -1,10 +1,11 @@
 import re
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, cast, override
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from items import UrlRecordItem
-from scrapy.http import Request, TextResponse
+from scrapy.http import Request, Response
 from scrapy.selector import Selector
 from scrapy.spiders import Spider
 
@@ -18,14 +19,15 @@ class BuildDailyUrlsSpider(Spider):
     def __init__(
         self,
         url: str = "https://www.lebanonnh.gov/232/Daily-Police-Log",
-        *args,
-        **kwargs,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.url = url
 
-    async def start(self):
-        yield Request(self.url)
+    @override
+    async def start(self) -> AsyncIterator[Request]:
+        yield Request(self.url, callback=self.parse_index)
 
     @staticmethod
     def extract_url(link: Selector, base_url: str) -> tuple[str, str | None] | None:
@@ -45,7 +47,7 @@ class BuildDailyUrlsSpider(Spider):
 
         return cleaned, None
 
-    def parse(self, response: TextResponse, **kwargs: Any) -> Any:
+    def parse_index(self, response: Response, **kwargs: Any) -> Iterator[UrlRecordItem]:
         # pdf_urls.created_at is a naive column that holds UTC, like the other writers.
         now = datetime.now(UTC).replace(tzinfo=None)
         for link in cast(list[Selector], response.css("a.fileType.pdf")):

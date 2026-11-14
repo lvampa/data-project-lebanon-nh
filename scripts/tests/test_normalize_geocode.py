@@ -6,7 +6,7 @@ import pytest
 from locations.geocode import GeocodeResult, Precision
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from scripts.normalize import geocode as geocode_job
 
@@ -335,3 +335,31 @@ def test_an_unknown_argument_is_refused_and_never_runs_the_job(db_session):
         geocode_job.main(["--everything"], geocoder=geocoder)
 
     assert geocoder.queries == []
+
+
+def test_a_row_an_admin_makes_human_after_the_job_loaded_it_is_not_overwritten(
+    db_session,
+):
+    add_row(db_session, "FIRST")
+    add_row(db_session, "SECOND")
+
+    class EditsSecondWhileLookingUpFirst(FakeGeocoder):
+        def __call__(self, query: str) -> GeocodeResult | None:
+            if query.startswith("FIRST"):
+                db_session.execute(
+                    update(AddressNormalization)
+                    .where(AddressNormalization.raw_address == "SECOND")
+                    .values(source="human", lat=1.0, lng=2.0, geocoded_via="manual")
+                )
+                db_session.commit()
+            return super().__call__(query)
+
+    geocoder = EditsSecondWhileLookingUpFirst(
+        {"FIRST, Lebanon, NH": hit(), "SECOND, Lebanon, NH": hit()}
+    )
+
+    geocode_job.run(geocoder)
+
+    second = the_row(db_session, "SECOND")
+    assert (second.lat, second.lng, second.geocoded_via) == (1.0, 2.0, "manual")
+    assert geocoder.queries == ["FIRST, Lebanon, NH"]

@@ -52,6 +52,9 @@ def run(
             if counts.requests >= max_requests:
                 counts.stopped_at_limit = True
                 break
+            if not _still_ours_to_place(session, row):
+                session.rollback()
+                continue
             _place(session, row, geocoder, counts, max_requests)
             session.commit()
     logfire.info(
@@ -76,6 +79,13 @@ def _rows_to_place(session: Session) -> list[AddressNormalization]:
             .order_by(AddressNormalization.id)
         )
     )
+
+
+def _still_ours_to_place(session: Session, row: AddressNormalization) -> bool:
+    """Re-read the row under a lock. A lookup can take minutes, and the admin may have
+    edited the row since it was loaded. The lock holds the admin's save until we commit."""
+    session.refresh(row, with_for_update=True)
+    return row.source in ("ai", "rule") and row.lat is None
 
 
 def _place(

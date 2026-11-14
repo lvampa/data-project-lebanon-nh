@@ -385,7 +385,8 @@ It geocodes whatever has been normalized so far, so a value Connor normalizes to
 - It takes the police log lock for its run, so it never overlaps the normalization job (16.2, 16.3).
 - A place code that already has coordinates on another row supplies them, with `geocoded_via = 'place_code'` (6.2).
 - A row with the same normalized address and kind as a placed row copies its coordinates and its `geocoded_via` (6.25).
-  A donor pinned by hand (`manual`) is skipped, because a copy was not placed by a person.
+  A hand-placed donor is used too, so two spellings of one address never land on different spots.
+  The copy keeps `source`, and `geocoded_via` says how the coordinates were found.
 - Otherwise it tries `geocode_query`, then the street alone, which gives an `approximate` result (6.9).
 - A limiter holds requests to 1 per second, and the job stops at 600 requests per run (6.7, 6.8).
 - A result outside the city bounds is discarded (6.4).

@@ -158,12 +158,12 @@ def _reuse_same_address(session: Session, row: AddressNormalization) -> bool:
         session,
         row,
         AddressNormalization.normalized_address == row.normalized_address,
-        # A copy was not placed by a person, so a hand-placed pin is not passed on.
-        AddressNormalization.geocoded_via.is_distinct_from("manual"),
     )
     if donor is None:
         return False
     _copy_pin(row, donor)
+    # A hand-placed pin is the best one for the address, so it is copied too.
+    # `geocoded_via` says how the coordinates were found; `source` still says who owns the row.
     row.geocoded_via = donor.geocoded_via
     return True
 

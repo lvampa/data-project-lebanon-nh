@@ -81,7 +81,7 @@ def test_an_empty_properties_table_gives_an_empty_street_list(db_session):
     assert load_street_list(db_session) == []
 
 
-# --- 6.15: a house number on a listed street ---
+# --- a house number on a listed street ---
 
 
 def test_a_house_number_on_a_listed_street_is_an_address():
@@ -115,7 +115,7 @@ def test_a_house_number_on_an_unlisted_street_is_a_leftover():
     assert leftovers(result) == ["12 OAK ST"]
 
 
-# --- 6.16: two listed streets ---
+# --- two listed streets ---
 
 
 def test_two_listed_streets_joined_by_and_are_an_intersection():
@@ -154,7 +154,7 @@ def test_three_streets_are_not_an_intersection():
     assert result.settled == []
 
 
-# --- 6.17: a known place code ---
+# --- a known place code ---
 
 HANNAFORD = PlaceNormalization(normalized_address="Hannaford, Market St", kind="place")
 

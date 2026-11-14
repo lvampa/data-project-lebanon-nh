@@ -33,7 +33,7 @@ def raws(accepted) -> list[str]:
     return [entry.item.raw for entry in accepted]
 
 
-# --- the answer as a whole (8.2) ---
+# --- the answer as a whole ---
 
 
 @pytest.mark.parametrize(

@@ -230,3 +230,7 @@ tmp/
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Spec working files. Only design.md is tracked.
+docs/specs/*/requirements.md
+docs/specs/*/tasks.md

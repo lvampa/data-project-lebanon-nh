@@ -89,7 +89,7 @@ def _rows_to_place(session: Session) -> list[AddressNormalization]:
                 AddressNormalization.normalized_address.is_not(None),
                 AddressNormalization.lat.is_(None),
                 AddressNormalization.geocode_attempts < MAX_ATTEMPTS,
-                # A bare highway is marked once and left for a person (6.3).
+                # A bare highway is marked once and left for a person.
                 or_(
                     AddressNormalization.kind != "highway",
                     AddressNormalization.needs_review.is_(False),
@@ -139,7 +139,7 @@ def _place(
 
 
 def _reuse_place_code(session: Session, row: AddressNormalization) -> bool:
-    """6.2: a place code another row has already placed supplies its coordinates."""
+    """A place code another row has already placed supplies its coordinates."""
     if not row.place_code:
         return False
     donor = _placed_donor(

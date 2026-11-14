@@ -121,5 +121,5 @@ Raw values (JSON): {json.dumps(list(raw_values))}
 
 
 def location_prompt_version(streets: Sequence[str]) -> str:
-    """The effective version: it changes whenever the street list does (6.24)."""
+    """The effective version: it changes whenever the street list does."""
     return f"{LOCATION_PROMPT_VERSION}+streets-{street_list_version(streets)}"

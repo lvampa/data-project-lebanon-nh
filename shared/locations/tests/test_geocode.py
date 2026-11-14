@@ -168,7 +168,7 @@ def test_the_user_agent_falls_back_to_the_repo(contact):
     assert "github.com/" in get.call_args.kwargs["headers"]["User-Agent"]
 
 
-# --- only Lebanon, NH counts (6.4) ---
+# --- only Lebanon, NH counts ---
 
 
 def test_the_request_asks_for_address_details():
@@ -225,7 +225,7 @@ def test_a_match_outside_the_box_is_a_miss_even_when_it_says_lebanon_nh():
         assert look_up() is None
 
 
-# --- the city bounds (6.4) ---
+# --- the city bounds ---
 
 
 def test_the_city_center_is_inside_the_bounds():
@@ -252,7 +252,7 @@ def test_places_outside_the_city_are_outside_the_bounds(place, lat, lng):
     assert not in_city_bounds(lat, lng), place
 
 
-# --- one request per second (6.7) ---
+# --- one request per second ---
 
 
 class FakeClock:

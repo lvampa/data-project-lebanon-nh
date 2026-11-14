@@ -97,7 +97,7 @@ def test_a_raw_value_with_quotes_and_newlines_stays_one_json_string():
     assert json.dumps([value]) in prompt
 
 
-# --- the location prompt's version follows the street list (6.24) ---
+# --- the location prompt's version follows the street list ---
 
 
 def test_the_street_list_version_is_eight_hex_digits_and_ignores_input_order():

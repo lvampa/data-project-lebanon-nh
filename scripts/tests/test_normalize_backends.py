@@ -321,18 +321,36 @@ def test_check_ready_fails_when_the_binary_is_missing(monkeypatch):
         ClaudeCliBackend(model="haiku").check_ready()
 
 
-def test_an_api_key_in_the_environment_stops_the_run_before_any_call(
-    fake_claude, monkeypatch
+@pytest.mark.parametrize(
+    "variable",
+    [
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "CLAUDE_CODE_USE_BEDROCK",
+        "CLAUDE_CODE_USE_VERTEX",
+    ],
+)
+def test_anything_that_bills_another_account_stops_the_run_before_any_call(
+    fake_claude, monkeypatch, variable
 ):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv(variable, "1")
     backend = ClaudeCliBackend(model="haiku")
 
-    with pytest.raises(AiBackendUnavailable, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(AiBackendUnavailable, match=variable):
         backend.check_ready()
-    with pytest.raises(AiBackendUnavailable, match="ANTHROPIC_API_KEY"):
+    with pytest.raises(AiBackendUnavailable, match=variable):
         backend.complete("prompt", SCHEMA)
 
     assert not fake_claude.log.exists()
+
+
+def test_command_is_the_exact_argv_every_call_uses(fake_claude):
+    fake_claude.play("ok", cli_result(ANSWER))
+    backend = ClaudeCliBackend(model="haiku")
+
+    backend.complete("prompt", SCHEMA)
+
+    assert backend.command(SCHEMA)[1:] == fake_claude.recorded("argv.json")
 
 
 # --- configuration ---

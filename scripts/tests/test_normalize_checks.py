@@ -38,12 +38,23 @@ def raws(accepted) -> list[str]:
 
 @pytest.mark.parametrize(
     "answer",
-    [{}, {"items": []}, {"items": "nope"}, {"other": 1}, [], "text", None],
-    ids=["empty", "no_items", "items_not_a_list", "wrong_key", "list", "text", "none"],
+    [{}, {"items": "nope"}, {"other": 1}, [], "text", None],
+    ids=["empty", "items_not_a_list", "wrong_key", "list", "text", "none"],
 )
 def test_an_empty_or_off_schema_answer_is_refused_whole(answer):
     with pytest.raises(AnswerOffSchema):
         check_incident_types(answer, sent=["MV COMPLAINT"], names_in_use=[])
+
+
+def test_an_answer_with_an_empty_item_list_leaves_every_value_missing():
+    # Missing values get a failed attempt, so a batch the model always answers with
+    # nothing reaches the attempt limit instead of being sent again every run.
+    checked = check_incident_types(
+        {"items": []}, sent=["MV COMPLAINT", "NOISE"], names_in_use=[]
+    )
+
+    assert checked.accepted == []
+    assert checked.missing == ["MV COMPLAINT", "NOISE"]
 
 
 # --- shared rules, shown on incident types ---
@@ -73,7 +84,9 @@ def test_an_item_for_a_value_that_was_not_sent_is_discarded():
     checked = check_incident_types(answer, sent=["MV COMPLAINT"], names_in_use=[])
 
     assert raws(checked.accepted) == ["MV COMPLAINT"]
-    assert [(d.raw, d.reason) for d in checked.discarded] == [("INVENTED", "not sent")]
+    # A value the job never sent is not a value it can charge an attempt to.
+    assert checked.discarded == []
+    assert checked.not_sent == ["INVENTED"]
 
 
 def test_a_value_that_comes_back_twice_is_discarded_both_times_and_not_missing():
@@ -261,8 +274,8 @@ def test_locations_share_the_not_sent_twice_and_missing_rules():
     checked = check_locations(answer, sent=["A", "B"], streets=STREETS)
 
     assert checked.accepted == []
-    assert sorted(d.reason for d in checked.discarded) == [
-        "not sent",
-        "returned more than once",
+    assert [(d.raw, d.reason) for d in checked.discarded] == [
+        ("A", "returned more than once")
     ]
+    assert checked.not_sent == ["NOT SENT"]
     assert checked.missing == ["B"]

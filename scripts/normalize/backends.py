@@ -18,6 +18,14 @@ DEFAULT_BACKEND = "claude_cli"
 DEFAULT_MODEL = "haiku"
 DEFAULT_TIMEOUT_SECONDS = 300
 
+# Any of these sends `claude -p` to a billed account instead of the subscription login.
+_BILLING_VARIABLES = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX",
+)
+
 
 class AiBackendUnavailable(Exception):
     """The backend cannot be used at all this run: missing, logged out, or at its limit."""
@@ -89,7 +97,7 @@ class ClaudeCliBackend:
     It runs from a new empty directory that is deleted afterwards, loads no user or
     project settings and no MCP servers, keeps no session, and takes the prompt on
     stdin. It signs in with the subscription login, so it refuses to run when
-    ANTHROPIC_API_KEY is set: the CLI would bill that key instead.
+    ANTHROPIC_API_KEY or another billing variable is set.
 
     Confirmed against `claude --help` (2.1.325): every flag below exists. Confirmed
     by a real call: the output when the CLI is not logged in. NOT confirmed, because
@@ -131,23 +139,7 @@ class ClaudeCliBackend:
         timeout_s: int = DEFAULT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
         self._refuse_an_api_key()
-        command = [
-            self._binary,
-            "-p",
-            "--output-format",
-            "json",
-            "--json-schema",
-            json.dumps(schema),
-            "--model",
-            self.model,
-            "--tools",
-            "",
-            "--setting-sources",
-            "",
-            "--strict-mcp-config",
-            "--no-session-persistence",
-            "--disable-slash-commands",
-        ]
+        command = self.command(schema)
         with tempfile.TemporaryDirectory(prefix="normalize-") as empty_directory:
             try:
                 finished = subprocess.run(
@@ -167,12 +159,33 @@ class ClaudeCliBackend:
                 ) from exc
         return self._answer(finished)
 
+    def command(self, schema: dict[str, Any]) -> list[str]:
+        """The exact argv of every call. The prompt is not in it: it goes in on stdin."""
+        return [
+            self._binary,
+            "-p",
+            "--output-format",
+            "json",
+            "--json-schema",
+            json.dumps(schema),
+            "--model",
+            self.model,
+            "--tools",
+            "",
+            "--setting-sources",
+            "",
+            "--strict-mcp-config",
+            "--no-session-persistence",
+            "--disable-slash-commands",
+        ]
+
     def _refuse_an_api_key(self) -> None:
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            raise AiBackendUnavailable(
-                "ANTHROPIC_API_KEY is set, and claude -p would bill that key instead "
-                "of the subscription. Unset it, then run again."
-            )
+        for variable in _BILLING_VARIABLES:
+            if os.environ.get(variable):
+                raise AiBackendUnavailable(
+                    f"{variable} is set, and claude -p would bill that account "
+                    "instead of the subscription. Unset it, then run again."
+                )
 
     def _answer(self, finished: "subprocess.CompletedProcess[str]") -> dict[str, Any]:
         envelope = _json_or_none(finished.stdout)

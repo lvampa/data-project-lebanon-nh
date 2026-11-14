@@ -97,9 +97,14 @@ def _parse_ts(time_str: str | None, log_date: date) -> datetime | None:
     return datetime(log_date.year, log_date.month, log_date.day, h, m, s)
 
 
+# A time this far before the one it follows is a clock that passed midnight; a smaller
+# gap is a call logged after the unit was already there.
+_MIDNIGHT_GAP = timedelta(hours=12)
+
+
 def _advance(dt: datetime | None, ref: datetime | None) -> datetime | None:
-    """Advance dt by one day if it crossed midnight past ref."""
-    if dt and ref and dt < ref:
+    """Advance dt by one day if it is more than 12 hours before ref."""
+    if dt and ref and ref - dt > _MIDNIGHT_GAP:
         return dt + timedelta(days=1)
     return dt
 

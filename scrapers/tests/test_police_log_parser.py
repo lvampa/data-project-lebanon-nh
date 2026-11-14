@@ -380,6 +380,19 @@ def test_an_undated_arrival_after_midnight_with_no_dispatch_lands_on_the_next_da
     assert entry["cleared_at"] == datetime(2026, 5, 12, 0, 10, 0)
 
 
+def test_an_arrival_a_minute_before_the_reported_time_stays_on_the_same_day():
+    # The call is logged after the officer is already there.
+    entry = parse_one(
+        "26-20018        1015 Initiated - Directed Patrol Log Information\n"
+        "                ID:    XA -   \n"
+        "                       Arvd-10:14:00  Clrd-10:30:00\n"
+    )
+
+    assert entry["arrived_at"] == datetime(2026, 5, 11, 10, 14, 0)
+    assert entry["cleared_at"] == datetime(2026, 5, 11, 10, 30, 0)
+    assert entry["scene_seconds"] == 960
+
+
 def test_a_same_day_dispatch_line_keeps_the_log_date():
     entry = parse_one(
         "26-20017        1015 Phone - Suspicious Person Advised\n"

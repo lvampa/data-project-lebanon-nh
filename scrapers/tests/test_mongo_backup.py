@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from maintenance import mongo_backup
-from maintenance.mongo_backup import BackupError, back_up, check_writable, prune
+from maintenance.mongo_backup import BackupError, back_up, check_writable
 from mongo.client import MongoDB
 
 NOW = datetime(2026, 11, 7, 2, 0, tzinfo=UTC)
@@ -58,23 +58,10 @@ def test_a_backup_is_written_without_the_password_on_the_command_line(
 
     [command] = tool.commands
     assert command[0] == "mongodump"
-    assert {"--db=scraped_data", "--gzip", f"--archive={dest}"} <= set(command)
+    assert {"--db=scraped_data", "--gzip", f"--archive={dest}.partial"} <= set(command)
     assert not any("s3cret" in arg for arg in command)
     assert tool.config == 'password: "s3cret"\n'
     assert dest.name == "scraped_data-20261107T020000Z.archive.gz"
-
-
-def test_the_seven_newest_backups_are_kept(tmp_path):
-    for day in range(1, 10):
-        (tmp_path / f"scraped_data-202611{day:02d}T020000Z.archive.gz").touch()
-    (tmp_path / "notes.txt").touch()
-
-    removed = prune(tmp_path, "scraped_data")
-
-    assert [p.name[13:21] for p in removed] == ["20261101", "20261102"]
-    kept = sorted(p.name for p in tmp_path.glob("*.archive.gz"))
-    assert len(kept) == 7 and kept[0].startswith("scraped_data-20261103")
-    assert (tmp_path / "notes.txt").exists()
 
 
 def test_a_failed_dump_raises_and_leaves_no_partial_file(tmp_path, monkeypatch):
@@ -82,6 +69,33 @@ def test_a_failed_dump_raises_and_leaves_no_partial_file(tmp_path, monkeypatch):
         back_up(tmp_path, settings(monkeypatch), NOW, FakeTool(returncode=2))
 
     assert list(tmp_path.iterdir()) == []
+
+
+def test_an_interrupted_dump_leaves_no_file_and_keeps_the_old_ones(
+    tmp_path, monkeypatch
+):
+    older = tmp_path / "scraped_data-20261101T020000Z.archive.gz"
+    older.write_bytes(b"older")
+
+    def interrupted(command) -> int:
+        FakeTool()(command)
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        back_up(tmp_path, settings(monkeypatch), NOW, interrupted)
+
+    assert [p.name for p in tmp_path.iterdir()] == [older.name]
+
+
+def test_a_second_run_in_the_same_second_does_not_overwrite_the_first(
+    tmp_path, monkeypatch
+):
+    first = back_up(tmp_path, settings(monkeypatch), NOW, FakeTool())
+
+    with pytest.raises(BackupError, match="already exists"):
+        back_up(tmp_path, settings(monkeypatch), NOW, FakeTool(returncode=1))
+
+    assert first.read_bytes() == b"partial dump"
 
 
 def test_the_script_exits_non_zero_when_the_folder_is_missing(

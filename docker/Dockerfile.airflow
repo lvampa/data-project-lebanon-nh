@@ -35,6 +35,16 @@ RUN curl -fsSL https://pgp.mongodb.com/server-8.0.asc \
     && apt-get update \
     && apt-get install -y --no-install-recommends mongodb-database-tools \
     && rm -rf /var/lib/apt/lists/*
+# pg_dump, for the PostgreSQL backup script. Debian bookworm packages version 15,
+# and pg_dump refuses a newer server, so version 16 comes from the PostgreSQL
+# repository, matching postgres:16.
+RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+        > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-16 \
+    && rm -rf /var/lib/apt/lists/*
 USER airflow
 
 WORKDIR /opt/airflow

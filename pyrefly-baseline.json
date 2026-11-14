@@ -2,27 +2,6 @@
   "min_severity": "error",
   "errors": [
     {
-      "column": 26,
-      "path": "api/routers/search.py",
-      "name": "bad-assignment",
-      "concise_description": "`dict[str, dict[str, list[str] | str]]` is not assignable to dict value type `str`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "api/routers/search.py",
-      "name": "bad-assignment",
-      "concise_description": "`dict[str, list[str]]` is not assignable to dict value type `str`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "api/routers/search.py",
-      "name": "bad-assignment",
-      "concise_description": "`int` is not assignable to dict value type `str`",
-      "severity": "error"
-    },
-    {
       "column": 15,
       "path": "api/services/addresses.py",
       "name": "bad-argument-type",
@@ -160,13 +139,6 @@
       "path": "scripts/scrape/scrape_llcs.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `Result` has no attribute `rowcount`",
-      "severity": "error"
-    },
-    {
-      "column": 47,
-      "path": "scripts/sync/sync_es.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Sequence[BudgetCapitalProject] | Sequence[BudgetLineItem] | Sequence[CityStaff] | Sequence[Llc] | Sequence[LogEntry] | Sequence[Officer] | Sequence[PlanningDocument] | Sequence[PlanningMeeting] | Sequence[Property]` is not assignable to parameter `rows` with type `list[Unknown]` in function `sync_index`",
       "severity": "error"
     },
     {

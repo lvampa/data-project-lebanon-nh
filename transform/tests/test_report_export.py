@@ -212,4 +212,6 @@ def test_a_house_number_in_a_public_location_fails_the_check(export, report_gen)
     failed = run_report_gen(report_gen, "check", "--dir", str(export))
 
     assert failed.returncode != 0
-    assert "incidents.json: 1 rows have a house number in location" in failed.stderr
+    assert (
+        "incidents.json: 1 rows have an unexpected number in location" in failed.stderr
+    )

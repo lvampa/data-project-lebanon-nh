@@ -32,18 +32,18 @@ const RULES: [Rule; 4] = [
         is_bad: is_filled,
         what: "a non-empty",
     },
-    // Public locations carry no house number.
+    // Public locations carry no number that could name a home.
     Rule {
         file: "incidents.json",
         fields: &["location"],
-        is_bad: has_house_number,
-        what: "a house number in",
+        is_bad: has_unexplained_number,
+        what: "an unexpected number in",
     },
     Rule {
         file: "addresses.json",
         fields: &["raw_address", "normalized_address"],
-        is_bad: has_house_number,
-        what: "a house number in",
+        is_bad: has_unexplained_number,
+        what: "an unexpected number in",
     },
 ];
 
@@ -111,43 +111,79 @@ fn is_filled(value: &Value) -> bool {
     }
 }
 
-/// True when a public location has a house number: any comma-separated part that starts
-/// with digits and then a word, such as "12 Main St" or "Smith residence, 12 Main St".
-/// "1200 block of Main St", "Route 120", "I-89 Exit 18" and "1st Ave" pass.
+/// True when a public location holds a number that could name a home. It fails closed: every
+/// run of digits has to be one the public set uses, or the value fails. The allowed forms:
 ///
-/// This is the same rule as the dbt check `assert_public_non_address_has_no_house_number`,
-/// plus the block form a house address is allowed to take.
-fn has_house_number(value: &Value) -> bool {
-    value
-        .as_str()
-        .is_some_and(|text| text.split(',').any(part_starts_with_house_number))
+/// - the hundred in "1200 block of Main St", at the start of a comma-separated part;
+/// - an ordinal, such as "1st" or "11th";
+/// - a road number after Route, Rte, RT, NH, US, VT, I or Interstate;
+/// - a number after Exit or "mile marker".
+///
+/// So "12 Main St", "12-14 Main St", "No. 12 Main St", "Smith Residence 12 Main St", "Lot 5"
+/// and "Apt 12" fail, and so does any digit that is not ASCII.
+fn has_unexplained_number(value: &Value) -> bool {
+    value.as_str().is_some_and(|text| {
+        text.chars().any(|c| !c.is_ascii() && c.is_numeric()) || has_unexplained_digits(text)
+    })
 }
 
-fn part_starts_with_house_number(part: &str) -> bool {
-    let part = part.trim_start();
-    let digits = part.bytes().take_while(u8::is_ascii_digit).count();
-    let (number, rest) = part.split_at(digits);
-    if number.is_empty() || is_block_of(number, rest) {
-        return false;
+fn has_unexplained_digits(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut end = 0;
+    while end < bytes.len() {
+        if !bytes[end].is_ascii_digit() {
+            end += 1;
+            continue;
+        }
+        let start = end;
+        while end < bytes.len() && bytes[end].is_ascii_digit() {
+            end += 1;
+        }
+        if !digits_are_explained(&text[..start], &text[start..end], &text[end..]) {
+            return true;
+        }
     }
-    // An optional letter after the number ("12B Main St"), then spaces, then a word.
-    let after_letter = rest
-        .strip_prefix(|c: char| c.is_ascii_alphabetic())
-        .unwrap_or(rest);
-    [rest, after_letter].into_iter().any(spaces_then_a_letter)
+    false
 }
 
-fn spaces_then_a_letter(text: &str) -> bool {
-    let word = text.trim_start();
-    word.len() < text.len() && word.starts_with(|c: char| c.is_ascii_alphabetic())
+/// `digits` is one whole run of digits, with the text before and after it.
+fn digits_are_explained(before: &str, digits: &str, after: &str) -> bool {
+    is_block_hundred(before, digits, after)
+        || is_ordinal(after)
+        || matches!(
+            last_word(before).as_str(),
+            "route" | "rte" | "rt" | "nh" | "us" | "vt" | "i" | "interstate" | "exit" | "marker"
+        )
 }
 
-/// The block form "1200 block of Main St": a whole hundred, no leading zero.
-fn is_block_of(number: &str, rest: &str) -> bool {
-    number.len() >= 3
-        && !number.starts_with('0')
-        && number.ends_with("00")
-        && rest.starts_with(" block of ")
+/// The "1200" of "1200 block of Main St": a whole hundred with no leading zero, opening
+/// a comma-separated part.
+fn is_block_hundred(before: &str, digits: &str, after: &str) -> bool {
+    let opens_part = before.trim_end().is_empty() || before.trim_end().ends_with(',');
+    opens_part
+        && digits.len() >= 3
+        && !digits.starts_with('0')
+        && digits.ends_with("00")
+        && after.to_ascii_lowercase().starts_with(" block of ")
+}
+
+/// "1st", "2nd", "3rd", "11th": the digits are followed by an ordinal suffix and not more letters.
+fn is_ordinal(after: &str) -> bool {
+    let after = after.to_ascii_lowercase();
+    ["st", "nd", "rd", "th"].iter().any(|suffix| {
+        after
+            .strip_prefix(suffix)
+            .is_some_and(|rest| !rest.starts_with(|c: char| c.is_ascii_alphabetic()))
+    })
+}
+
+/// The lowercase word just before a number, skipping spaces, hyphens and dots: "I-" gives "i".
+fn last_word(before: &str) -> String {
+    let before = before.trim_end_matches([' ', '-', '.']);
+    let start = before
+        .rfind(|c: char| !c.is_ascii_alphabetic())
+        .map_or(0, |index| index + 1);
+    before[start..].to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -304,7 +340,7 @@ mod tests {
 
         assert_eq!(
             check_dir(dir.path()),
-            vec!["incidents.json: 1 rows have a house number in location"]
+            vec!["incidents.json: 1 rows have an unexpected number in location"]
         );
     }
 
@@ -320,23 +356,34 @@ mod tests {
         assert_eq!(
             check_dir(dir.path()),
             vec![
-                "addresses.json: 1 rows have a house number in raw_address",
-                "addresses.json: 1 rows have a house number in normalized_address",
+                "addresses.json: 1 rows have an unexpected number in raw_address",
+                "addresses.json: 1 rows have an unexpected number in normalized_address",
             ]
         );
     }
 
     #[test]
-    fn public_locations_without_a_house_number_pass() {
+    fn public_locations_with_only_allowed_numbers_pass() {
         let passing = [
             "1200 block of Main St",
             "100 block of Mascoma St",
             "Main St",
             "Main St and Hanover St",
             "Route 120",
+            "NH Route 12A",
+            "US Route 4",
+            "Rte 4",
+            "RT 4",
             "I-89 Exit 18",
+            "Exit 18 on I-89",
+            "I-89 mile marker 12",
+            "Interstate 89",
             "1st Ave",
+            "2nd St",
+            "3rd Ave",
+            "11th St",
             "Smith residence, Main St",
+            "Smith residence, 1200 block of Main St",
         ];
         for location in passing {
             let dir = clean_export();
@@ -347,14 +394,25 @@ mod tests {
     }
 
     #[test]
-    fn locations_that_keep_a_house_number_fail() {
+    fn locations_with_any_other_number_fail() {
         let failing = [
             "12 Main St",
             "12B Main St",
+            "12-14 Main St",
+            "12 1/2 Main St",
+            "No. 12 Main St",
+            "#12 Main St",
+            "Smith Residence 12 Main St",
+            "Smith residence, 12 Main St",
+            "Mascoma Apartments Apt 12",
+            "Lot 5",
+            "Route 12 Apt 5",
             "1050 block of Main St",
             "0200 block of Main St",
-            "Smith residence, 12 Main St",
+            "Smith residence 1200 block of Main St",
             "  45 Elm St",
+            "\u{FF11}\u{FF12} Main St",
+            "\u{0661}\u{0662} Main St",
         ];
         for location in failing {
             let dir = clean_export();

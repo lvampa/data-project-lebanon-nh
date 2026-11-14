@@ -584,8 +584,8 @@ def test_an_address_on_a_listed_street_is_settled_by_a_rule_and_never_sent(
         "rule",
         rules_prompt_version(),
     )
-    assert row.normalized_address == "12 MAIN ST"
-    assert row.geocode_query == "12 MAIN ST, Lebanon, NH"
+    assert row.normalized_address == "12 Main St"
+    assert row.geocode_query == "12 Main St, Lebanon, NH"
     assert backend.calls == []
     assert result.summary("location").waiting == 0
 

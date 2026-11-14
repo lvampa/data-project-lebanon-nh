@@ -6,6 +6,7 @@ call. Whatever they do not settle is a leftover for AI, including a bare street 
 a highway, and any place whose code is unknown.
 """
 
+import re
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 
@@ -51,13 +52,35 @@ class RuleResult:
     leftovers: list[CanonicalLocation]
 
 
-def display_form(text: str) -> str:
-    """How a rule row's address reads. Canonical form is upper case, so "12 MAIN ST".
+_DIRECTIONS = frozenset({"N", "S", "E", "W", "NE", "NW", "SE", "SW"})
+_ORDINAL = re.compile(r"\d+(ST|ND|RD|TH)", re.IGNORECASE)
 
-    The AI writes "12 Main St". To make the two match, return `text.title()` here,
-    or a smarter version that keeps ordinals and direction letters. Nothing else
-    needs to change.
+
+def display_form(text: str) -> str:
+    """How an address reads: "12 MAIN ST" becomes "12 Main St", as the AI writes it.
+
+    Directions stay upper case, ordinals get a lower case suffix ("3rd"), and the
+    "and" of an intersection stays lower case.
     """
+    return " ".join(_display_word(word) for word in text.split(" "))
+
+
+def _display_word(word: str) -> str:
+    upper = word.upper()
+    if upper in _DIRECTIONS:
+        return upper
+    if word == "and" or not word:
+        return word
+    if _ORDINAL.fullmatch(word):
+        return word.lower()
+    return "-".join(_capitalized(part) for part in word.split("-"))
+
+
+def _capitalized(part: str) -> str:
+    text = part[:1].upper() + part[1:].lower()
+    # "O'BRIEN" reads "O'Brien", but "HANNAFORD'S" must not read "Hannaford'S".
+    if re.match(r"[A-Z]'[a-z]", text):
+        text = text[:2] + text[2:].capitalize()
     return text
 
 
@@ -94,7 +117,7 @@ def _address_on_a_listed_street(
     house_number, street = split_house_number(address)
     if house_number is None or street not in streets:
         return None
-    return _rule(item, "address", address, street=street)
+    return _rule(item, "address", display_form(address), street=street)
 
 
 def _intersection_of_listed_streets(
@@ -104,7 +127,8 @@ def _intersection_of_listed_streets(
     parts = item.canonical.split(_INTERSECTION_JOINER)
     if len(parts) != 2 or not all(part in streets for part in parts):
         return None
-    return _rule(item, "intersection", " and ".join(parts), street=parts[0])
+    shown = display_form(" and ".join(parts))
+    return _rule(item, "intersection", shown, street=parts[0])
 
 
 def _known_place_code(
@@ -123,11 +147,10 @@ def _rule(
     normalized_address: str,
     street: str | None = None,
 ) -> RuleNormalization:
-    shown = display_form(normalized_address)
     return RuleNormalization(
         canonical=item.canonical,
         kind=kind,
-        normalized_address=shown,
-        geocode_query=f"{shown}, {_CITY}",
+        normalized_address=normalized_address,
+        geocode_query=f"{normalized_address}, {_CITY}",
         street=street,
     )

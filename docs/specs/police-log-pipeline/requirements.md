@@ -2,7 +2,7 @@
 
 **Status:** In progress
 **Created:** 2026-11-06
-**Updated:** 2026-11-07
+**Updated:** 2026-11-13
 
 ## Introduction
 
@@ -14,7 +14,8 @@ Postgres holds 343 entries from 3 PDFs, 650 PDFs are waiting, and 10 are stuck m
 No incident type or address has ever been normalized, so the public map is empty and search cannot group "MV Complaint" with other traffic calls.
 A parser fix cannot repair rows already stored, because nothing can reprocess them.
 
-Success is that a new PDF flows from the city page to admin search and to the public JSON without manual steps, with every value the PDF gave kept as it was and a normalized value stored beside it.
+Success is that a new PDF flows from the city page to admin search and to the public JSON on a daily schedule, with every value the PDF gave kept as it was and a normalized value stored beside it.
+The one manual step is the AI normalizing: Connor runs one command on his Mac, and the daily run picks up whatever is normalized so far.
 AI does the normalizing, either through `claude -p` on Connor's Max plan or through a free local model, and never through a paid API.
 Connor can correct any normalized value, and his correction always wins.
 When AI or the geocoder fails, the pipeline keeps going on raw values and tries again later.
@@ -25,7 +26,7 @@ AI is used only where the values are open-ended.
 | Value | Produced by | Why |
 |---|---|---|
 | Category and plain type name | AI | Incident types are an open vocabulary: 92 distinct values in 3 days, and growing. |
-| Normalized address and location kind | AI | Locations are free text, such as "HANNAFORD'S MARKET - MARKET ST". |
+| Normalized address and location kind | Rules first, then AI for the rest | Locations are free text, such as "HANNAFORD'S MARKET - MARKET ST". A house number on a known street needs no AI. |
 | Coordinates | Geocoder | A lookup, checked against the city bounds. |
 | Disposition, call source, officer, times | Parser rules | Closed sets or fixed formats that a rule reads exactly. |
 
@@ -45,12 +46,17 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 - **Normalized value:** A cleaned value derived from a raw value, such as a category, a standard address, or coordinates.
 - **Normalized field:** One of the two fields that get normalized values: incident type and location.
 - **Normalization:** The stored normalized value for one distinct raw value of a normalized field.
-- **Source:** Who produced a normalization: `ai` or `human`.
+- **Source:** Who produced a normalization: `rule`, `ai`, or `human`.
+  `rule` means the rule pass settled it with no AI call.
   A location has one source for the whole record; how its coordinates were found (geocoder, place code, or by hand) is recorded separately.
 - **Review mark:** A flag on a normalization or a raw value that asks Connor to look at it.
 - **Normalization job:** The scheduled job that finds raw values without a normalization and creates one.
 - **AI backend:** What answers an AI call: `claude -p` on the Max plan, or a local model.
 - **AI call:** One request the normalization job sends to the AI backend.
+- **Canonical address rules:** Fixed text rules that make letter case, spacing, punctuation, and street suffix and direction spellings (such as `STREET` and `ST`) produce one form.
+- **Rule pass:** The step of the normalization job that settles locations with the canonical address rules, the street list, and known place codes, before any AI call.
+- **Street list:** The distinct street names in the parcel locations, in canonical form.
+- **Prompt version:** The version of a prompt's text. For locations it also names the version of the street list the prompt carried.
 - **Geocoder:** Nominatim, the service the admin API already uses to turn an address into coordinates.
 - **Header-like line:** A line in a log PDF's text that starts with a case number pattern, such as `26-13339`.
 - **Place code:** The bracketed code the PDF prints before some locations, such as `[L HANNAF]`.
@@ -176,6 +182,18 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 10. THE normalization job SHALL NOT change a location normalization whose source is `human`, including its coordinates.
 11. THE consumer models SHALL work out each location's public location and public coordinates as in 11.6 and 11.7, in one place, so that every consumer reads the same values.
 12. WHEN Connor saves a normalized address in the admin and geocoding fails, THE admin API SHALL keep the coordinates the location already had.
+13. THE normalization job SHALL send each distinct raw location to AI at most once, unless the operator asks for it to be redone.
+14. THE normalization job SHALL apply the canonical address rules to every waiting raw location before making any AI call, and SHALL treat raw locations with the same canonical form as one value.
+15. WHEN a raw location's canonical form is a house number followed by a street on the street list, THE normalization job SHALL store it as kind `address` with source `rule`, and SHALL NOT send it to AI.
+16. WHEN a raw location's canonical form is two streets on the street list joined by `and`, `&`, or `/`, THE normalization job SHALL store it as kind `intersection` with source `rule`, and SHALL NOT send it to AI.
+17. WHEN a raw location's place code already has a normalization of kind `place` with no review mark, THE normalization job SHALL copy its normalized address and kind with source `rule`, and SHALL NOT send it to AI.
+18. THE normalization job SHALL send to AI only the raw locations that 6.15 to 6.17 did not settle.
+19. THE canonical address rules SHALL be deterministic, SHALL make no network or database call, and SHALL have one implementation that the normalization job and any other consumer share.
+20. THE normalization job SHALL build the street list at the start of each run from the parcel locations, with house numbers and units removed and the canonical address rules applied.
+21. THE normalization job SHALL send the street list with every location AI call.
+22. IF an AI answer gives a street that is not on the street list, THEN THE normalization job SHALL store the item with a review mark.
+23. IF the street list is empty, THEN THE normalization job SHALL make no location AI calls in that run and SHALL log an error.
+24. THE normalization job SHALL record, with each location AI call and each normalization it stores from one, a prompt version that changes whenever the street list changes.
 
 ### Requirement 7: Record where each normalization came from and let Connor correct it
 
@@ -198,6 +216,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 12. WHEN Connor asks to hand a `human` normalization back to AI, THE admin API SHALL delete it and its failed attempt count, so that the normalization job treats the raw value as new.
 13. WHEN Connor replaces an `ai` normalization, THE AI's answer SHALL stay in the archive's record of that AI call, so that AI answers can be compared with his corrections.
     WHILE MongoDB is down, an AI call's record can be missing; the normalization is stored anyway.
+14. WHEN the operator asks for a redo, THE normalization job SHALL NOT send a raw value whose normalization already has the current prompt version.
 
 ### Requirement 8: Survive AI failures
 
@@ -226,13 +245,15 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 #### Acceptance criteria
 
-1. THE normalization job SHALL send AI calls to the AI backend named in configuration: `claude -p` with the subscription login and a small model by default, or a local model when Connor turns it on.
+1. THE normalization job SHALL send AI calls to the AI backend named in configuration: `claude -p` with the subscription login of the person running the job on Connor's Mac and a small model by default, or a local model when Connor turns it on.
 2. IF the AI backend is `claude -p` and `ANTHROPIC_API_KEY` is set, THEN THE normalization job SHALL exit with an error before making any AI call, because the CLI bills the key when it is present.
 3. THE test suite SHALL run one set of contract tests against every AI backend, covering a valid answer, an empty answer, a malformed answer, a timeout, and a login failure.
 4. THE normalization job SHALL take the model name from configuration and record it as in 7.2.
 5. THE normalization job SHALL send distinct raw values, not entries, with at most 50 values per AI call.
 6. THE normalization job SHALL make at most 10 AI calls per run, 5 for each normalized field with unused calls passing to the other, and SHALL leave the rest for the next run.
 7. IF the configured AI backend is missing, not logged in, or not reachable, THEN THE normalization job SHALL exit with an error that says so before sending any raw value.
+8. THE AI backend SHALL make each AI call with every tool turned off, from an empty working directory created for that call, and without loading project or user settings, hooks, or MCP servers.
+9. THE AI backend SHALL receive only the prompt and the answer schema and SHALL return only the answer, and THE normalization job SHALL be the only code that reads raw values from or writes normalizations to the database.
 
 ### Requirement 10: Search and filter normalized records in the admin
 
@@ -281,11 +302,12 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 #### Acceptance criteria
 
 1. THE scheduler SHALL run discovery once a day.
-2. WHEN discovery finishes, THE scheduler SHALL run processing, then normalization, then geocoding, then the consumer model build, in that order.
+2. WHEN discovery finishes, THE scheduler SHALL run processing, then geocoding, then the consumer model build, in that order.
+   The scheduler does not run normalization; geocoding and the build work on whatever has been normalized so far (requirement 16).
 3. THE process job SHALL handle up to 100 URL records per run.
 4. THE scheduler SHALL allow at most one run of each police log job at a time, counting reprocess.
 5. THE scheduler SHALL stop any police log task that runs longer than 60 minutes and mark it failed.
-6. IF the processing, normalization, or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
+6. IF the processing or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
 7. WHEN a stage fails after its retries, THE scheduler SHALL show the run as failed and log the stage name and reason.
 8. WHEN the scheduler containers start, THE init service SHALL apply the database migrations before any police log job runs.
 9. THE scheduler SHALL NOT run the public export or deploy the site.
@@ -332,6 +354,18 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 7. THE evaluation SHALL NOT run in the test suite or the pre-push hook, because it makes real AI calls.
 8. THE local model backend SHALL pass the same contract tests as `claude -p`, and its evaluation score SHALL be recorded in the repo before it is used for a scheduled run.
 
+### Requirement 16: Run AI normalization by hand on Connor's Mac
+
+**User story:** As Connor, I want to run the AI normalizing myself from my Mac with my normal Claude login, so that no long-lived token sits in `.env` and no container holds a Claude login.
+
+#### Acceptance criteria
+
+1. THE normalization job SHALL run as one documented command from the repo root on Connor's Mac, with his own `claude` login and no Claude token in `.env`.
+2. WHILE the process, reprocess, or geocode job is running, THE normalization job SHALL exit with a non-zero status and say another police log job is running.
+3. WHILE the normalization job is running, THE process, reprocess, and geocode jobs SHALL NOT start.
+4. THE normalization job SHALL exit with a non-zero status when it cannot run or every AI call fails, and with zero otherwise.
+5. THE daily schedule SHALL NOT run the normalization job.
+
 ## Out of scope
 
 - Changes to the public site or admin pages.
@@ -365,5 +399,9 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
   Admin search for incidents runs in Postgres (requirement 10), and removing Elasticsearch from the stack is its own follow-up task.
 - Search across the other entity types, such as properties and planning documents.
   The search spec covers it and still describes Elasticsearch.
+- Running AI normalization in the scheduler, or installing the `claude` CLI in the Airflow image.
+  Deferred; the `airflow-claude-cli` branch exists, unbuilt, if this is revisited.
+- Scheduling the normalization job on the Mac.
+  A LaunchAgent is an optional later step, sketched in design.md.
 - Alerts by email or chat when a run fails.
   Failures show in Airflow and Logfire.

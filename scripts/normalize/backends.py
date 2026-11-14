@@ -99,11 +99,13 @@ class ClaudeCliBackend:
     stdin. It signs in with the subscription login, so it refuses to run when
     ANTHROPIC_API_KEY or another billing variable is set.
 
-    Confirmed against `claude --help` (2.1.325): every flag below exists. Confirmed
-    by a real call: the output when the CLI is not logged in. NOT confirmed, because
-    the sandbox this was written in could not reach the API: the envelope of a
-    successful structured answer (read from `structured_output`, else from `result`
-    as JSON text) and the wording of a usage-limit message. Both are best guesses.
+    Confirmed against `claude --help` (2.1.325): every flag below exists. Confirmed by
+    real calls: the output when the CLI is not logged in, and a successful structured
+    answer, which is `structured_output` in the JSON envelope. NOT confirmed: the
+    wording of a usage-limit message, which is a best guess.
+
+    Each call costs about 4.9k cached input tokens of overhead, plus the output, even
+    with tools off, so a batch is worth filling.
     """
 
     name = "claude_cli"
@@ -198,6 +200,10 @@ class ClaudeCliBackend:
             )
         if not isinstance(envelope, dict):
             raise AiCallFailed("claude printed no JSON result")
+        subtype = envelope.get("subtype", "success")
+        if subtype != "success":
+            raise AiCallFailed(f"claude ended with {subtype}")
+        # `structured_output` is the answer. `result` holds the same object as text.
         answer = envelope.get("structured_output")
         if answer is None:
             answer = _json_or_none(str(envelope.get("result", "")))

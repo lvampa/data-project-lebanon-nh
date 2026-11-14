@@ -4,6 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 from items.budget import BudgetDocumentItem
 from pipelines import BudgetDocumentPipeline
+from postgres.models.budget_document import BudgetDocument
+from sqlalchemy import select
 
 SAMPLE_ITEM = BudgetDocumentItem(
     fiscal_year=2026,
@@ -43,14 +45,16 @@ def test_close_spider_closes_session(pipeline):
     pipeline._session.close.assert_called_once()
 
 
-def test_first_item_stays_committed_when_second_fails(fake_session):
+def test_first_item_stays_committed_when_second_fails(db_session, fail_on_execute):
     pipeline = BudgetDocumentPipeline()
-    pipeline._session = fake_session
-    fake_session.fail_on_call = 2
+    pipeline.open_spider()
+    fail_on_execute(pipeline._session, 2)
+    second = BudgetDocumentItem(SAMPLE_ITEM, document_type="line_items")
 
     pipeline.process_item(SAMPLE_ITEM)
     with pytest.raises(RuntimeError):
-        pipeline.process_item(SAMPLE_ITEM)
+        pipeline.process_item(second)
     pipeline.close_spider()
 
-    assert len(fake_session.committed) == 1
+    stored = db_session.scalars(select(BudgetDocument.document_type)).all()
+    assert stored == ["budget_book"]

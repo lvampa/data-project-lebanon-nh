@@ -1,43 +1,25 @@
-import os
-from pathlib import Path
-
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, text
+from postgres_testing.plugin import ALEMBIC_INI
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
-ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
-
-pytestmark = pytest.mark.skipif(
-    not TEST_DATABASE_URL,
-    reason="TEST_DATABASE_URL is not set; these tests need an empty Postgres database",
-)
 
 
 @pytest.fixture
-def migrated():
-    # The skipif above runs these tests only when it is set.
-    assert TEST_DATABASE_URL is not None
-    engine = create_engine(TEST_DATABASE_URL)
-    with engine.connect() as connection:
-        # Alembic joins this outer transaction, so rolling it back leaves the
-        # test database empty even when a step fails.
-        transaction = connection.begin()
-        config = Config(ALEMBIC_INI)
-        config.attributes["connection"] = connection
-        command.upgrade(config, "head")
-        yield connection, config
-        transaction.rollback()
-    engine.dispose()
+def alembic_config(db_connection):
+    # Alembic joins the test's connection, so every step is rolled back with it.
+    config = Config(ALEMBIC_INI)
+    config.attributes["connection"] = db_connection
+    return config
 
 
-def test_migrations_match_models_and_downgrade_cleanly(migrated):
-    _, config = migrated
+def test_migrations_run_up_and_down_and_match_models(alembic_config):
+    command.downgrade(alembic_config, "base")
 
-    command.check(config)
-    command.downgrade(config, "base")
+    command.upgrade(alembic_config, "head")
+    command.check(alembic_config)
+    command.downgrade(alembic_config, "base")
 
 
 @pytest.mark.parametrize(
@@ -62,8 +44,6 @@ def test_migrations_match_models_and_downgrade_cleanly(migrated):
         "pdf_url_state",
     ],
 )
-def test_constraints_reject_invalid_rows(migrated, statement):
-    connection, _ = migrated
-
+def test_constraints_reject_invalid_rows(db_connection, statement):
     with pytest.raises(IntegrityError):
-        connection.execute(text(statement))
+        db_connection.execute(text(statement))

@@ -7,6 +7,7 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "elasticsearch>=8.13,<9",
     "httpx>=0.27.0",
+    "locations",
     "logfire>=4.31.0",
     "mongo",
     "playwright>=1.60.0",
@@ -19,6 +20,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+locations = { workspace = true }
 mongo = { workspace = true }
 postgres = { workspace = true }
 

@@ -53,8 +53,9 @@ exclude = ["*.md"]
 preset = "strict"
 project-includes = ["api", "dags", "scrapers", "scripts", "shared", "transform"]
 # Scrapy runs from scrapers/ and Airflow from dags/, so modules in those folders
-# import each other by top-level name (`from items import ...`).
-search-path = [".", "scrapers", "dags"]
+# import each other by top-level name (`from items import ...`). The transform tests
+# share fixtures the same way (`from test_dbt_models import ...`).
+search-path = [".", "scrapers", "dags", "transform/tests"]
 # Airflow and pendulum are installed in the Airflow image, not in the workspace venv.
 ignore-missing-imports = ["airflow.*", "pendulum.*"]
 # Real errors that existed when type checking was added, listed so that only new

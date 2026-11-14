@@ -49,7 +49,7 @@ def test_parse_index_yields_division_requests(spider):
         url="https://www.lebanonnh.gov/287/Divisions-Roster",
         body=ROSTER_INDEX_HTML,
     )
-    results = list(spider.parse(response))
+    results = list(spider.parse_index(response))
     urls = [r.url for r in results]
     assert any("290" in u or "Patrol" in u for u in urls)
     assert any("291" in u or "Investigations" in u for u in urls)

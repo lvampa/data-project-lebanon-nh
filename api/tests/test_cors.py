@@ -24,7 +24,7 @@ def test_get_from_other_origin_gets_no_allow_origin_header(client):
 
 def test_preflight_from_admin_origin_is_allowed(client):
     resp = client.options(
-        "/api/search",
+        "/api/incidents",
         headers={"Origin": ADMIN_ORIGIN, "Access-Control-Request-Method": "GET"},
     )
     assert resp.status_code == 200
@@ -33,7 +33,7 @@ def test_preflight_from_admin_origin_is_allowed(client):
 
 def test_preflight_from_other_origin_is_rejected(client):
     resp = client.options(
-        "/api/search",
+        "/api/incidents",
         headers={"Origin": OTHER_ORIGIN, "Access-Control-Request-Method": "GET"},
     )
     assert "access-control-allow-origin" not in resp.headers

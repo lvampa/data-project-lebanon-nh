@@ -2,7 +2,7 @@
 
 **Status:** In progress
 **Created:** 2026-06-10
-**Updated:** 2026-11-07
+**Updated:** 2026-11-14
 
 ## Overview
 
@@ -13,7 +13,8 @@ The admin page calls the endpoint and renders the groups (requirement 5); its co
 The first version synced the nine types into Elasticsearch each night.
 That version is built and is replaced here; the Decisions section records what it did and why it went.
 
-This ships as one pull request after police log pipeline PR 9, which builds the word matching and the incidents model, and before that spec's follow-up removes Elasticsearch.
+This ships as one pull request after police log pipeline PR 9, which builds the word matching and the incidents model.
+Elasticsearch has since been removed from the stack with the old `/api/search` router, so the endpoint returns with this version and the admin search page gets a 404 until then.
 
 ## Architecture
 

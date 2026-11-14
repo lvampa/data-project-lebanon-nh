@@ -27,7 +27,7 @@ Airflow DAG civicclerk_planning (daily 05:00 UTC)
 ```
 
 The script follows the same pattern as `scripts/scrape/scrape_llcs.py`.
-Downstream, `scripts/sync/sync_es.py` reads both tables into the Elasticsearch search index, which is outside this spec.
+Searching both tables is outside this spec; see the search spec.
 
 ## Components and interfaces
 

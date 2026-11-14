@@ -17,8 +17,7 @@ def build_dag(spec: DagSpec) -> DAG:
         schedule=spec.schedule,
         start_date=pendulum.datetime(2026, 6, 1, tz="UTC"),
         catchup=False,
-        # Several upstream DAGs trigger sync_elasticsearch on the same morning,
-        # and a slow vgsi_property crawl must not overlap next week's run.
+        # A slow vgsi_property crawl must not overlap next week's run.
         max_active_runs=1,
         params={name: Param(**kwargs) for name, kwargs in spec.params.items()},
         tags=list(spec.tags),

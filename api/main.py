@@ -1,8 +1,4 @@
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
-
 import logfire
-from elasticsearch import Elasticsearch
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,23 +9,13 @@ from api.routers import (
     health,
     incidents,
     llcs,
-    search,
     stats,
 )
 
 settings = get_settings()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.es = Elasticsearch(settings.elasticsearch_host, request_timeout=10)
-    yield
-    app.state.es.close()
-
-
-app = FastAPI(title="Lebanon PD Log - Internal API", lifespan=lifespan)
-# Not in the lifespan: Starlette builds the middleware stack before the
-# lifespan runs, so instrumenting there never wraps a request.
+app = FastAPI(title="Lebanon PD Log - Internal API")
 logfire.configure()
 logfire.instrument_fastapi(app)
 
@@ -41,4 +27,3 @@ app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(addresses.router, prefix="/api/addresses", tags=["addresses"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 app.include_router(llcs.router, prefix="/api/llcs", tags=["llcs"])
-app.include_router(search.router, prefix="/api/search", tags=["search"])

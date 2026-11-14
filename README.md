@@ -30,3 +30,13 @@ The pre-push hook runs the tests, so it needs Postgres up too.
 Set `TEST_POSTGRES_DB` to use another database; the run stops unless its name ends in `_test`.
 The run leaves `app_test` at the newest migration of the branch you tested.
 Before testing an older branch, drop `app_test` or point `TEST_POSTGRES_DB` at another `_test` database, or the upgrade fails on a revision that branch does not have.
+
+## Removing the old Elasticsearch data
+
+Elasticsearch is gone from the stack, but a volume made by an earlier `docker compose up` stays on disk.
+Stop the old containers, then delete the volume:
+```bash
+docker compose down --remove-orphans
+docker volume rm data-project_elasticsearch_data
+```
+The volume name is the folder name plus `_elasticsearch_data`; `docker volume ls` shows it.

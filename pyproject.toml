@@ -5,7 +5,6 @@ members = ["scrapers", "scripts", "shared/postgres", "shared/mongo", "api"]
 [dependency-groups]
 dev = [
     "beautifulsoup4>=4.15.0",
-    "elasticsearch>=8.13,<9",
     "playwright>=1.64.1",
     "playwright-stealth>=2.0.3",
     "pre-commit>=4.7.0",

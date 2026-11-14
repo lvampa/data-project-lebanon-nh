@@ -2,10 +2,12 @@
 
 **Status:** In progress
 **Created:** 2026-06-10
-**Updated:** 2026-11-07
+**Updated:** 2026-11-14
 
 Tasks 1 to 7 built the first version on Elasticsearch, and their requirement numbers refer to that version of requirements.md in git history.
-Tasks 9 to 11 move search to Postgres and ship as one pull request of about 12 files, after police log pipeline PR 9 and before its Elasticsearch removal.
+Tasks 9 to 11 move search to Postgres and ship as one pull request of about 12 files, after police log pipeline PR 9.
+Elasticsearch has been removed from the stack, and `/api/search` and its tests went with it, because the Postgres version below is not built yet.
+The endpoint returns with tasks 9 to 11, and until then the admin search page gets a 404.
 
 - [x] 1. Group `scripts/` by action
   - Move the scrape, import, and export scripts into `scripts/scrape/`, `scripts/ingest/`, and `scripts/export/`, and add an empty `scripts/sync/` package.

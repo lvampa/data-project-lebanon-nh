@@ -49,7 +49,6 @@ SPECS = [
         command="python run_process_urls.py --limit '{{ params.limit }}'",
         timeout=timedelta(hours=2),
         tags=("police-log",),
-        triggers=("sync_elasticsearch",),
         params={
             "limit": {
                 "default": 50,
@@ -74,7 +73,6 @@ SPECS = [
         command="python scripts/scrape/scrape_llcs.py --limit 50",
         timeout=timedelta(hours=1),
         tags=("property", "llc"),
-        triggers=("sync_elasticsearch",),
     ),
     DagSpec(
         dag_id="civicclerk_planning",
@@ -82,7 +80,6 @@ SPECS = [
         command="python scripts/scrape/scrape_civicclerk.py",
         timeout=timedelta(hours=2),
         tags=("planning",),
-        triggers=("sync_elasticsearch",),
     ),
     DagSpec(
         dag_id="city_staff",
@@ -91,7 +88,6 @@ SPECS = [
         command="scrapy crawl city_staff",
         timeout=timedelta(hours=1),
         tags=("staff",),
-        triggers=("sync_elasticsearch",),
     ),
     DagSpec(
         dag_id="officer_roster",
@@ -100,23 +96,14 @@ SPECS = [
         command="scrapy crawl officer_roster",
         timeout=timedelta(hours=1),
         tags=("officers",),
-        triggers=("sync_elasticsearch",),
     ),
     DagSpec(
         dag_id="budget_discovery",
-        # Monthly because the budget publish date varies. Budget documents are
-        # not indexed, so this does not trigger the Elasticsearch sync.
+        # Monthly because the budget publish date varies.
         schedule="0 4 1 * *",
         cwd="scrapers",
         command="scrapy crawl budget_discovery",
         timeout=timedelta(hours=1),
         tags=("budget",),
-    ),
-    DagSpec(
-        dag_id="sync_elasticsearch",
-        schedule=None,
-        command="python scripts/sync/sync_es.py",
-        timeout=timedelta(hours=1),
-        tags=("sync",),
     ),
 ]

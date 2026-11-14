@@ -8,7 +8,6 @@ from pydantic_settings import BaseSettings, NoDecode
 # Postgres is not here because the shared postgres package builds its engine
 # from POSTGRES_* itself, at import time.
 class Settings(BaseSettings):
-    elasticsearch_host: str = "http://localhost:9200"
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3001"]
     admin_api_token: str | None = None
     nominatim_contact: str | None = None

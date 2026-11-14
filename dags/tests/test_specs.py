@@ -28,17 +28,6 @@ def is_valid_cron(expression: str) -> bool:
     return True
 
 
-def downstream_of(dag_id: str) -> set[str]:
-    reached: set[str] = set()
-    pending = list(SPECS_BY_ID[dag_id].triggers)
-    while pending:
-        target = pending.pop()
-        if target not in reached:
-            reached.add(target)
-            pending.extend(SPECS_BY_ID[target].triggers)
-    return reached
-
-
 def spider_names() -> set[str]:
     spider_files = (REPO_ROOT / "scrapers" / "spiders").glob("*.py")
     source = "\n".join(path.read_text() for path in spider_files)
@@ -78,12 +67,3 @@ def test_triggered_dags_have_no_schedule():
 
 def test_llc_lookup_runs_after_vgsi_property():
     assert "llc_lookup" in SPECS_BY_ID["vgsi_property"].triggers
-
-
-def test_every_indexed_source_leads_to_elasticsearch_sync():
-    # Budget documents are not indexed; budget data reaches Elasticsearch
-    # through scripts/ingest, which no DAG runs.
-    not_indexed = {"sync_elasticsearch", "budget_discovery"}
-    for spec in SPECS:
-        if spec.dag_id not in not_indexed:
-            assert "sync_elasticsearch" in downstream_of(spec.dag_id), spec.dag_id

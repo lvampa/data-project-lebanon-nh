@@ -2952,10 +2952,12 @@ name = "scripts"
 version = "0.1.0"
 source = { editable = "scripts" }
 dependencies = [
+    { name = "alembic" },
     { name = "beautifulsoup4" },
     { name = "elasticsearch" },
     { name = "httpx" },
     { name = "logfire" },
+    { name = "mongo" },
     { name = "playwright" },
     { name = "playwright-stealth" },
     { name = "postgres" },
@@ -2972,10 +2974,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.18.4" },
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "elasticsearch", specifier = ">=8.13,<9" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "logfire", specifier = ">=4.31.0" },
+    { name = "mongo", editable = "shared/mongo" },
     { name = "playwright", specifier = ">=1.64.1" },
     { name = "playwright-stealth", specifier = ">=2.0.3" },
     { name = "postgres", editable = "shared/postgres" },

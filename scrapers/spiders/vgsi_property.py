@@ -38,9 +38,20 @@ def _text(response: Response, suffix: str) -> str | None:
     return val.strip() if val else None
 
 
+def _parcel_id(url: str) -> str:
+    return url.split("pid=")[-1].split("&")[0]
+
+
 class VgsiPropertySpider(scrapy.Spider):
     name = "vgsi_property"
     allowed_domains = ["gis.vgsi.com"]
+    archive_source = "vgsi_parcel"
+
+    def archive_key(self, response: Response) -> str | None:
+        # Street index pages only list parcels; the parcel pages are the originals.
+        if "Parcel.aspx" not in response.url:
+            return None
+        return _parcel_id(response.url)
 
     async def start(self):
         yield Request(urljoin(BASE_URL, "Streets.aspx"), callback=self.parse)
@@ -62,7 +73,7 @@ class VgsiPropertySpider(scrapy.Spider):
             )
 
     def parse_parcel(self, response: Response, **kwargs):
-        pid = response.url.split("pid=")[-1].split("&")[0]
+        pid = _parcel_id(response.url)
 
         sales = []
         for row in response.css("[id$='grdSales'] tbody tr"):

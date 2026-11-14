@@ -53,7 +53,7 @@ The three spec files ride along in this pull request.
   - _Requirements: 13.6_
 
 - [x] 3. Document running migrations by hand
-  - A README section with the one command, `uv run alembic -c shared/postgres/alembic.ini upgrade head`, run from the repo root against the compose Postgres. No compose service runs it.
+  - A README section with the one command, `uv run migrate`, run from the repo root against the compose Postgres. It runs `alembic upgrade head`, then creates the MongoDB indexes. No compose service runs it.
   - The test harness still migrates its own test database to head; that is separate.
   - _Requirements: 12.8_
 

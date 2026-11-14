@@ -7,6 +7,7 @@ dependencies = [
     "alembic>=1.18.4",
     "beautifulsoup4>=4.15.0",
     "httpx>=0.27.0",
+    "locations",
     "logfire>=4.31.0",
     "mongo",
     "playwright>=1.64.1",
@@ -22,6 +23,7 @@ dependencies = [
 migrate = "scripts.migrate:main"
 
 [tool.uv.sources]
+locations = { workspace = true }
 mongo = { workspace = true }
 postgres = { workspace = true }
 
@@ -38,6 +40,7 @@ packages = [
     "scripts.export",
     "scripts.ingest",
     "scripts.models",
+    "scripts.normalize",
     "scripts.scrape",
 ]
 

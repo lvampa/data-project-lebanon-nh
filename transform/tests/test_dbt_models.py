@@ -434,6 +434,30 @@ def test_the_public_set_holds_no_held_back_values(dbt):
     assert owners == [(None, None)]
 
 
+def test_a_location_waiting_for_review_has_no_public_location(dbt):
+    """11.19: listed, but with no location and no pin, until it is reviewed."""
+    rows = good_rows()
+    rows[AddressNormalization][0]["needs_review"] = True
+    dbt.seed_rows(rows)
+    assert dbt.run("run").returncode == 0
+
+    with dbt.engine.connect() as connection:
+        incident = connection.execute(
+            text(
+                "select location, location_kind, lat, lng, coordinate_precision"
+                " from marts.public_incidents where case_number = '26-1001'"
+            )
+        ).one()
+        pins = (
+            connection.execute(text("select raw_address from marts.public_addresses"))
+            .scalars()
+            .all()
+        )
+
+    assert tuple(incident) == (None, None, None, None, None)
+    assert pins == ["Main St and Hanover St"]
+
+
 def test_the_disposition_seed_is_the_parsers_list(dispositions_seed):
     sys.path.insert(0, str(PROJECT_DIR.parent / "scrapers"))
     from parsers.dispositions import _DISPOSITIONS

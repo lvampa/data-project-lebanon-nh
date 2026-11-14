@@ -144,20 +144,22 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 
 ## 8. Specs and plans
 
-Specs are for project features and are tracked in the repo.
-Implementation plans are for you, and are not.
+A feature's `design.md` is tracked in the repo.
+Its requirements, its task list and implementation plans are working files for you, and are not tracked.
 
 - Write the spec before coding the feature.
 - Save implementation plans to `.claude/plans/YYYY-MM-DD-<name>.md`, which is not tracked.
-- Delete a plan once it is implemented, after updating the feature's spec to match what was built.
+- Delete a plan once it is implemented, after updating the feature's `design.md` to match what was built.
 
 ### Spec layout
 
 Each feature gets `docs/specs/<feature-name>/` with a short kebab-case name and three files, written and reviewed in order:
 
-1. `requirements.md`: what the feature must do and why.
-2. `design.md`: how it will be built.
-3. `tasks.md`: the design broken into steps that can be checked off.
+1. `requirements.md`: what the feature must do and why. Untracked.
+2. `design.md`: how it will be built. Tracked, and kept short.
+3. `tasks.md`: the design broken into steps that can be checked off. Untracked.
+
+`.gitignore` ignores `requirements.md` and `tasks.md`, so they can live in the folder as working copies.
 
 Each file starts with the title and a status block, kept the same across the three files:
 
@@ -194,8 +196,11 @@ Each requirement has a user story and numbered acceptance criteria in EARS form:
 
 ### design.md
 
-Sections, skipping any that do not apply: Overview (with the requirements it covers), Architecture, Components and interfaces, Data models, Error handling, Testing strategy, Decisions (with rejected alternatives and why), Open questions.
+A few screens, not a full specification: what the feature is, the data flow, and the key decisions with what was rejected and why.
+Add a short data model, failure handling or testing section only when it earns its place, and an Open questions section when there are any.
+Do not cite requirement numbers, since the requirements are not tracked.
 Show code only for interfaces, schemas, and formats.
+Say "the operator", not a person's name.
 
 ### tasks.md
 

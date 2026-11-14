@@ -360,16 +360,11 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 #### Acceptance criteria
 
-1. THE normalization job SHALL run as one documented command from the repo root on Connor's Mac, outside any container.
-2. THE normalization job SHALL read its database settings from the repo's `.env`, and SHALL connect to the compose Postgres and MongoDB on localhost.
-3. THE normalization job SHALL use the `claude` login of the person running it, and SHALL NOT read a Claude token from `.env` or the environment.
-4. THE normalization job SHALL make each AI call as in 9.8, with every tool off, an empty working directory, and no settings, hooks, or MCP servers, even though it runs in Connor's own account.
-5. WHILE the process, reprocess, or geocode job is running, THE normalization job SHALL NOT start, and SHALL exit with a non-zero status and a message saying another police log job is running.
-6. WHILE the normalization job is running, THE process, reprocess, and geocode jobs SHALL NOT start.
-7. IF Postgres is unreachable, THEN THE normalization job SHALL exit with a non-zero status and a message naming the host and port, before making any AI call.
-8. WHEN the normalization job finishes, THE job SHALL print a summary of at most 15 lines. For each field it gives how many values the rules settled, how many AI normalized, how many were discarded, and how many still wait, then the AI calls made and the call records lost.
-9. THE normalization job SHALL exit with a non-zero status when 8.11, 9.2, 9.7, 16.5, or 16.7 applies, and with zero otherwise.
-10. THE daily schedule SHALL NOT run the normalization job.
+1. THE normalization job SHALL run as one documented command from the repo root on Connor's Mac, with his own `claude` login and no Claude token in `.env`.
+2. WHILE the process, reprocess, or geocode job is running, THE normalization job SHALL exit with a non-zero status and say another police log job is running.
+3. WHILE the normalization job is running, THE process, reprocess, and geocode jobs SHALL NOT start.
+4. THE normalization job SHALL exit with a non-zero status when it cannot run or every AI call fails, and with zero otherwise.
+5. THE daily schedule SHALL NOT run the normalization job.
 
 ## Out of scope
 

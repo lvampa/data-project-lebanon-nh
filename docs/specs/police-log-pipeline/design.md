@@ -493,7 +493,9 @@ Both name fields now hold the public location, so the map's popup code keeps wor
 
 Running it:
 
-- `deploy.sh` runs `generate_report.sh` (report-gen against `DATABASE_URL`), then `report-gen check`, then `bun run build`, then `wrangler pages deploy` (12.9).
+- `deploy.sh` runs `dbt build` first, then `generate_report.sh` (report-gen against `DATABASE_URL`), then `report-gen check`, then `bun run build`, then `wrangler pages deploy` (12.9).
+  The models are views, so the export reads live rows, and rows written since the last DAG run, such as a hand-run normalize, have not met the data checks. The build runs them again, and a failure stops the deploy before anything is exported.
+- report-gen deletes the five files it writes before it writes them, so a run that fails halfway leaves them missing, which the check reports, and never an old export. Other files in the folder are not touched.
 - The files in `frontend/web/public/data` stay gitignored and are never committed.
 - `report-gen` needs the `marts` views. If they are missing, the select fails with "relation does not exist" and the deploy stops; run `dbt run` (or let the DAG run), then deploy again.
 
@@ -504,7 +506,12 @@ Pre-deploy check (11.16 to 11.18):
 - It fails, naming the file, the field and the number of rows, when `incidents.json` has a non-empty `officer` or `reference_number`, or `properties.json` has a non-empty `owner` or `owner_address`.
 - It also fails when any of the four public files is missing.
 - `deploy.sh` runs it after the export and before the build, so a failure stops the deploy before anything is uploaded.
-- Block level is not rechecked here, because the file doesn't carry the location kind; the dbt check in 14.5 covers it.
+- It also fails when `incidents.json` `location`, or `addresses.json` `raw_address` or `normalized_address`, holds a number that could name a home.
+  It fails closed: every run of digits has to be one of the forms the public set uses, or the value fails.
+  The allowed forms are the hundred of "1200 block of Main St" at the start of a comma-separated part, an ordinal such as "1st", a road number after Route, Rte, RT, NH, US, VT, I or Interstate, and a number after Exit, Mile or "mile marker".
+  So "12 Main St", "12-14 Main St", "No. 12 Main St", "Smith Residence 12 Main St", "Lot 5" and "Apt 12" fail, and so does any digit that is not ASCII.
+  "1200 block of Main St", "Route 120", "I-89 Exit 18" and "1st Ave" pass.
+- Block level is not fully rechecked here, because the file doesn't carry the location kind: a block-shaped value that is not a whole hundred, such as "1050 block of Main St", fails, but a street-only value is not compared with the street list; the dbt check in 14.5 covers that.
 
 ### Admin search
 

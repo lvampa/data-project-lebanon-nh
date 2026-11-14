@@ -1,4 +1,6 @@
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
+from typing import Any, override
 
 import logfire
 import scrapy
@@ -12,10 +14,11 @@ class OfficerRosterSpider(scrapy.Spider):
     name = "officer_roster"
     allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov"]
 
-    async def start(self):
-        yield Request(ROSTER_URL, callback=self.parse)
+    @override
+    async def start(self) -> AsyncIterator[Request]:
+        yield Request(ROSTER_URL, callback=self.parse_index)
 
-    def parse(self, response: Response, **kwargs):
+    def parse_index(self, response: Response, **kwargs: Any) -> Iterator[Request]:
         """Roster index — find links to division sub-pages."""
         division_links = response.css(".secondaryNav a[href^='/']")
         logfire.info("officer roster index", links=len(division_links))
@@ -30,7 +33,9 @@ class OfficerRosterSpider(scrapy.Spider):
                 cb_kwargs={"division": division_name},
             )
 
-    def parse_division(self, response: Response, division: str = "", **kwargs):
+    def parse_division(
+        self, response: Response, division: str = "", **kwargs: Any
+    ) -> Iterator[OfficerItem]:
         """Division page — extract officers from table rows or h-card widgets."""
         now = datetime.now(UTC).replace(tzinfo=None)
 

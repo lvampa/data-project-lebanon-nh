@@ -1,5 +1,6 @@
 from datetime import datetime
 
+import pytest
 from locations.canonical import RULES_VERSION, canonical_address
 from postgres.models.property import Property
 
@@ -8,6 +9,7 @@ from scripts.normalize.rules import (
     PlaceNormalization,
     RuleNormalization,
     apply_rules,
+    display_form,
     rules_prompt_version,
 )
 from scripts.normalize.streets import load_street_list, streets_from_locations
@@ -87,8 +89,9 @@ def test_a_house_number_on_a_listed_street_is_an_address():
 
     rule = settled(result)["12 MAIN ST"]
     assert rule.kind == "address"
-    assert rule.normalized_address == "12 MAIN ST"
-    assert rule.geocode_query == "12 MAIN ST, Lebanon, NH"
+    assert rule.normalized_address == "12 Main St"
+    assert rule.geocode_query == "12 Main St, Lebanon, NH"
+    assert rule.street == "MAIN ST"
     assert leftovers(result) == []
 
 
@@ -96,7 +99,7 @@ def test_a_unit_does_not_stop_a_listed_address_and_is_not_kept():
     result = apply_rules([location("12 Main St Apt 3")], STREETS, places={})
 
     rule = settled(result)["12 MAIN ST APT 3"]
-    assert (rule.kind, rule.normalized_address) == ("address", "12 MAIN ST")
+    assert (rule.kind, rule.normalized_address) == ("address", "12 Main St")
 
 
 def test_a_direction_and_suffix_spelling_still_matches_the_listed_street():
@@ -120,8 +123,9 @@ def test_two_listed_streets_joined_by_and_are_an_intersection():
 
     rule = settled(result)["MAIN ST & ELM ST"]
     assert rule.kind == "intersection"
-    assert rule.normalized_address == "MAIN ST and ELM ST"
-    assert rule.geocode_query == "MAIN ST and ELM ST, Lebanon, NH"
+    assert rule.street == "MAIN ST"
+    assert rule.normalized_address == "Main St and Elm St"
+    assert rule.geocode_query == "Main St and Elm St, Lebanon, NH"
 
 
 def test_an_ampersand_or_slash_makes_the_same_intersection():
@@ -164,6 +168,7 @@ def test_a_known_place_code_copies_its_address_and_kind():
 
     rule = settled(result)["HANNAFORDS MARKET - MARKET ST"]
     assert rule.kind == "place"
+    assert rule.street is None
     assert rule.normalized_address == "Hannaford, Market St"
     assert rule.geocode_query == "Hannaford, Market St, Lebanon, NH"
 
@@ -244,3 +249,58 @@ def test_every_location_is_either_settled_or_left_over_exactly_once():
 
 def test_a_rule_rows_prompt_version_names_the_rules_version():
     assert rules_prompt_version() == f"rules-{RULES_VERSION}"
+
+
+def test_the_display_helper_decides_how_an_address_reads(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.normalize.rules.display_form", lambda text: text.title()
+    )
+
+    result = apply_rules([location("12 Main St")], STREETS, places={})
+
+    rule = settled(result)["12 MAIN ST"]
+    assert rule.normalized_address == "12 Main St"
+    assert rule.geocode_query == "12 Main St, Lebanon, NH"
+
+
+# --- how an address reads ---
+
+
+@pytest.mark.parametrize(
+    ("canonical", "shown"),
+    [
+        ("12 MAIN ST", "12 Main St"),
+        ("12 N MAIN ST", "12 N Main St"),
+        ("3RD ST", "3rd St"),
+        ("21ST ST", "21st St"),
+        ("102ND AVE", "102nd Ave"),
+        ("5 NE PARK ST", "5 NE Park St"),
+        ("SE ELM ST", "SE Elm St"),
+        ("MAIN ST and ELM ST", "Main St and Elm St"),
+        ("O'BRIEN RD", "O'Brien Rd"),
+        ("MARY HITCHCOCK MEMORIAL DR", "Mary Hitchcock Memorial Dr"),
+        ("US ROUTE 4", "US Route 4"),
+        ("NH-120", "NH-120"),
+        ("I-89 EXIT 18", "I-89 Exit 18"),
+        ("MCDONALD DR", "McDonald Dr"),
+        ("PO BOX 5", "PO Box 5"),
+    ],
+)
+def test_display_form_title_cases_and_keeps_directions_and_ordinals_right(
+    canonical, shown
+):
+    assert display_form(canonical) == shown
+
+
+def test_a_place_copied_from_an_earlier_answer_is_not_recased():
+    place = PlaceNormalization("CVS Pharmacy, Main St", "place")
+
+    result = apply_rules([location("CVS", "L CVS")], STREETS, places={"L CVS": place})
+
+    assert settled(result)["CVS"].normalized_address == "CVS Pharmacy, Main St"
+
+
+def test_the_rules_version_changed_with_the_title_case_output():
+    # Rule rows store this. Existing rows were written upper case, so a redo must see
+    # them as old. Moving it back to 1 would hide them.
+    assert rules_prompt_version() != "rules-1"

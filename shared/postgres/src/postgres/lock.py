@@ -1,8 +1,9 @@
 """One lock for every job that writes police log entries.
 
-The process job and the reprocess job both upsert `log_entries`. Running them
-together would let an old parse overwrite a new one, so each takes this lock for
-its whole run, from a shell as well as from Airflow.
+The process, reprocess, normalization and geocode jobs all write the police log
+tables. Running two together would let an old parse overwrite a new one, or two
+jobs spend the same AI calls, so each takes this lock for its whole run, from a
+shell as well as from Airflow.
 """
 
 from collections.abc import Iterator

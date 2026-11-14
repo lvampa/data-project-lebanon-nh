@@ -21,6 +21,8 @@ dependencies = [
 
 [project.scripts]
 migrate = "scripts.migrate:main"
+normalize = "scripts.normalize.job:main"
+geocode = "scripts.normalize.geocode:main"
 
 [tool.uv.sources]
 locations = { workspace = true }

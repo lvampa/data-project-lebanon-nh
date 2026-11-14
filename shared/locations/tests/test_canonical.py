@@ -140,7 +140,7 @@ def test_a_street_named_like_a_unit_word_is_not_stripped():
 # The hash of street_suffixes.csv when RULES_VERSION was last set. Changing the file
 # changes parsed values, so it comes with a RULES_VERSION bump (rule rows record it).
 SUFFIX_FILE_SHA256 = "543097cf3545ba8d71b438aeec217a68c9bdbdfb17900ae1f43e0d3a0d6a0bd2"
-SUFFIX_FILE_VERSION = "1"
+SUFFIX_FILE_VERSION = "2"
 
 
 def test_the_rules_version_is_bumped_when_the_suffix_file_changes():

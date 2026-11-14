@@ -10,7 +10,8 @@ The city posts one police log PDF per day.
 The pipeline finds the PDFs, parses them into `log_entries`, and feeds two consumers: the admin API and admin search that Connor uses, and the static JSON that the public site and map read.
 
 Today the flow stops early.
-Postgres holds 343 entries from 3 PDFs, 650 PDFs are waiting, and 10 are stuck mid-claim.
+Postgres holds only test data: 343 entries from 3 PDFs, with about 650 PDFs not yet processed.
+Nothing is live, so the databases are reset and rescraped, and no data is carried over (2026-11-13).
 No incident type or address has ever been normalized, so the public map is empty and search cannot group "MV Complaint" with other traffic calls.
 A parser fix cannot repair rows already stored, because nothing can reprocess them.
 
@@ -294,6 +295,15 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 10. IF an incident's type has no normalization yet, THEN THE public export SHALL write the raw incident type with an empty category and normalized type name.
 11. THE public export SHALL count incidents in `stats.json` by category, by normalized type name, and by weekday, over the public window only.
 12. THE public export SHALL keep writing `addresses.json` in its current shape, from the incidents and public locations in the public window.
+13. THE public export SHALL write `properties.json` from the public parcel model, and SHALL NOT run its own query on the parcels table.
+14. THE public export SHALL NOT write a parcel's owner name or owner mailing address.
+15. THE public export SHALL keep the `owner` and `owner_address` field names in `properties.json` with empty values, so that the current site keeps working.
+16. WHEN `deploy.sh` runs, THE pre-deploy check SHALL read the exported JSON files after the export and before the site build.
+17. IF `incidents.json` holds a non-empty officer or reference number, or `properties.json` holds a non-empty owner or owner address, THEN THE pre-deploy check SHALL stop the deploy and name the file, the field, and the number of rows.
+18. IF any of `incidents.json`, `addresses.json`, `properties.json`, or `stats.json` is missing, THEN THE pre-deploy check SHALL stop the deploy.
+19. WHILE an incident's location normalization has a review mark, THE public export SHALL write the incident with an empty public location and empty coordinates, and SHALL leave it out of `addresses.json`.
+20. WHEN a location's kind is `address`, THE public location SHALL be built only from its matched street, as "<Street>" or "<n00> block of <Street>", and SHALL never include the normalized address text.
+21. IF a location of kind `address` has no matched street, THEN THE public export SHALL write an empty public location and empty coordinates.
 
 ### Requirement 12: Run the stages in order on a schedule
 
@@ -309,7 +319,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 5. THE scheduler SHALL stop any police log task that runs longer than 60 minutes and mark it failed.
 6. IF the processing or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
 7. WHEN a stage fails after its retries, THE scheduler SHALL show the run as failed and log the stage name and reason.
-8. THE README SHALL document the one command that applies the database migrations, `uv run migrate`, and THE operator SHALL run it by hand before any police log job runs. Nothing applies them at startup.
+8. THE `uv run migrate` command, documented in the README, SHALL drop the consumer models, apply the database migrations, create the MongoDB indexes, and build the consumer models, in that order, when Connor runs it by hand before any police log job. Nothing applies them at startup. IF a step fails, THEN THE command SHALL stop before the next one and exit with a non-zero status.
 9. THE scheduler SHALL NOT run the public export or deploy the site.
    The public export is written from the consumer models when `deploy.sh` runs, and the files are not committed.
 
@@ -338,6 +348,9 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 4. THE data checks SHALL fail if a category is outside the five, or a case number appears more than once among incidents.
 5. THE data checks SHALL fail if the public set holds an incident outside the public window, an officer name, or a house address that is not at block level.
 6. WHEN a data check fails, THE build SHALL name the check and the number of rows that failed it.
+7. THE data checks SHALL fail if the public parcels hold an owner name or an owner mailing address.
+8. THE data checks SHALL fail if a public location of kind `address` is anything other than its street or "<n00> block of" its street.
+9. THE data checks SHALL fail if a public location holds any number other than a block hundred at the start or after a comma, an ordinal, a road number, or an exit or mile number, or holds any non-ASCII digit, using the same allowlist as the pre-deploy check.
 
 ### Requirement 15: Measure how well AI normalizes
 

@@ -11,8 +11,11 @@ Start Postgres and MongoDB, then run this from the repo root:
 docker compose up -d postgres mongo
 uv run migrate
 ```
-It applies the Postgres migrations, then creates the MongoDB indexes, and stops at the first failure.
-It is safe to run again, and you should after you pull a branch that adds a migration or an index.
+It drops the dbt views, applies the Postgres migrations, creates the MongoDB indexes, then rebuilds the views with `dbt build`, and stops at the first failure.
+It is safe to run again, and you should after you pull a branch that adds a migration, an index, or a dbt model.
+
+If it ends with "migrations applied; consumer models failed their checks", the schema is current, but a dbt data check failed, so the public views are missing until you fix the data and run it again.
+The dbt output just above names the check and its row count.
 
 It reads `POSTGRES_*` and `MONGO_*` from your shell or your `.env`, and falls back to the local compose values.
 For any other Alembic command, `uv run alembic -c shared/postgres/alembic.ini ...` still works.

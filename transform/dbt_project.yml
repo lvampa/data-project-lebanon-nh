@@ -1,0 +1,40 @@
+name: lebanon
+version: "0.1.0"
+config-version: 2
+profile: lebanon
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["data_tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+flags:
+  # No usage stats sent to dbt Labs from Connor's machine or CI.
+  send_anonymous_usage_stats: false
+
+vars:
+  # The public window: the most recent 90 days, counted back from the newest log date
+  # stored (requirements glossary, 11.2).
+  public_window_days: 90
+  # The same box as in_city_bounds in shared/locations/geocode.py; a test keeps them
+  # equal. geocode() also checks Nominatim's state and city, so this is the coarse check.
+  city_bounds:
+    min_lat: 43.56
+    max_lat: 43.69
+    min_lng: -72.34
+    max_lng: -72.17
+
+models:
+  lebanon:
+    # Everything lives in the one `marts` schema from the profile, so the migrate
+    # step can drop it with cascade before `alembic upgrade head` (design.md).
+    +materialized: view
+
+seeds:
+  lebanon:
+    # Generated from the parser's disposition list before each build; not committed.
+    dispositions:
+      +column_types:
+        disposition: text

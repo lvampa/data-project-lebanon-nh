@@ -164,13 +164,10 @@ It is also the archive's replay for police log PDFs; the archive spec's replay c
 - It reads URL records that are `complete` or `error`, in log date order (4.1, 4.2).
 - For each, it takes the newest archived version, extracts text with pypdf, and calls `ingest_log_text` in its own transaction, then records the content hash and versions and marks a repaired `error` record `complete` (4.4).
   It writes the entry texts again; at the same parser version, unchanged ones only move their seen count.
-  A URL with no archived PDF body but a `police_log_text` version is reparsed from that text.
 - A record with no archived version goes back to `pending` and is counted (4.12).
 - It checks the archive is reachable before it starts, and exits with an error if not (4.13).
 - It takes the same advisory lock as the process runner.
   The lock covers runs from a shell as well as from Airflow.
-- It does not repair the 343 entries stored before this work.
-  Those three PDFs were never archived; discovery adds them again, the process job downloads and archives them, and the upsert in `ingest_log_text` updates their entries.
 - It logs the counts in 4.10.
 
 ### AI backend
@@ -428,18 +425,86 @@ models/
     public_incidents.sql         incidents in the public window, public columns only
     public_addresses.sql         today's addresses.json shape, from public_incidents
     public_stats.sql             counts by category, type name, and weekday
+    public_properties.sql        parcels for properties.json, with owner and owner_address empty
 ```
+
+- Every model, staging included, builds as a view in the one `marts` schema, so dropping `marts` with cascade removes all of them.
+- `stg_incident_types` and `stg_locations` keep one row per folded key, preferring a `human` row, so the joins in `incidents` can never duplicate an entry.
+- `public_properties` reads `properties` straight from the source.
+  Owner names and owner mailing addresses are mostly residents', and residents are kept off the public site, the same rule the people pages follow (11.13 to 11.15).
+  The two columns stay with empty values until the frontend drops them, like the held-back incident fields (11.5).
+  It's not part of the police log, but it's here because it goes out in the same export and the same deploy.
 
 - `incidents` left-joins entries to both lookup tables, so an entry with no normalization has empty normalized columns (8.12).
 - `public_incidents` selects from `incidents`: the 90 day window from the newest log date, the public columns, the public location and coordinates, and empty values for the held-back fields (11.2 to 11.10).
-- A dbt macro, `public_location`, is the one place that works out block level: for kind `address` it reads the leading house number from the normalized address, rounds it down to the hundred, drops it when under 100, and rounds coordinates to 3 places (6.11, 11.6, 11.7).
+  A location with a review mark is treated as not normalized, so its incidents are listed with no location or pin until it's reviewed (11.19).
+- A dbt macro, `public_location`, is the one place that works out block level (6.11, 11.6, 11.7, 11.20, 11.21).
+  - For kind `address` it builds the text only from the matched `street`, from the street list, and never from the AI's address text, so it fails closed.
+  - A leading house number of 100 or more becomes "<n00> block of <Street>". Under 100, or no number, gives "<Street>". No street gives nothing, and no pin.
+  - Coordinates round to 3 places.
+  - So "Rear 12 Main St" or "12 Mascoma St Lot 5" from the AI can't reach the site.
   Data check 14.5 tests its output.
 - The incidents and stats API and admin search read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
-- `report-gen` becomes plain selects from the three public models and drops its own joins and its 2,000 row cap.
+- `report-gen` becomes plain selects from the four public models and drops its own joins and its 2,000 row cap (see "Public export").
 - Postgres will not let a migration drop or retype a column a view reads.
-  So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, run `dbt run`.
-  The `migrate` service and the test fixture both follow it, and a test proves a migration that drops a column a model uses still upgrades.
+  So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, then build the models.
+  `uv run migrate` runs that order (see "Schedule"), and a test proves a migration that drops a column a model uses still upgrades after the drop.
 - A paid tier later is another model over `incidents` with a different filter.
+
+### Public export (report-gen)
+
+`tools/report-gen` keeps its CLI and its five files, but reads the `marts.public_*` views instead of the tables.
+Its own joins, `INCIDENT_LIMIT` (2,000), and the raw-table counts go away (11.1, 11.2).
+Every query is a plain `select ... order by` on one view, and the filtering lives in dbt.
+
+| File | Reads | Order |
+|---|---|---|
+| `incidents.json` | `marts.public_incidents` | `reported_at desc nulls last` |
+| `addresses.json` | `marts.public_addresses` | `count desc` |
+| `properties.json` | `marts.public_properties` | `assessed_total desc nulls last` |
+| `stats.json` | `marts.public_stats`, plus `count(*)` of `marts.public_incidents` | by count |
+| `staff.json` | `city_staff`, unchanged | as today |
+
+`incidents.json`, per incident (11.3 to 11.5):
+
+| Field | From | Note |
+|---|---|---|
+| `case_number`, `reported_at`, `call_source`, `disposition`, `source_url` | same columns | as today |
+| `incident_type` | `incident_type` (the raw type) | as today |
+| `location` | `location` (the public location) | was the raw location; now block level, or empty until normalized |
+| `officer`, `reference_number` | `null` | kept as fields, always empty (11.4, 11.5) |
+| `category`, `normalized_type` | same columns | new |
+| `lat`, `lng`, `coordinate_precision` | same columns | new; empty when not placed (11.8) |
+
+`addresses.json` keeps its shape exactly: `raw_address`, `normalized_address`, `count`, `lat`, `lng` (11.12).
+Both name fields now hold the public location, so the map's popup code keeps working and shows block-level names.
+
+`properties.json` keeps every field. `owner` and `owner_address` are always `null` (11.13 to 11.15).
+
+`stats.json` keeps `total`, `generated_at`, `by_type` and `by_weekday`, and adds `by_category` (11.11).
+- `total` is the public incident count, not every entry.
+- `by_type` is `{incident_type, count}` with the normalized type name as `incident_type`, top 20.
+  Not-yet-normalized incidents are left out of it.
+- `by_category` is `{category, count}`, with not-yet-normalized incidents under `null`.
+- `by_weekday` is `{day, count}` as today.
+- No page reads `stats.json` yet, so the change risks nothing on the site.
+
+`staff.json` is out of this feature: city staff are public employees, and the people pages rule allows them on the site.
+
+Running it:
+
+- `deploy.sh` runs `generate_report.sh` (report-gen against `DATABASE_URL`), then `report-gen check`, then `bun run build`, then `wrangler pages deploy` (12.9).
+- The files in `frontend/web/public/data` stay gitignored and are never committed.
+- `report-gen` needs the `marts` views. If they are missing, the select fails with "relation does not exist" and the deploy stops; run `dbt run` (or let the DAG run), then deploy again.
+
+Pre-deploy check (11.16 to 11.18):
+
+- `report-gen check --dir frontend/web/public/data` reads the written JSON files.
+  It doesn't rerun the queries, so it catches a leak however it got into the files.
+- It fails, naming the file, the field and the number of rows, when `incidents.json` has a non-empty `officer` or `reference_number`, or `properties.json` has a non-empty `owner` or `owner_address`.
+- It also fails when any of the four public files is missing.
+- `deploy.sh` runs it after the export and before the build, so a failure stops the deploy before anything is uploaded.
+- Block level is not rechecked here, because the file doesn't carry the location kind; the dbt check in 14.5 covers it.
 
 ### Admin search
 
@@ -492,7 +557,10 @@ dbt tests are the data checks in requirement 14:
 | `unique` and `not_null` on case number | `incidents` | 14.4 |
 | Every row inside the public window | `public_incidents` | 14.5 |
 | `officer` is empty | `public_incidents` | 14.5 |
-| No public location of kind `address` starts with a number that is not a multiple of 100 | `public_incidents` | 14.5 |
+| A public location of kind `address` is exactly its street or "<n00> block of" its street, with 3-place coordinates | `public_incidents` | 14.5, 14.8 |
+| No public location has a number outside the allowlist ("N00 block of", ordinals, road numbers, exit and mile numbers), the same rule as `report-gen check` | `public_incidents` | 14.9 |
+| `owner` and `owner_address` are empty | `public_properties` | 14.7 |
+| dbt unit tests for `public_location`: block rounding, under 100, a unit dropped, other kinds as stored, no normalization gives no location, and the 90 day edge | `public_incidents` | 6.11, 11.6 to 11.9, 11.2 |
 
 The disposition seed is generated from `dispositions.py` by a small script that runs before each dbt build, and it is not committed, so the list lives in one place.
 
@@ -505,7 +573,7 @@ The disposition seed is generated from `dispositions.py` by a small script that 
   A draft is labeled with AI help and then checked line by line by Connor, since a person has to decide what is right.
 - The draft labels come from a different model and prompt than the one being scored, and `results.md` says which, so the first score does not flatter the default backend.
 - Known limit: the set comes from the same three PDFs the prompts were written against.
-  Lines from new PDFs are added after the backfill.
+  Lines from new PDFs are added after the first full scrape.
 - The command runs the same prompt building, backend, and `checks.py` as the job, and neither reads nor writes the database (15.2).
   The list of type names already in use is a fixed file stored with the set.
 - It prints accuracy per field, the discarded and unsure counts, and each wrong item (15.3 to 15.5), comparing text without regard to case or spacing (15.6).
@@ -536,7 +604,13 @@ discover ─► process (limit 100) ─► geocode ─► dbt build ─► watch
   If Connor is normalizing when the DAG reaches process or geocode, that task finds the lock held, fails fast with the message, and the work waits for the next run.
   So he runs the job outside the DAG's start time.
 - A manual DAG, `police_log_reprocess`, with date parameters, wraps the reprocess script.
-- A one-shot `migrate` service in compose drops `marts`, runs `alembic upgrade head`, then `dbt run`, and the Airflow services wait for it (12.8).
+- There is no migrate container. Connor runs `uv run migrate` after pulling a schema change and before the next DAG run (12.8).
+  It's the `scripts.migrate:main` console script, added with steps 2 and 3 in #27. PR 7 adds steps 1 and 4 to the same command.
+  It stops at the first failing step with a non-zero exit:
+  1. `DROP SCHEMA IF EXISTS marts CASCADE`, on the app's engine.
+  2. `alembic upgrade head`.
+  3. `init_indexes()` for the MongoDB indexes.
+  4. `dbt build --project-dir transform --profiles-dir transform`, run as a subprocess, so the models are built and their data checks run. The `scripts` package doesn't depend on dbt itself.
 
 The Airflow image has no `claude` CLI and no Claude token.
 That work is deferred; the `airflow-claude-cli` branch exists, unbuilt, if it's ever revisited.
@@ -601,17 +675,17 @@ Adds:
 
 | Column | Type | Notes |
 |---|---|---|
-| `log_date` | date, NOT NULL | Backfilled in the migration from the URL record's `log_date`, else `reported_at::date`. The migration fails if any row is still null. |
+| `log_date` | date, NOT NULL | The log date of the PDF. |
 | `place_code` | text | For example `L HANNAF`. |
 | `officer_code` | text | For example `SMN`. |
 | `refer_to` | jsonb | List of `{kind, number}`. |
 | `disposition_unmatched` | boolean | Default false. |
 | `missing_from_parse` | boolean | Default false. |
 | `parser_version` | integer | |
-| `created_at`, `updated_at` | timestamp | `created_at` backfilled from `scraped_at`. |
+| `created_at`, `updated_at` | timestamp | |
 
 Drops `raw_text`, `raw_reason_action`, and `scraped_at`.
-The two text columns are raw source and move to the archive; the legacy import copies the 343 live rows' values there before the migration runs (archive 8.4).
+The two text columns are raw source and move to the archive. They are dropped with no copy, because the database is reset and rescraped (2026-11-13).
 The parser still cuts both for each entry; the ingest moves them into an `EntryText` before validating the record, so they reach the archive as `police_log_entry_text` and never Postgres.
 `scraped_at` duplicates `created_at`, and the archive records each version's fetch time.
 `case_number` becomes NOT NULL; the live table has no nulls.
@@ -695,7 +769,7 @@ One mechanism for database tests, replacing the three that exist (`TEST_DATABASE
   The check runs before any connection.
 - MongoDB tests use the archive spec's plugin and the `scraped_data_test` database; ingest and reprocess tests need it, so CI starts `mongo` next to `postgres`.
 - A session fixture creates `app_test` if missing and runs `alembic upgrade head`.
-  A separate fixture, asked for only by API and dbt tests, runs `dbt run` so the `marts` views exist.
+  The dbt tests use their own `app_dbt_test` database (below); the API tests in PR 8 get a fixture that builds the `marts` views.
 - Each test rebinds the existing sessionmaker to one connection inside an outer transaction, `SessionLocal.configure(bind=connection, join_transaction_mode="create_savepoint")`, and restores it after, so code under test can commit and the test still rolls back (13.3).
   No production code changes for this.
 - The fixtures are a pytest plugin in `shared/postgres` that the scrapers, scripts, and API suites load.
@@ -711,7 +785,15 @@ Other tests:
 - Normalization and geocode jobs: `FakeBackend` and a fake geocoder; no real AI call and no request to Nominatim (13.5).
 - Canonical rules and the rule pass: pure-function tests over known spelling pairs, plus a job test showing that a house number on a listed street is stored as `rule` and that `FakeBackend` never sees it.
 - No tools: the `ClaudeCliBackend` contract test checks, with a fake executable, that each call runs in a new empty directory and passes the flags task 13 settles (9.8).
-- dbt: `dbt build` against `app_test` with seeded rows that should pass, and one seeded bad row per data check that should fail it.
+- dbt: `transform/tests/test_dbt_models.py` runs `dbt build` on seeded rows that should pass, then one bad case per data check that must fail it, by name and with a failure count (14.6).
+  - It uses its own database, `app_dbt_test`, migrated at the start of the session and dropped at the end, not `app_test`.
+    dbt reads committed rows from its own process, so the rolled-back connection can't serve it.
+    Views over `log_entries` in `app_test` would also stop the migration tests from dropping columns.
+  - Checks on source data get a bad source row.
+    The public models write held-back fields as empty literals, so no source row can break those checks.
+    Instead the test swaps in a public view that leaks the field, which is the regression the check exists to catch.
+  - dbt's own singular checks live in `transform/data_tests/`, so `transform/tests/` holds the pytest suite, like the other packages.
+  - The API tests in PR 8 need the `marts` views too; that fixture moves into the shared test plugin then.
 - DAG: structure tests on the spec, in the style of `dags/tests/test_specs.py`.
 - Evaluation: the scoring functions are unit tested with a fake backend; the real run is manual (15.7).
 
@@ -884,17 +966,39 @@ Incident search runs as a Postgres query over the dbt models, with full-text sea
 The lost-rows bug it was meant to fix is already fixed in all five pipelines on `fix/integration`, and the police pipeline no longer fits a per-item base.
 Tidying the other four is a follow-up.
 
+## Frontend changes for Connor
+
+The export keeps every field name, so the site builds and runs unchanged after PR 8a.
+These are what Connor changes so it stops showing empty or misleading things.
+The agents don't touch the frontend.
+
+- **Officer, always empty now.**
+  - `frontend/web/components/incidents-table.tsx`: the `Officer` header (line 60) and cell (line 87), and the `officer` filter (lines 25, 27, 39).
+  - `frontend/web/components/incidents-filters.tsx`: the officer input (lines 39 to 44), and `officer` in `hasFilters` (line 25).
+- **Block-level locations and pins.**
+  `incidents.json` `location`, and `addresses.json` `raw_address` and `normalized_address`, now read like "1200 block of Main St", with coordinates rounded to about 100 meters.
+  - `frontend/web/lib/map-utils.ts` line 10 needs no change.
+    The popup label may want a word saying the pin is approximate.
+  - An incident with no normalization yet has an empty `location` and no pin.
+- **No owner search.**
+  - `frontend/web/components/property-search.tsx`: the owner match (line 31) and "Search by address or owner…" (line 49).
+  - `frontend/web/components/property-table.tsx`: the `Owner` header (line 23) and cell (line 35).
+  - `frontend/web/app/properties/page.tsx` line 13: "search by address or owner".
+- **New incident fields, optional to use:** `category`, `normalized_type`, `lat`, `lng` and `coordinate_precision`.
+  They go into `Incident` in `frontend/shared/lib/types.ts` if he wants category filters or per-incident pins.
+  `stats.json` gains `by_category`; no page reads `stats.json` today.
+
 ## Open questions
 
 1. **Do 2025 PDFs use the same layout?**
    The parser is proven only on May 2026.
-   The header-line check (2.14) will show it during the backfill.
+   The header-line check (2.14) will show it during the first full scrape.
 2. **How the CLI reports a login or usage-limit failure.**
    Needed for 8.9; Connor may have to run one command and paste the output.
 3. **The token for the scheduled AI call.**
    Settled on 2026-11-13: there's no token. The job runs by hand on Connor's Mac with his login (see Decisions).
 4. **The officer column on the public site.**
-   The export writes an empty `officer`, so the officer column and filter in `incidents-table.tsx` will have nothing to show until the frontend changes.
+   The export writes an empty `officer`; the frontend changes are listed in "Frontend changes for Connor".
 5. **Who labels the evaluation set.**
    The plan is an AI-drafted set that Connor checks line by line, about 150 lines.
 6. **Cross-entity admin search.**
@@ -906,3 +1010,6 @@ Tidying the other four is a follow-up.
 8. **The street list's real size.**
    It's measured in task 14.
    Past about 1,500 streets, choose between trimming it (for example, to streets that appear in the logs) and the `find_street` tool.
+9. **Locations waiting for review on the public site.**
+   Decided as the safe default on 2026-11-13, until Connor says otherwise: a location with `needs_review` set gives its incidents no public location and no pin (11.19).
+   The incident is still listed. Connor can relax this, for example to publish AI rows marked unsure, by dropping the one `case` in `public_incidents`.

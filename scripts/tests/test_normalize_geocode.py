@@ -135,7 +135,7 @@ def test_a_row_with_no_geocode_query_is_looked_up_by_its_address(db_session):
     assert the_row(db_session, "HANNAFORDS").lat == IN_CITY[0]
 
 
-# --- place codes (6.2) ---
+# --- place codes ---
 
 
 def test_a_place_code_with_coordinates_on_another_row_is_reused_with_no_request(
@@ -172,7 +172,7 @@ def test_a_place_code_with_no_coordinates_anywhere_is_looked_up_normally(db_sess
     assert the_row(db_session, "HANNAFORDS MARKET").geocoded_via == "nominatim"
 
 
-# --- misses and attempts (6.5, 6.6) ---
+# --- misses and attempts ---
 
 
 def test_a_miss_counts_an_attempt_and_changes_nothing_else(db_session):
@@ -259,7 +259,7 @@ def test_rows_that_already_have_coordinates_or_no_address_are_skipped(db_session
     assert geocoder.queries == []
 
 
-# --- the request budget (6.8) ---
+# --- the request budget ---
 
 
 def test_a_run_stops_at_the_request_limit_and_leaves_the_rest(db_session):

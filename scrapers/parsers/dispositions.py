@@ -4,8 +4,8 @@ The log prints one string, such as "Telephone Harassment Incident Report Taken".
 a list of known endings tells the incident type from the disposition.
 
 Changing this list changes parsed values, so it comes with a PARSER_VERSION bump and
-a reprocess. Until older entries are reprocessed, data check 14.3 fails the daily
-build, because they still carry a newly listed disposition inside their incident type.
+a reprocess. Until older entries are reprocessed, they still carry a newly listed
+disposition inside their incident type.
 """
 
 import re

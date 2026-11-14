@@ -1,27 +1,31 @@
 # Postgres backup: design
 
-**Status:** In progress
+**Status:** Done
 **Created:** 2026-11-13
-**Updated:** 2026-11-13
+**Updated:** 2026-11-14
 
 ## Overview
 
-`scrapers/maintenance/postgres_backup.py` runs `pg_dump -Fc` once, by hand, inside the Airflow image: `python -m maintenance.postgres_backup`.
-It covers requirement 1.
+A hand-run script dumps the Postgres database to a dated file.
+`python -m maintenance.postgres_backup` runs `pg_dump -Fc` once, inside the Airflow image, and writes `app-<UTC timestamp>.dump` to `/opt/backups/postgres`.
+That path is a bind mount of the host folder set in `compose.yml` and `.env.example`.
 
-- The file is `app-20261113T221000Z.dump`, in `/opt/backups/postgres`, a bind mount of the host folder set in `compose.yml` and `.env.example`.
-- The password goes in a temporary `PGPASSFILE`, passed to `pg_dump` in its environment (1.5).
-- It dumps to `<name>.partial` and renames it on success, so a failed or Ctrl-C'd run leaves no backup-looking file; a failure raises `BackupError` and `main` exits 1 (1.4).
-- It reuses `BackupError` and `check_writable` from `mongo_backup` (1.3), so it runs as a module.
+## How it works
+
+- The password goes in a temporary `PGPASSFILE`, never in the command line or the file name.
+- It dumps to `<name>.partial` and renames on success, so a failed or interrupted run leaves no file that looks like a backup.
+- A failure raises `BackupError` and exits 1.
+  The script reuses `BackupError` and `check_writable` from the Mongo backup.
 - `docker/Dockerfile.airflow` installs `postgresql-client-16`, because Debian's version 15 refuses a version 16 server.
 
 ## Decisions
 
 - **A dated file per run, no pruning.**
-  Connor's choice for a small hobby project.
+  The operator deletes old files by hand.
   Rejected: a nightly DAG, rotation, a verified single copy, and automatic restore checks.
-  They were built and cut as too much for the app.
+  They were built and cut as too much for a small hobby project.
 
-## Testing strategy
+## Testing
 
-- Unit tests with a fake `pg_dump`: a new dated file that leaves older ones alone, no password in the command, environment or file name, a failed or interrupted dump leaving no file, a same-second rerun refused, and a missing folder.
+Unit tests use a fake `pg_dump`.
+They cover a new dated file that leaves older ones alone, no password in the command, environment or file name, a failed or interrupted dump leaving no file, a same-second rerun refused, and a missing folder.

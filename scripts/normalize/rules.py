@@ -121,7 +121,7 @@ def apply_rules(
 def _address_on_a_listed_street(
     item: CanonicalLocation, streets: Collection[str]
 ) -> RuleNormalization | None:
-    """6.15: a house number followed by a street on the street list."""
+    """A house number followed by a street on the street list."""
     address, _unit = strip_unit(item.canonical)
     house_number, street = split_house_number(address)
     if house_number is None or street not in streets:
@@ -132,7 +132,7 @@ def _address_on_a_listed_street(
 def _intersection_of_listed_streets(
     item: CanonicalLocation, streets: Collection[str]
 ) -> RuleNormalization | None:
-    """6.16: exactly two streets on the street list, joined by and, &, or /."""
+    """Exactly two streets on the street list, joined by and, &, or /."""
     parts = item.canonical.split(_INTERSECTION_JOINER)
     if len(parts) != 2 or not all(part in streets for part in parts):
         return None
@@ -143,7 +143,7 @@ def _intersection_of_listed_streets(
 def _known_place_code(
     item: CanonicalLocation, places: Mapping[str, PlaceNormalization]
 ) -> RuleNormalization | None:
-    """6.17: a place code that already has a place normalization with no review mark."""
+    """A place code that already has a place normalization with no review mark."""
     place = places.get(item.place_code) if item.place_code else None
     if place is None:
         return None

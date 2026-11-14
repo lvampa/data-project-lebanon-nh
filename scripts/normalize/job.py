@@ -72,7 +72,7 @@ def allocate_calls(
     needed: Mapping[str, int], per_field: int = CALLS_PER_FIELD
 ) -> dict[str, int]:
     """Each field may make `per_field` calls, and calls it does not use pass to the
-    others (9.6)."""
+    others."""
     allowed = {name: min(count, per_field) for name, count in needed.items()}
     spare = sum(per_field - count for count in allowed.values())
     for name, count in needed.items():
@@ -214,7 +214,7 @@ def _call(
     stored = discarded = 0
     for entry in checked.accepted:
         stored += chosen.store(session, by_sent[entry.item.raw], entry, call_id)
-    # Only values whose own item was discarded or missing are charged (8.6).
+    # Only values whose own item was discarded or missing are charged.
     for discard in checked.discarded:
         discarded += chosen.fail(session, by_sent[discard.raw])
     for raw in checked.missing:

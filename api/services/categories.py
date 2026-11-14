@@ -17,7 +17,7 @@ def list_categories(db: Session, paging: Paging) -> Page[CategoryRecord]:
             LogEntry.incident_type,
             func.count().label("count"),
             IncidentTypeCategory.category,
-            IncidentTypeCategory.subcategory,
+            IncidentTypeCategory.normalized_type,
         )
         .outerjoin(
             IncidentTypeCategory,
@@ -27,7 +27,7 @@ def list_categories(db: Session, paging: Paging) -> Page[CategoryRecord]:
         .group_by(
             LogEntry.incident_type,
             IncidentTypeCategory.category,
-            IncidentTypeCategory.subcategory,
+            IncidentTypeCategory.normalized_type,
         )
     )
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
@@ -43,7 +43,7 @@ def list_categories(db: Session, paging: Paging) -> Page[CategoryRecord]:
                 raw_incident_type=r.incident_type,
                 count=r.count,
                 category=r.category,
-                subcategory=r.subcategory,
+                normalized_type=r.normalized_type,
                 is_categorized=r.category is not None,
             )
             for r in rows
@@ -57,7 +57,7 @@ def update_category(
     now = datetime.now(UTC).replace(tzinfo=None)
     changes = {
         "category": update.category,
-        "subcategory": update.subcategory,
+        "normalized_type": update.normalized_type,
         "updated_at": now,
     }
     with logfire.span(
@@ -73,5 +73,5 @@ def update_category(
     return CategoryResult(
         raw_incident_type=raw_incident_type,
         category=update.category,
-        subcategory=update.subcategory,
+        normalized_type=update.normalized_type,
     )

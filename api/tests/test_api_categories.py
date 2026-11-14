@@ -3,12 +3,12 @@ from unittest.mock import MagicMock
 from api.tests.sql import compile_pg, executed_stmt, upsert_set_columns
 
 
-def _make_row(incident_type, count, category=None, subcategory=None):
+def _make_row(incident_type, count, category=None, normalized_type=None):
     r = MagicMock()
     r.incident_type = incident_type
     r.count = count
     r.category = category
-    r.subcategory = subcategory
+    r.normalized_type = normalized_type
     return r
 
 
@@ -47,7 +47,7 @@ def test_list_categories_pages_in_stable_order(mock_db, client):
 def test_patch_category_upserts_on_raw_incident_type(mock_db, client):
     resp = client.patch(
         "/api/categories/MV%20Stop",
-        json={"category": "Traffic", "subcategory": "Moving Violation"},
+        json={"category": "Traffic", "normalized_type": "Moving Violation"},
     )
 
     assert resp.status_code == 200
@@ -57,7 +57,7 @@ def test_patch_category_upserts_on_raw_incident_type(mock_db, client):
     params = compile_pg(stmt).params
     assert params["raw_incident_type"] == "MV Stop"
     assert params["category"] == "Traffic"
-    assert params["subcategory"] == "Moving Violation"
-    assert upsert_set_columns(stmt) == {"category", "subcategory", "updated_at"}
+    assert params["normalized_type"] == "Moving Violation"
+    assert upsert_set_columns(stmt) == {"category", "normalized_type", "updated_at"}
     mock_db.add.assert_not_called()
     mock_db.commit.assert_called_once()

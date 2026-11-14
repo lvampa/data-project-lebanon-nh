@@ -93,27 +93,6 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `Sequence[str | None]` is not assignable to declared return type `list[str]`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[IncidentCategoryRecord]` is not assignable to parameter `iterable` with type `Iterable[dict[Unknown, Unknown]]` in function `list.extend`",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[dict[Unknown, Unknown]]` is not assignable to parameter `rows` with type `list[IncidentCategoryRecord]` in function `scripts.ingest.import_incident_categories.upsert_categories`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "scrapers/spiders/budget_discovery.py",
       "name": "bad-override-mutable-attribute",

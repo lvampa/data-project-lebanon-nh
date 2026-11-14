@@ -32,7 +32,6 @@ build-backend = "setuptools.build_meta"
 package-dir = { "scripts" = "." }
 packages = [
     "scripts",
-    "scripts.export",
     "scripts.ingest",
     "scripts.models",
     "scripts.scrape",

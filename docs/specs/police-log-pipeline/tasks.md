@@ -138,7 +138,7 @@ About 34 files.
 If it passes 40, the `shared/locations` package (task 11) ships first as its own pull request.
 No AI yet.
 
-- [ ] 10. Add provenance to the lookup tables
+- [x] 10. Add provenance to the lookup tables
   - One mixin with `source` (checked against `rule`, `ai`, `human`), `prompt_version`, `ai_call_id`, `needs_review`, and `failed_attempts`; `normalized_type` in place of `subcategory`; the location columns in design.md, with no stored public location; the widened `geocoded_via` check.
   - One Alembic migration, covered by the up and down test.
   - Delete the three old categorizer scripts and their tests, which stop working when `subcategory` goes.

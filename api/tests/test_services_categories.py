@@ -11,7 +11,7 @@ def test_list_categories_joins_categories_and_pages():
     db.scalar.return_value = 1
     db.execute.return_value.all.return_value = [
         MagicMock(
-            incident_type="MV Stop", count=8, category="Traffic", subcategory=None
+            incident_type="MV Stop", count=8, category="Traffic", normalized_type=None
         )
     ]
 
@@ -28,13 +28,13 @@ def test_list_categories_joins_categories_and_pages():
 
 def test_update_category_upserts_and_commits():
     db = MagicMock()
-    update = CategoryUpdate(category="Traffic", subcategory="Moving Violation")
+    update = CategoryUpdate(category="Traffic", normalized_type="Moving Violation")
 
     result = categories.update_category(db, "MV Stop", update)
 
     stmt = executed_stmt(db)
     assert "ON CONFLICT (raw_incident_type) DO UPDATE" in str(compile_pg(stmt))
-    assert upsert_set_columns(stmt) == {"category", "subcategory", "updated_at"}
+    assert upsert_set_columns(stmt) == {"category", "normalized_type", "updated_at"}
     db.commit.assert_called_once()
     assert result.raw_incident_type == "MV Stop"
     assert result.category == "Traffic"

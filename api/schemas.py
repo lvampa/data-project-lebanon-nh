@@ -75,19 +75,19 @@ class CategoryRecord(BaseModel):
     raw_incident_type: str
     count: int
     category: str | None
-    subcategory: str | None
+    normalized_type: str | None
     is_categorized: bool
 
 
 class CategoryUpdate(BaseModel):
     category: str
-    subcategory: str | None = None
+    normalized_type: str | None = None
 
 
 class CategoryResult(BaseModel):
     raw_incident_type: str
     category: str
-    subcategory: str | None
+    normalized_type: str | None
 
 
 class LlcPrincipal(BaseModel):

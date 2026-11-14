@@ -16,7 +16,12 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import logfire
-from locations.geocode import GeocodeResult, geocode, in_city_bounds
+from locations.geocode import (
+    GeocodeResult,
+    GeocodeUnavailable,
+    geocode,
+    in_city_bounds,
+)
 from postgres import SessionLocal, engine
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
@@ -41,6 +46,7 @@ class GeocodeCounts:
     bare_highways: int = 0
     requests: int = 0
     stopped_at_limit: bool = False
+    geocoder_unavailable: bool = False
 
 
 def run(
@@ -55,7 +61,14 @@ def run(
             if not _still_ours_to_place(session, row):
                 session.rollback()
                 continue
-            _place(session, row, geocoder, counts, max_requests)
+            try:
+                _place(session, row, geocoder, counts, max_requests)
+            except GeocodeUnavailable as exc:
+                # Nothing is known about the row, so it is not charged an attempt.
+                session.rollback()
+                counts.geocoder_unavailable = True
+                logfire.error("geocoder unavailable; stopping the run", error=str(exc))
+                break
             session.commit()
     logfire.info(
         "geocoded: {placed} placed, {reused} reused, {missed} missed",
@@ -133,6 +146,8 @@ def _reuse_place_code(session: Session, row: AddressNormalization) -> bool:
         .where(
             AddressNormalization.place_code == row.place_code,
             AddressNormalization.id != row.id,
+            # A place must not inherit an address's pin, which is unrounded.
+            AddressNormalization.kind == row.kind,
             AddressNormalization.lat.is_not(None),
         )
         .order_by(AddressNormalization.id)
@@ -199,6 +214,9 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
     )
     if counts.stopped_at_limit:
         print(f"Stopped at {MAX_REQUESTS} requests. Run it again for the rest.")
+    if counts.geocoder_unavailable:
+        print("Nominatim is unavailable or refused the request. Stopped early.")
+        return 1
     return 0
 
 

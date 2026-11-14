@@ -3,7 +3,7 @@
 from datetime import datetime
 
 import pytest
-from locations.geocode import GeocodeResult, Precision
+from locations.geocode import GeocodeResult, GeocodeUnavailable, Precision
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select, update
@@ -390,3 +390,63 @@ def test_a_miss_is_not_charged_when_the_street_fallback_was_skipped_for_the_budg
     assert geocoder.queries == ["12 MAIN ST, Lebanon, NH"]
     assert the_row(db_session, "12 MAIN ST").geocode_attempts == 0
     assert counts.missed == 0
+
+
+class UnavailableAfter(FakeGeocoder):
+    """Answers `good` lookups, then raises GeocodeUnavailable, as a 429 would."""
+
+    def __init__(self, good: int) -> None:
+        super().__init__({})
+        self.good = good
+
+    def __call__(self, query: str) -> GeocodeResult | None:
+        self.queries.append(query)
+        if len(self.queries) > self.good:
+            raise GeocodeUnavailable("429")
+        return hit()
+
+
+def test_an_unavailable_geocoder_stops_the_run_and_charges_no_attempt(db_session):
+    for number in range(4):
+        add_row(db_session, f"ROW {number}")
+    geocoder = UnavailableAfter(good=1)
+
+    counts = geocode_job.run(geocoder)
+
+    assert counts.placed == 1
+    assert counts.geocoder_unavailable is True
+    assert len(geocoder.queries) == 2
+    attempts = [the_row(db_session, f"ROW {n}").geocode_attempts for n in range(4)]
+    assert attempts == [0, 0, 0, 0]
+
+
+def test_the_command_exits_non_zero_and_says_so_when_the_geocoder_is_unavailable(
+    db_session, capsys
+):
+    add_row(db_session, "12 MAIN ST")
+
+    status = geocode_job.main([], geocoder=UnavailableAfter(good=0))
+
+    assert status == 1
+    assert "unavailable" in capsys.readouterr().out.lower()
+
+
+def test_a_place_does_not_inherit_the_coordinates_of_an_address(db_session):
+    add_row(
+        db_session,
+        "12 MAIN ST",
+        place_code="L SHARED",
+        kind="address",
+        lat=43.6001,
+        lng=-72.2001,
+        geocoded_via="nominatim",
+        coordinate_precision="exact",
+    )
+    add_row(db_session, "HANNAFORDS", place_code="L SHARED", kind="place")
+    geocoder = FakeGeocoder({"HANNAFORDS, Lebanon, NH": hit()})
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "HANNAFORDS")
+    assert (row.lat, row.lng) == IN_CITY
+    assert counts.reused == 0

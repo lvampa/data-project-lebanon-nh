@@ -10,7 +10,7 @@ This is planned and not built.
 `/api/search` was removed with Elasticsearch, so the admin search page gets a 404 until this version lands.
 
 The planned design is one FastAPI endpoint, `GET /api/search?q=&limit=`, that normalizes the query against `address_normalizations`, runs one Postgres query per entity type, and returns the results grouped by type.
-Every query uses the same word matching as incident search: whole words by full text, one-edit typos for longer words, and partial identifiers.
+Every query would use one shared word matching, which incident search would use too: whole words by full text, one-edit typos for longer words, and partial identifiers.
 The admin page already calls the endpoint and renders the groups, so the response shape does not change.
 
 The first version synced nine entity types into Elasticsearch each night.
@@ -25,7 +25,7 @@ GET /api/search ──> api/services/search.py ──> SEARCH_TYPES (nine entrie
    3. build results from the row's columns, minus the type's hidden fields
 ```
 
-- **Word matching** is shared with incident search.
+- **Word matching** would be shared with incident search.
   The query is split into words, and every word must match (AND).
   A word matches as a whole word in the short fields, as a whole word in a stored tsvector for long text, as a one-edit typo for words of 5 or more letters (behind a `word_similarity >= 0.3` prefilter), or inside an identifier for 4 or more digits and hyphens.
 - **Ordering** uses three keys: whether any word matched a ranking field, then the score, then the type's date.

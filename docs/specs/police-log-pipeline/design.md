@@ -606,7 +606,7 @@ Adds:
 |---|---|---|
 | `log_date` | date, NOT NULL | Backfilled in the migration from the URL record's `log_date`, else `reported_at::date`. The migration fails if any row is still null. |
 | `place_code` | text | For example `L HANNAF`. |
-| `officer_code` | text | For example `SMN`. |
+| `officer_code` | text | For example `XA`. |
 | `refer_to` | jsonb | List of `{kind, number}`. |
 | `disposition_unmatched` | boolean | Default false. |
 | `missing_from_parse` | boolean | Default false. |

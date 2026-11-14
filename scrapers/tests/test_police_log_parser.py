@@ -337,6 +337,20 @@ def test_a_clear_time_after_midnight_carries_its_own_date(nov_1):
     assert entry["scene_seconds"] == 29466
 
 
+def test_every_time_on_a_line_may_carry_its_own_date():
+    entry = parse_one(
+        "26-20014        2350 Phone - Suspicious Person Advised\n"
+        "                ID:    XA -   \n"
+        "                       Disp-23:51:00  Enrt-11/12/2026 @ 00:01:00  "
+        "Arvd-11/12/2026 @ 00:05:00  Clrd-11/12/2026 @ 00:20:00\n"
+    )
+
+    assert entry["dispatched_at"] == datetime(2026, 5, 11, 23, 51, 0)
+    assert entry["enroute_at"] == datetime(2026, 11, 12, 0, 1, 0)
+    assert entry["arrived_at"] == datetime(2026, 11, 12, 0, 5, 0)
+    assert entry["cleared_at"] == datetime(2026, 11, 12, 0, 20, 0)
+
+
 def test_a_dispatch_with_no_arrival_and_a_clear_after_midnight(nov_1):
     entry = nov_1["26-31459"]
 

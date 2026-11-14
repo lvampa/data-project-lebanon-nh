@@ -27,7 +27,8 @@ _CALL_SOURCE_RE = re.compile(r"Call Source:\s*(.+?)\s*$", re.MULTILINE)
 
 # "Primary Id:    XA - Officer A. Example"; the rank is not part of the name.
 _OFFICER_RE = re.compile(
-    r"Primary Id:\s*(?P<code>\S+)\s+-\s+(?:(?:Officer|Corporal|Sergeant)\s+)?(?P<name>.+?)\s*$",
+    r"Primary Id:\s*(?P<code>\S+)\s+-\s+"
+    r"(?:(?:Officer|Corporal|Sergeant)\s+)?(?P<name>.+?)\s*$",
     re.MULTILINE,
 )
 
@@ -47,20 +48,20 @@ _LOCATION_RES = (
 # "Refer To Incident:      26L-426-OF", and the same for Arrest, Citation, Accident
 _REFERENCE_RE = re.compile(r"Refer To (?P<kind>[A-Za-z]+):\s*(?P<number>\S+)")
 
-# A time, or the date and time of a clear that ran past midnight:
+# A time, or a date and time when the unit's call ran past midnight:
 # "Clrd-11/02/2026 @ 00:00:06".
-_CLEAR_TIME = r"(?:\d{2}/\d{2}/\d{4} @ )?\d{2}:\d{2}:\d{2}"
+_TIME = r"(?:\d{2}/\d{2}/\d{4} @ )?\d{2}:\d{2}:\d{2}"
 
 # "Disp-07:44:25  Enrt-07:47:00  Arvd-07:56:57  Clrd-07:58:57". A unit that starts on
 # its own prints only Arvd and Clrd, so every part is optional.
 _DISPATCH_RE = re.compile(
-    r"^[ \t]+(?=(?:Disp|Enrt|Arvd|Clrd)-)(?:Disp-(?P<disp>\d{2}:\d{2}:\d{2})[ \t]*)?"
-    r"(?:Enrt-(?P<enrt>\d{2}:\d{2}:\d{2})[ \t]*)?"
-    r"(?:Arvd-(?P<arvd>\d{2}:\d{2}:\d{2})[ \t]*)?"
-    rf"(?:Clrd-(?P<clrd>{_CLEAR_TIME})[ \t]*)?$",
+    r"^[ \t]+(?=(?:Disp|Enrt|Arvd|Clrd)-)"
+    rf"(?:Disp-(?P<disp>{_TIME})[ \t]*)?"
+    rf"(?:Enrt-(?P<enrt>{_TIME})[ \t]*)?"
+    rf"(?:Arvd-(?P<arvd>{_TIME})[ \t]*)?"
+    rf"(?:Clrd-(?P<clrd>{_TIME})[ \t]*)?$",
     re.MULTILINE,
 )
-
 
 # A line that opens a unit's block: "ID:    XA -", "Fire Unit:", "EMS Unit:".
 _UNIT_LINE_RE = re.compile(r"^[ \t]*(?:ID|[A-Za-z ]*Unit):", re.MULTILINE)

@@ -10,8 +10,8 @@ def _make_row(**kwargs):
 
 def test_stats_by_type_returns_list(mock_db, client):
     mock_db.execute.return_value.all.return_value = [
-        _make_row(incident_type="Telephone Harassment", count=12),
-        _make_row(incident_type="MV Stop", count=8),
+        _make_row(incident_type="Telephone Harassment", total=12),
+        _make_row(incident_type="MV Stop", total=8),
     ]
     resp = client.get("/api/stats/by-type")
 
@@ -24,8 +24,8 @@ def test_stats_by_type_returns_list(mock_db, client):
 
 def test_stats_by_hour_returns_buckets(mock_db, client):
     mock_db.execute.return_value.all.return_value = [
-        _make_row(hour=0, count=3),
-        _make_row(hour=14, count=10),
+        _make_row(hour=0, total=3),
+        _make_row(hour=14, total=10),
     ]
     resp = client.get("/api/stats/by-hour")
 
@@ -36,8 +36,8 @@ def test_stats_by_hour_returns_buckets(mock_db, client):
 
 def test_stats_by_weekday_returns_day_names(mock_db, client):
     mock_db.execute.return_value.all.return_value = [
-        _make_row(dow=0, count=5),
-        _make_row(dow=1, count=8),
+        _make_row(dow=0, total=5),
+        _make_row(dow=1, total=8),
     ]
     resp = client.get("/api/stats/by-weekday")
 

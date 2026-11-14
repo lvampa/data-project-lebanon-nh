@@ -2,7 +2,7 @@
 
 **Status:** In progress
 **Created:** 2026-11-06
-**Updated:** 2026-11-07
+**Updated:** 2026-11-13
 
 ## Overview
 
@@ -30,7 +30,9 @@ Raw, unparsed source lives in the MongoDB raw source archive: the original PDFs,
 Reprocess re-extracts text from the archived PDFs; Postgres keeps the content hash as the reference.
 Parsed raw values stay on `log_entries` and are never rewritten.
 Normalized values live in the two existing lookup tables, each row carrying who produced it.
-A normalization job fills them through an AI backend interface and checks every answer in code; a separate job geocodes locations.
+A normalization job fills them, and a separate job geocodes locations.
+The normalization job is a workflow, not an agent: code loads the batch, fixed rules settle the exact matches, and the model sees only the leftovers.
+The model gets no tools and no database, returns schema JSON, and code checks and writes every answer.
 Connor's edits go through the admin API, are marked `human`, and no job overwrites them.
 dbt builds the consumer models, runs the data checks, and gives the admin API, admin search, and the public export one definition of an incident.
 Admin search is a Postgres query over those models, using full-text search and trigram matching, with no separate search index.
@@ -51,8 +53,13 @@ city page ──► discover spider ──► pdf_urls (pending)
      reprocess script ────────┴── pypdf ◄──────────────┼────────────────────────────────────────────────┘
      (archived PDF, no download)                       │ distinct raw values
                                                        ▼
-                                    normalize job ──► AI backend (claude -p, or Ollama)
-                                           │           └─► Mongo ai_calls (every call)
+                                    normalize job ──► rule pass (shared/locations): exact matches stored, no AI
+                                           │
+                                           │ leftovers, street list, schema (no tools, no database)
+                                           ▼
+                                    AI backend (claude -p, or Ollama) ──► JSON answer ──► Mongo ai_calls (every call)
+                                           │
+                                           │ back in the job: Pydantic, checks.py, upsert (never over human)
                                            ▼
                  incident_type_categories, address_normalizations ◄── admin API (source = human)
                                            ▲
@@ -176,8 +183,19 @@ class AiBackend(Protocol):
     # raises AiCallFailed, or AiBackendUnavailable for login and usage limit
 ```
 
-- `ClaudeCliBackend` runs `claude -p` with JSON output, the schema, and the configured model, from an empty temp directory with tools disabled.
-  The default model is the small Claude model, Haiku.
+The pattern is a workflow, not an agent (see Decisions).
+The backend is a pure function from a prompt and a JSON schema to an answer.
+It never sees a database connection, a file, or a tool.
+
+- One AI call is one batch.
+  For `ClaudeCliBackend` that is one `claude -p` subprocess per batch, which ends before the answer is checked.
+- `ClaudeCliBackend` runs `claude -p` with structured JSON output against the schema and the configured model.
+  It runs with every tool turned off, from a fresh empty temporary working directory that is deleted afterwards, and under a timeout (8.1, 9.8).
+  It does not load the project's or the user's settings, hooks, or MCP servers.
+  Only the prompt and schema go in, and only stdout comes back.
+- The exact CLI flags for structured output, turning tools off, the model, and skipping settings and MCP servers are confirmed in task 13 against `claude --help` and one real call.
+  This design doesn't name them.
+- The default model is the small Claude model, Haiku.
   It exits with an error if `ANTHROPIC_API_KEY` is set (9.2).
   The command name comes from `CLAUDE_BIN`, so tests point it at a fake executable.
 - `OllamaBackend` posts to an Ollama server with the schema in its `format` field.
@@ -194,7 +212,9 @@ class AiBackend(Protocol):
 `scripts/normalize/`, run as `python -m normalize.job [--field incident_type|location] [--redo]`.
 
 ```
-job.py         find waiting values, batch, call, check, store, log the summary, set the exit code
+job.py         find waiting values, rule pass, batch, call, check, store, log the summary, set the exit code
+rules.py       the rule pass for locations, built on shared/locations canonical rules
+streets.py     builds the street list from parcel locations, and its version
 prompts.py     prompt text, PROMPT_VERSION per field, answer models
 checks.py      pure functions that sort an answer into accepted, discarded, missing
 backends.py    AiBackend and its implementations
@@ -206,19 +226,52 @@ eval/          incident_types.jsonl, locations.jsonl, results.md
 Flow for each field:
 
 1. Select distinct raw values with no row, or with a row that has no value and fewer than 3 failed attempts.
-2. Fold case and spacing into a key and group by it.
+   A raw value with a stored value is never selected again, so each one goes to AI at most once (5.4, 6.13).
+   Only `--redo` sends stored values again, and only those whose `prompt_version` isn't the current one (7.14).
+2. Group by a key.
+   Incident types use case and spacing folded.
+   Locations use the canonical address from `shared/locations`, which also folds suffix and direction spellings.
    A new raw value whose key already has a normalization copies the value and its source with no AI call (5.3).
-3. Batch up to 50 groups per call.
+3. Locations only: the rule pass, which makes no AI call (6.14 to 6.18).
+   - A canonical address that is a house number followed by a street on the street list is stored as kind `address`.
+   - Two streets on the list joined by `and`, `&`, or `/` are stored as kind `intersection`.
+   - A raw value whose place code already has a `place` normalization with no review mark copies its normalized address and kind.
+   - These rows get `source = 'rule'`, `prompt_version = 'rules-<RULES_VERSION>'`, and a `geocode_query` built from the normalized address.
+   - Anything else, including a bare street name, is a leftover.
+4. Batch up to 50 leftover groups per call.
    Each field gets 5 calls per run, and calls a field does not use pass to the other (9.6).
-4. Check the reply, store accepted items with `source = 'ai'` and the call's `ai_call_id`.
-5. Write one `ai_calls` document per call, failed or not, through the archive's best-effort writer (8.13).
+   The location prompt carries the street list (6.20, 6.21).
+   If the street list is empty, the job makes no location AI calls that run and logs an error (6.23).
+5. Parse stdout with the field's Pydantic answer model, run `checks.py`, then store accepted items with `source = 'ai'`, the call's `ai_call_id`, and the effective prompt version.
+6. Write one `ai_calls` document per call, failed or not, through the archive's best-effort writer (8.13).
    If Mongo is down, the normalizations are still stored and the lost call records are counted (8.14).
+
+The job is the only code that reads raw values or writes normalizations (9.9).
+Between steps 4 and 5 there is no database handle in the backend's reach.
+A crash between the call and the write loses only that call's answer: nothing is half written, and the values are still waiting next run.
+
+### Street list
+
+- `streets.py` builds it from `properties.location`.
+  It strips the house number and any unit, applies the canonical address rules, and keeps the distinct streets in sorted order (6.20).
+- Expected size: a few hundred streets, from about 5,000 parcels.
+  That's an estimate; task 14 measures the count and the tokens it adds to a prompt.
+- It's built once per run, in memory, and not stored in its own table.
+  Its version is the first 8 hex digits of the SHA-256 of the sorted list joined by newlines.
+- The location prompt's effective version is `<PROMPT_VERSION>+streets-<hash>`.
+  That value goes on every `ai_calls` document and in each row's `prompt_version` (6.24).
+  A weekly VGSI scrape that adds a street changes the version.
+  That moves no row, since only `--redo` acts on older versions.
+- The street list depends on the VGSI scrape having run.
+  An empty `properties` table gives an empty list, and 6.23 applies.
 
 Answer checking:
 
 - The answer shape is one Pydantic model per field, and its JSON schema is what the backend receives, so the schema sent and the validation applied are one definition.
   The incident type model reuses `IncidentCategory` from `scripts/models/incident_category.py`.
 - `checks.py` then applies the set rules: drop items whose raw value was not sent or came back twice, report missing ones, drop type names containing a listed abbreviation as a whole word, and snap a name to an existing one that differs only in case or spacing (8.3, 8.4, 5.6, 5.7).
+- For locations, `checks.py` also compares the answer's `street`, in canonical form, with the street list.
+  A street not on the list is stored with `needs_review`, not discarded, because a state road or a neighboring town's street can be right (6.22).
 - Only discarded and missing values get a failed attempt (8.6).
 - An item with `unsure` set is stored with `needs_review` (8.5).
 
@@ -257,6 +310,8 @@ Location prompt, in outline:
 - The task: turn each police log location in Lebanon, NH into a clean address and say what kind of place it is.
 - The four kinds with an example each.
 - Rules: keep house numbers, write intersections as "A St and B St", give a `geocode_query` a map search would find, never invent a house number, set `unsure` when guessing.
+- The street list: "Use a street from this list when the location is on one; leave `street` empty if none fits."
+- The raw values, all of them leftovers that the rule pass didn't settle.
 
 ```json
 {
@@ -293,7 +348,19 @@ The "Shown as" label is the recommendation for the frontend.
 ```python
 def geocode(query: str) -> GeocodeResult | None     # lat, lng, precision: "exact" | "approximate"
 def in_city_bounds(lat: float, lng: float) -> bool
+
+# shared/locations/canonical.py, the one implementation of the canonical address rules
+RULES_VERSION: str
+def canonical_address(raw: str) -> str              # case, spacing, punctuation, suffix and direction spellings
+def split_house_number(canonical: str) -> tuple[str | None, str]   # ("12", "MAIN ST"), or (None, "MAIN ST")
+def strip_unit(canonical: str) -> tuple[str, str | None]           # ("12 MAIN ST", "UNIT 3")
 ```
+
+- The suffix and direction spellings are a data file in the package, `shared/locations/street_suffixes.csv`, based on the USPS street suffix abbreviations.
+  A change to the file or the functions bumps `RULES_VERSION`.
+- The functions are pure, with no database and no network, so they're tested on their own with known spelling pairs.
+- This is the implementation the address entity spec's canonical rules refer to.
+  That spec's design (on `spec/address-entity`) planned a dbt macro, and has to be updated to use these instead (open question 7).
 
 
 The geocode job, `python -m normalize.geocode`, is its own task so that AI calls and geocoding each fit the 60 minute limit.
@@ -495,7 +562,8 @@ One SQLAlchemy mixin adds these to both lookup tables.
 
 | Column | Type | Notes |
 |---|---|---|
-| `source` | text | `ai` or `human`, with a check constraint. Null while a value waits. |
+| `source` | text | `rule`, `ai`, or `human`, with a check constraint. Null while a value waits. `rule` is used only for locations, by the rule pass. |
+| `prompt_version` | text | The effective prompt version of the AI answer, or `rules-<RULES_VERSION>` for a rule row. Null for `human`. `--redo` uses it to skip rows already on the current version (7.14). |
 | `ai_call_id` | text | The `ai_calls` document that produced the last AI answer. It stays when a human takes over the value. Its document holds the backend, model, and prompt version. |
 | `needs_review` | boolean | The review mark. |
 | `failed_attempts` | integer | Default 0. |
@@ -545,6 +613,8 @@ Each lands with the pull request that uses it.
 | AI answer empty or off-schema | Nothing stored from that call. | 8.2 |
 | AI item missing, duplicated, or invalid | Item dropped; that value gets a failed attempt; 3 gives a review mark. | 8.3, 8.4, 8.7 |
 | AI says unsure | Stored with a review mark. | 8.5 |
+| AI gives a street not on the street list | Stored with a review mark. | 6.22 |
+| Street list empty (VGSI not scraped yet) | No location AI calls this run; an error is logged; the rule pass's place-code reuse still runs. | 6.23 |
 | Backend logged out or at its usage limit | No more AI calls this run. | 8.9 |
 | Every AI call fails | Job exits non-zero; later stages still run. | 8.11, 12.6 |
 | Geocoder miss or failure | Address kept, coordinates untouched, attempt counted. | 6.5, 6.6 |
@@ -573,6 +643,8 @@ Other tests:
 - Parser: one text fixture and test per fixed gap, cut from the three stored PDFs.
 - Backend contract tests: one parametrized suite over `FakeBackend`, `ClaudeCliBackend` with a fake executable, and `OllamaBackend` with a stubbed server (9.3).
 - Normalization and geocode jobs: `FakeBackend` and a fake geocoder; no real AI call and no request to Nominatim (13.5).
+- Canonical rules and the rule pass: pure-function tests over known spelling pairs, plus a job test showing that a house number on a listed street is stored as `rule` and that `FakeBackend` never sees it.
+- No tools: the `ClaudeCliBackend` contract test checks, with a fake executable, that each call runs in a new empty directory and passes the flags task 13 settles (9.8).
 - dbt: `dbt build` against `app_test` with seeded rows that should pass, and one seeded bad row per data check that should fail it.
 - DAG: structure tests on the spec, in the style of `dags/tests/test_specs.py`.
 - Evaluation: the scoring functions are unit tested with a fake backend; the real run is manual (15.7).
@@ -593,6 +665,40 @@ AI names and categorizes incident types and cleans locations.
   Adding the missing value to the list and reprocessing fixes the entry and every later one.
 - Rejected: rules for incident types.
   92 distinct values in 3 days and no fixed list; a rule table would need constant upkeep.
+
+### A workflow, not an agent
+
+Code loads each batch, a rule pass settles exact matches, and the model gets only the leftovers and the street list.
+The model has no tools and no database, and returns JSON against a schema.
+Code parses it with Pydantic, checks it in `checks.py`, and upserts it, never over a `human` row.
+
+Why:
+- The steps are known in advance, so a fixed workflow is simpler, cheaper, and easier to test than an agent deciding its own steps.
+  Anthropic's "Building effective agents" (https://www.anthropic.com/engineering/building-effective-agents) recommends workflows for well-defined tasks, and starting with the simplest solution.
+- Every model input is scraped text from city PDFs that anyone could influence.
+  A model with no tools has no way to act on an injected instruction: the worst it can do is a wrong answer, which the checks and the review mark catch.
+
+Rejected alternatives:
+- **An agent with MCP read and write tools, such as `get_pending` and `save`.**
+  - It gives the model write access it doesn't need, which is OWASP LLM Top 10's Excessive Agency (LLM06).
+  - It puts untrusted content, private data, and a way to act or send data out in one process. That is Simon Willison's lethal trifecta (https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/).
+  - Retries and partial writes get messy: a session that dies after three saves out of fifty leaves the batch half done, and the next run has to work out which half.
+  - It's hard to test, because the tests would have to script a tool-calling conversation, not compare one answer.
+  - It needs an MCP server and headless tool permissions to run under Airflow.
+- **A read-only `find_street` lookup tool. Deferred, not rejected.**
+  This is the upgrade path if the street list in the prompt proves too big or too weak.
+  The trigger is a measured list of more than about 1,500 streets, or evaluation misses that a lookup would fix.
+  It needs a small MCP server, because `claude -p` runs with tools off here, and it would keep the job as the only writer.
+
+### Rules first, AI for the leftovers
+
+- Exact matches, meaning a house number on a known street, two known streets, or a known place code, are settled by `shared/locations` rules, which are free, instant, and repeatable.
+  Only what the rules can't settle uses Max plan usage.
+- The street list comes from parcels because VGSI lists every addressed street in the city, and it's already scraped.
+- Rejected: sending every location to AI.
+  It spends calls on values a rule reads exactly, and two runs can disagree.
+- Rejected: a second copy of the canonical rules in SQL for the address entity's dbt models.
+  Two implementations would drift, and the address key depends on them matching.
 
 ### Normalize distinct values, not entries
 
@@ -708,3 +814,10 @@ Tidying the other four is a follow-up.
    The plan is an AI-drafted set that Connor checks line by line, about 150 lines.
 6. **Cross-entity admin search.**
    Settled: `/api/search` moves to Postgres for all nine record types, under the search spec, in one pull request after PR 9 and before the Elasticsearch removal.
+7. **The address entity's canonical rules.**
+   The draft on `spec/address-entity` puts them in a dbt macro.
+   They now live in `shared/locations/canonical.py`, so that spec has to read a stored canonical value, for example a `canonical_address` column written by this job and by the property pipeline, and not recompute it in SQL.
+   This is decided when that spec's design is filled in.
+8. **The street list's real size.**
+   It's measured in task 14.
+   Past about 1,500 streets, choose between trimming it (for example, to streets that appear in the logs) and the `find_street` tool.

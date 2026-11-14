@@ -20,7 +20,7 @@ from locations.geocode import GeocodeResult, geocode, in_city_bounds
 from postgres import SessionLocal, engine
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 MAX_ATTEMPTS = 3
@@ -75,6 +75,11 @@ def _rows_to_place(session: Session) -> list[AddressNormalization]:
                 AddressNormalization.normalized_address.is_not(None),
                 AddressNormalization.lat.is_(None),
                 AddressNormalization.geocode_attempts < MAX_ATTEMPTS,
+                # A bare highway is marked once and left for a person (6.3).
+                or_(
+                    AddressNormalization.kind != "highway",
+                    AddressNormalization.needs_review.is_(False),
+                ),
             )
             .order_by(AddressNormalization.id)
         )
@@ -103,8 +108,11 @@ def _place(
         counts.bare_highways += 1
         return
 
-    found = _look_up(row, geocoder, counts, max_requests)
+    found, skipped_for_budget = _look_up(row, geocoder, counts, max_requests)
     if found is None:
+        if skipped_for_budget:
+            # Not a real miss: the run ran out of requests before the second try.
+            return
         row.geocode_attempts += 1
         if row.geocode_attempts >= MAX_ATTEMPTS:
             row.needs_review = True
@@ -143,20 +151,24 @@ def _look_up(
     geocoder: Geocoder,
     counts: GeocodeCounts,
     max_requests: int,
-) -> GeocodeResult | None:
-    """The row's query first, then its street alone. A result outside the city is a miss."""
+) -> tuple[GeocodeResult | None, bool]:
+    """The row's query first, then its street alone, and whether the street was skipped
+    for want of requests. A result outside the city is a miss."""
     query = row.geocode_query or f"{row.normalized_address}, Lebanon, NH"
     counts.requests += 1
     found = geocoder(query)
     if found is not None and in_city_bounds(found.lat, found.lng):
-        return found
-    if row.street and counts.requests < max_requests:
-        counts.requests += 1
-        street = geocoder(f"{row.street}, Lebanon, NH")
-        if street is not None and in_city_bounds(street.lat, street.lng):
-            # A street with no point on it is approximate, whatever the match said.
-            return GeocodeResult(street.lat, street.lng, "approximate")
-    return None
+        return found, False
+    if not row.street:
+        return None, False
+    if counts.requests >= max_requests:
+        return None, True
+    counts.requests += 1
+    street = geocoder(f"{row.street}, Lebanon, NH")
+    if street is not None and in_city_bounds(street.lat, street.lng):
+        # A street with no point on it is approximate, whatever the match said.
+        return GeocodeResult(street.lat, street.lng, "approximate"), False
+    return None, False
 
 
 def _names_a_point(normalized_address: str) -> bool:

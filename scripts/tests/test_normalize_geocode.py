@@ -363,3 +363,30 @@ def test_a_row_an_admin_makes_human_after_the_job_loaded_it_is_not_overwritten(
     second = the_row(db_session, "SECOND")
     assert (second.lat, second.lng, second.geocoded_via) == (1.0, 2.0, "manual")
     assert geocoder.queries == ["FIRST, Lebanon, NH"]
+
+
+def test_a_bare_highway_already_marked_for_review_is_not_selected_again(db_session):
+    add_row(
+        db_session,
+        "I-89 NB MM 18",
+        kind="highway",
+        normalized_address="I-89 northbound",
+        needs_review=True,
+    )
+
+    counts = geocode_job.run(FakeGeocoder())
+
+    assert counts.bare_highways == 0
+
+
+def test_a_miss_is_not_charged_when_the_street_fallback_was_skipped_for_the_budget(
+    db_session,
+):
+    add_row(db_session, "12 MAIN ST", street="MAIN ST")
+    geocoder = FakeGeocoder()
+
+    counts = geocode_job.run(geocoder, max_requests=1)
+
+    assert geocoder.queries == ["12 MAIN ST, Lebanon, NH"]
+    assert the_row(db_session, "12 MAIN ST").geocode_attempts == 0
+    assert counts.missed == 0

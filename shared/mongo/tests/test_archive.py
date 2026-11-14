@@ -346,11 +346,11 @@ def test_keys_lists_each_source_key_once(raw_sources):
 def test_an_insert_only_write_leaves_a_stored_version_as_it_is(raw_sources):
     first = response(fetched_at=datetime(2026, 11, 1, tzinfo=UTC))
     again = response(fetched_at=datetime(2026, 11, 2, tzinfo=UTC))
-    raw_sources.bulk_write([version_insert("police_log_text", "k", first)])
-    [before] = stored(raw_sources, "police_log_text")
+    raw_sources.bulk_write([version_insert("police_log_entry_text", "k", first)])
+    [before] = stored(raw_sources, "police_log_entry_text")
 
-    raw_sources.bulk_write([version_insert("police_log_text", "k", again)])
+    raw_sources.bulk_write([version_insert("police_log_entry_text", "k", again)])
 
-    [after] = stored(raw_sources, "police_log_text")
+    [after] = stored(raw_sources, "police_log_entry_text")
     assert after == before
     assert (after["seen_count"], after["last_seen_at"].day) == (1, 1)

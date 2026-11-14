@@ -497,6 +497,26 @@ def test_a_donor_of_another_kind_is_not_used_for_the_same_address(db_session):
     assert (counts.reused, counts.requests) == (0, 1)
 
 
+def test_a_hand_placed_pin_is_not_copied_to_another_spelling(db_session):
+    add_row(
+        db_session,
+        "12 MAIN ST",
+        normalized_address="12 Main St",
+        source="human",
+        lat=43.6001,
+        lng=-72.2001,
+        geocoded_via="manual",
+    )
+    add_row(db_session, "12 MAIN STREET", normalized_address="12 Main St")
+    geocoder = FakeGeocoder({"12 MAIN STREET, Lebanon, NH": hit()})
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "12 MAIN STREET")
+    assert (row.lat, row.geocoded_via) == (IN_CITY[0], "nominatim")
+    assert counts.reused == 0
+
+
 def test_a_human_row_is_not_filled_from_a_donor_with_the_same_address(db_session):
     add_row(
         db_session,

@@ -4,8 +4,9 @@
 
 It takes `ai` and `rule` rows that have a normalized address and no coordinates, and
 never a `human` row. It reuses the coordinates of a place code another row already
-has, or the coordinates of another spelling of the same address, asks the geocoder for the row's query and then for its street alone, and drops a
-result outside the city. A row that misses three times is marked for review. It stops
+has, or the coordinates of another spelling of the same address. Otherwise it asks the
+geocoder for the row's query and then for its street alone, and drops a result outside
+the city. A row that misses three times is marked for review. It stops
 after 600 requests, and leaves the rest for the next run.
 """
 
@@ -157,6 +158,8 @@ def _reuse_same_address(session: Session, row: AddressNormalization) -> bool:
         session,
         row,
         AddressNormalization.normalized_address == row.normalized_address,
+        # A copy was not placed by a person, so a hand-placed pin is not passed on.
+        AddressNormalization.geocoded_via.is_distinct_from("manual"),
     )
     if donor is None:
         return False
@@ -166,12 +169,12 @@ def _reuse_same_address(session: Session, row: AddressNormalization) -> bool:
 
 
 def _placed_donor(
-    session: Session, row: AddressNormalization, same: ColumnElement[bool]
+    session: Session, row: AddressNormalization, *same: ColumnElement[bool]
 ) -> AddressNormalization | None:
     return session.scalars(
         select(AddressNormalization)
         .where(
-            same,
+            *same,
             AddressNormalization.id != row.id,
             # A place must not inherit an address's pin, which is unrounded.
             AddressNormalization.kind == row.kind,

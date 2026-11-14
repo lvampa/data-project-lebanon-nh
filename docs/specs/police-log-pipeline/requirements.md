@@ -194,6 +194,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 22. IF an AI answer gives a street that is not on the street list, THEN THE normalization job SHALL store the item with a review mark.
 23. IF the street list is empty, THEN THE normalization job SHALL make no location AI calls in that run and SHALL log an error.
 24. THE normalization job SHALL record, with each location AI call and each normalization it stores from one, a prompt version that changes whenever the street list changes.
+25. WHEN a raw location has the same normalized address and kind as another location that was placed by the geocoder or from a place code, THE geocode job SHALL reuse its coordinates instead of asking the geocoder.
 
 ### Requirement 7: Record where each normalization came from and let Connor correct it
 

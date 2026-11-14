@@ -19,6 +19,30 @@ Run both again after you pull a branch that adds a migration or an index.
 They read `POSTGRES_*` and `MONGO_*` from your shell, and fall back to the local compose values.
 If your `.env` sets other values, load them first with `set -a; . ./.env; set +a`.
 
+## Normalizing with AI
+
+The AI normalizing runs by hand on your Mac, with your own Claude login.
+No container runs it, and no Claude token goes in `.env`.
+
+```bash
+docker compose up -d postgres mongo
+uv sync
+uv run python -m scripts.normalize.job
+uv run python -m scripts.normalize.geocode
+```
+
+The first command gives incident types a category and a plain name, and gives locations a clean address and a kind.
+The second puts the normalized locations on the map.
+Run the VGSI scrape first, because the location step builds its street list from the parcel table, and makes no location AI calls while that table is empty.
+
+The job takes `--field incident_type` or `--field location` to do one field, and `--redo` to ask again for rows that are not on the current prompt version.
+A value goes to the AI once, so running it again only sends what is new, or what failed.
+Each run makes at most 10 AI calls of up to 50 values.
+
+Both commands refuse to run while another police log job holds the lock, and say so.
+The job refuses to run when `ANTHROPIC_API_KEY` is set, because the CLI would bill that key instead of your plan.
+Both read `POSTGRES_*` and `MONGO_*` from your shell, as the migration commands do.
+
 ## Tests
 
 Run every suite from the repo root with `uv run pytest`.

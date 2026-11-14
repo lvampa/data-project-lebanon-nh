@@ -201,13 +201,13 @@ Task 15 needs PR 4's columns, and task 16 needs PR 4's `shared/locations` packag
   - Each accepted item stores its call's `ai_call_id`; a test with MongoDB unreachable stores the normalizations and counts the lost call records.
   - _Requirements: 1.2, 5.1, 5.3, 5.4, 6.1, 6.13, 6.18, 6.23, 6.24, 7.2, 7.9, 7.11, 7.13, 7.14, 8.6, 8.7, 8.8, 8.10, 8.11, 8.13, 8.14, 9.5, 9.6, 9.9, 16.1 to 16.4_
 
-- [ ] 16. Add the geocode job
+- [x] 16. Add the geocode job
   - Place-code reuse, query then street fallback, the bounds check, 3 attempts, 600 requests per run, no bare highways, no `human` rows.
   - It takes `ai` and `rule` rows, and the police log lock.
   - Tests with a fake geocoder.
   - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6, 6.8, 6.10, 16.3_
 
-- [ ] 16b. Document the Mac run
+- [x] 16b. Document the Mac run
   - Add the command to the README's running section: `docker compose up -d postgres mongo`, `uv sync`, then the command.
   - QA: Connor runs one real batch of 10 himself, since it uses his login.
   - _Requirements: 16.1_

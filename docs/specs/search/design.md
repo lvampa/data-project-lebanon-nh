@@ -48,7 +48,7 @@ The pre-push hook skips it.
   The first version copied nine tables into Elasticsearch nightly.
   A correction or a new scrape did not show until the next sync, it ran a JVM service for one admin user, and the incident index disagreed with the incidents API.
   Rejected: keeping Elasticsearch for the other eight types, because two engines would apply different typo rules to one search box.
-  Rejected: one dbt view that unions all types, because Postgres could not use the planning document index through the union.
+  Rejected: one SQL view that unions all types, because Postgres could not use the planning document index through the union.
   Rejected: plain Postgres full-text search, because it misses typos and partial case numbers.
 - **One query per type from a registry.**
   Rejected: a branch per type in the endpoint.

@@ -25,7 +25,7 @@ Normalized values sit in two lookup tables, keyed by the raw value, so each dist
 4 export     report-gen ─► JSON in frontend/web/public/data ─► bun run build ─► wrangler pages deploy
 ```
 
-The daily DAGs run stages 1 and 2 (`discover_urls` triggers `process_urls`).
+The `discover_urls` DAG runs weekly and triggers `process_urls`, which together are stages 1 and 2.
 `police_log_reprocess` is a manually triggered DAG for stage 2.
 Stage 3 runs by hand: `uv run normalize` and `uv run geocode` from the repo root.
 Stage 4 is `scripts/deploy.sh`.
@@ -97,6 +97,18 @@ There is no Elasticsearch and no dbt.
 The map joins `log_entries` to `address_normalizations` on the raw location.
 The export ships unfiltered: exact addresses, officer names and the row cap as they are.
 
+## Retention and what is not built
+
+All history is stored, and nothing is expired or deleted.
+The public site will show only the last year, and the admin shows everything.
+The one-year window belongs in the export query, and it is not built yet: the export does not filter by date.
+
+Not built yet:
+
+- A single daily `police_log` DAG that runs collect, parse, normalize and geocode in order.
+  Normalize and geocode are run by hand until then.
+- The one-year export window.
+
 ## Data model notes
 
 - `log_entries` keeps parsed raw values and is never rewritten by normalization.
@@ -121,7 +133,7 @@ The export ships unfiltered: exact addresses, officer names and the row cap as t
   Rejected: a long-lived token in `.env`, or a login inside the Airflow container, because both would put a subscription credential next to containers that read scraped text.
   The cost is that new values reach the map a day or two late.
 - **Normalize distinct values, not entries.**
-  About 76,000 entries reduce to a few thousand distinct strings.
+  Many entries repeat the same incident type or address, so distinct values are far fewer than entries.
   Rejected: normalized columns on `log_entries`, which would spend a call per entry and fan every correction out.
 - **Two lookup tables, not one generic table or a places table.**
   The payloads differ, and a `place_code` column covers reuse of coordinates at a fraction of the size.

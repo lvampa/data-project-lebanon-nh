@@ -13,9 +13,9 @@ from datetime import datetime
 from typing import Any
 
 import logfire
-from ingest.lock import police_log_lock
 from ingest.pdf_urls import utc_now
 from postgres import SessionLocal, engine
+from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings

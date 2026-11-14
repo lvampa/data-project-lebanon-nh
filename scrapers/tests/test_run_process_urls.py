@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 import run_process_urls
-from ingest.lock import police_log_lock
 from ingest.pdf_urls import utc_now
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
 from mongo.client import MongoDB
+from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
 
 ARCHIVED_PDF = ArchivedResponse(
@@ -91,17 +91,6 @@ def test_does_not_crawl_while_another_police_log_job_holds_the_lock(
 
     assert crawl.limits == []
     assert "Another police log job" in capsys.readouterr().err
-
-
-def test_lock_is_free_again_after_the_job_ends(test_engine):
-    with (
-        police_log_lock(test_engine) as first,
-        police_log_lock(test_engine) as second,
-    ):
-        assert (first, second) == (True, False)
-
-    with police_log_lock(test_engine) as third:
-        assert third is True
 
 
 @pytest.mark.parametrize(

@@ -1,8 +1,8 @@
 """Look a place up on Nominatim, shared by the admin API and the geocode job.
 
-A lookup never raises: a failure is a miss, so a caller keeps whatever coordinates it
-already has. Nominatim's usage policy allows one request per second, so every lookup
-goes through a limiter.
+No match, or a reply that cannot be read, is a miss and returns None. A transport
+failure or a refusal raises GeocodeUnavailable, which is not a miss. Nominatim's
+usage policy allows one request per second, so every lookup goes through a limiter.
 """
 
 import logging
@@ -23,9 +23,16 @@ Precision = Literal["exact", "approximate"]
 # A coarse box around Lebanon, NH, cut short of downtown Hanover. It is only a sanity
 # check, such as for a street of the same name in another state. It cannot tell West
 # Lebanon from White River Junction across the river, so the address decides.
-_MIN_LAT, _MAX_LAT = 43.58, 43.69
+_MIN_LAT, _MAX_LAT = 43.56, 43.69
 _MIN_LNG, _MAX_LNG = -72.34, -72.17
-_AREA_KEYS = ("city", "town", "village")
+# OpenStreetMap may tag West Lebanon as a village of its own, with no "Lebanon" at all.
+_AREA_KEYS = ("city", "town", "village", "hamlet")
+_AREA_NAMES = frozenset({"Lebanon", "West Lebanon"})
+
+
+class GeocodeUnavailable(Exception):
+    """Nominatim could not be reached or refused the request, so nothing is known about
+    the query. That is not a miss: a caller must not count it against the address."""
 
 
 @dataclass(frozen=True)
@@ -94,15 +101,18 @@ def geocode(
         results = reply.json()
         if results and _is_in_lebanon(results[0]):
             return _result_of(results[0])
-    except Exception as exc:
-        logger.warning("geocode(%r) failed: %s", query, exc)
+    except httpx.HTTPError as exc:
+        # Covers timeouts, DNS and connection failures, and a 403 or 429 status.
+        raise GeocodeUnavailable(f"geocode({query!r}): {exc}") from exc
+    except (KeyError, ValueError, TypeError) as exc:
+        logger.warning("geocode(%r) got an unreadable reply: %s", query, exc)
     return None
 
 
 def _is_in_lebanon(match: dict[str, Any]) -> bool:
     address = match.get("address") or {}
     in_lebanon = address.get("state") == "New Hampshire" and any(
-        address.get(key) == "Lebanon" for key in _AREA_KEYS
+        address.get(key) in _AREA_NAMES for key in _AREA_KEYS
     )
     return in_lebanon and in_city_bounds(float(match["lat"]), float(match["lon"]))
 

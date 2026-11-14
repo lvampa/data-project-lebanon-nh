@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["scrapers", "scripts", "shared/postgres", "shared/mongo", "api"]
+members = ["scrapers", "scripts", "shared/postgres", "shared/mongo", "shared/locations", "api"]
 
 
 [dependency-groups]

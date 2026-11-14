@@ -10,7 +10,7 @@ build, because they still carry a newly listed disposition inside their incident
 
 import re
 
-_DISPOSITIONS = (
+DISPOSITIONS = (
     "Incident Report Taken",
     "Broadcast Log Information",
     "Criminal Summons Issued",
@@ -43,10 +43,13 @@ _DISPOSITIONS = (
     "Warning",
 )
 
+# The old private name, kept in case anything still imports it.
+_DISPOSITIONS = DISPOSITIONS
+
 # Longest first, so a suffix such as "Paperwork NOT Served" is not cut short.
 _DISPOSITION_AT_END = re.compile(
     r"\s+("
-    + "|".join(re.escape(d) for d in sorted(_DISPOSITIONS, key=len, reverse=True))
+    + "|".join(re.escape(d) for d in sorted(DISPOSITIONS, key=len, reverse=True))
     + r")\s*$",
     re.IGNORECASE,
 )

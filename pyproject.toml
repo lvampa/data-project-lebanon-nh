@@ -37,15 +37,9 @@ allow-star-arg-any = true
 # Tests take pytest fixtures by name; the same rule as the pyrefly config.
 "**/tests/**" = ["ANN"]
 # Not yet strict: code written before annotations were required. Remove a line once
-# its file is annotated. The list under [tool.pyrefly] also covers four paths that
-# already pass these rules but not pyrefly's implicit-Any check.
-"api/**" = ["ANN"]
+# its file is annotated. The list under [tool.pyrefly] also covers paths that already
+# pass these rules but not pyrefly's implicit-Any check.
 "scripts/**" = ["ANN"]
-"scrapers/extensions.py" = ["ANN"]
-"scrapers/spiders/budget_discovery.py" = ["ANN"]
-"scrapers/spiders/city_staff.py" = ["ANN"]
-"scrapers/spiders/create_url_records.py" = ["ANN"]
-"scrapers/spiders/officer_roster.py" = ["ANN"]
 "scrapers/spiders/vgsi_property.py" = ["ANN"]
 
 [tool.ruff.format]
@@ -79,10 +73,22 @@ errors = { implicit-any = false, missing-override-decorator = false }
 
 # Not yet strict: code written before type checking. Remove a block once its file
 # passes the strict checks. Each block takes one glob; `matches` does not accept a
-# list. Ruff's ANN ignores cover the same paths, less four that already pass them:
-# the mongo client, llc.py, scrapers/settings.py and the incident categorizer.
+# list. Ruff's ANN ignores cover the same paths, less the ones that already pass them:
+# the four api files, llc.py, scrapers/settings.py and the incident categorizer.
 [[tool.pyrefly.sub-config]]
-matches = "api/**"
+matches = "api/deps.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "api/routers/search.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "api/services/addresses.py"
+errors = { implicit-any = false, missing-override-decorator = false }
+
+[[tool.pyrefly.sub-config]]
+matches = "api/services/categories.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
@@ -90,15 +96,7 @@ matches = "scripts/**"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
-matches = "shared/mongo/src/mongo/client.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
 matches = "shared/postgres/src/postgres/models/llc.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
-matches = "scrapers/extensions.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
@@ -107,22 +105,6 @@ errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
 matches = "scrapers/maintenance/categorize_incident_types.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
-matches = "scrapers/spiders/budget_discovery.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
-matches = "scrapers/spiders/city_staff.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
-matches = "scrapers/spiders/create_url_records.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
-matches = "scrapers/spiders/officer_roster.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]

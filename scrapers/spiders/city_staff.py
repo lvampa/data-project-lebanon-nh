@@ -1,6 +1,7 @@
 import re
-from collections.abc import Generator
+from collections.abc import AsyncIterator, Generator
 from datetime import UTC, datetime
+from typing import Any, override
 
 import logfire
 import scrapy
@@ -31,7 +32,8 @@ class CityStaffSpider(scrapy.Spider):
     name = "city_staff"
     allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov", "flyleb.com"]
 
-    async def start(self) -> Generator[Request, None, None]:
+    @override
+    async def start(self) -> AsyncIterator[Request]:
         for url, dept in DEPT_ROSTER_SOURCES:
             yield Request(
                 url, callback=self.parse_dept_roster, cb_kwargs={"department": dept}
@@ -43,7 +45,7 @@ class CityStaffSpider(scrapy.Spider):
         yield Request(COUNCIL_INDEX_URL, callback=self.parse_council_index)
 
     def parse_dept_roster(
-        self, response: Response, department: str = "", **kwargs
+        self, response: Response, department: str = "", **kwargs: Any
     ) -> Generator[CityStaffItem, None, None]:
         now = datetime.now(UTC).replace(tzinfo=None)
         current_division: str | None = None
@@ -61,7 +63,8 @@ class CityStaffSpider(scrapy.Spider):
             if not dd:
                 continue
 
-            texts = [_clean(t) for t in dd.css("::text").getall() if _clean(t)]
+            cleaned = (_clean(t) for t in dd.css("::text").getall())
+            texts = [t for t in cleaned if t]
             if not texts:
                 continue
 
@@ -99,7 +102,7 @@ class CityStaffSpider(scrapy.Spider):
         yield from items
 
     def parse_directory_table(
-        self, response: Response, department: str = "", **kwargs
+        self, response: Response, department: str = "", **kwargs: Any
     ) -> Generator[CityStaffItem, None, None]:
         now = datetime.now(UTC).replace(tzinfo=None)
         items: list[CityStaffItem] = []
@@ -131,7 +134,7 @@ class CityStaffSpider(scrapy.Spider):
         yield from items
 
     def parse_council_index(
-        self, response: Response, **kwargs
+        self, response: Response, **kwargs: Any
     ) -> Generator[Request, None, None]:
         links = response.css("a[href*='/Councilor-']")
         logfire.info("city council index", links=len(links))
@@ -143,7 +146,7 @@ class CityStaffSpider(scrapy.Spider):
                 yield response.follow(href, callback=self.parse_council_member)
 
     def parse_council_member(
-        self, response: Response, **kwargs
+        self, response: Response, **kwargs: Any
     ) -> Generator[CityStaffItem, None, None]:
         now = datetime.now(UTC).replace(tzinfo=None)
 

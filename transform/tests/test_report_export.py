@@ -91,13 +91,11 @@ def run_report_gen(
     )
 
 
-@pytest.fixture
-def export(dbt: DbtProject, report_gen: Path, tmp_path: Path) -> Iterator[Path]:
-    """The five files report-gen writes from the public models over the good rows."""
+def generate(dbt: DbtProject, report_gen: Path, output: Path) -> None:
+    """Build the public models over the good rows, then run report-gen into `output`."""
     dbt.seed_rows(good_rows())
     built = dbt.run("build")
     assert built.returncode == 0, built.output
-    output = tmp_path / "data"
     result = run_report_gen(
         report_gen,
         "--output-dir",
@@ -105,6 +103,13 @@ def export(dbt: DbtProject, report_gen: Path, tmp_path: Path) -> Iterator[Path]:
         database=database_url(dbt.engine),
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.fixture
+def export(dbt: DbtProject, report_gen: Path, tmp_path: Path) -> Iterator[Path]:
+    """The five files report-gen writes from the public models over the good rows."""
+    output = tmp_path / "data"
+    generate(dbt, report_gen, output)
     yield output
 
 
@@ -182,3 +187,29 @@ def test_the_check_passes_on_the_export_and_fails_on_a_leaked_officer(
     assert passed.returncode == 0, passed.stderr
     assert failed.returncode != 0
     assert "incidents.json: 1 rows have a non-empty officer" in failed.stderr
+
+
+def test_an_old_export_file_is_replaced_and_other_files_are_left_alone(
+    dbt, report_gen, tmp_path
+):
+    output = tmp_path / "data"
+    output.mkdir()
+    (output / "incidents.json").write_text('[{"officer": "Smith"}]')
+    (output / "notes.txt").write_text("keep me")
+
+    generate(dbt, report_gen, output)
+
+    assert all(row["officer"] is None for row in read(output, "incidents.json"))
+    assert (output / "notes.txt").read_text() == "keep me"
+    assert run_report_gen(report_gen, "check", "--dir", str(output)).returncode == 0
+
+
+def test_a_house_number_in_a_public_location_fails_the_check(export, report_gen):
+    incidents = read(export, "incidents.json")
+    incidents[0]["location"] = "12 Main St"
+    (export / "incidents.json").write_text(json.dumps(incidents))
+
+    failed = run_report_gen(report_gen, "check", "--dir", str(export))
+
+    assert failed.returncode != 0
+    assert "incidents.json: 1 rows have a house number in location" in failed.stderr

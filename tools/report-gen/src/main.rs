@@ -10,6 +10,16 @@ use std::path::{Path, PathBuf};
 
 const DEFAULT_DIR: &str = "frontend/web/public/data";
 
+/// The files `generate` writes. It clears these first, so a run that fails halfway
+/// leaves them missing, which `check` catches, and never an old export.
+const OUTPUT_FILES: [&str; 5] = [
+    "stats.json",
+    "incidents.json",
+    "addresses.json",
+    "staff.json",
+    "properties.json",
+];
+
 #[derive(Parser)]
 #[command(about = "Generate static JSON report files from PostgreSQL")]
 struct Args {
@@ -63,6 +73,7 @@ async fn generate(output_dir: &Path) -> Result<()> {
         std::env::var("DATABASE_URL").map_err(|_| anyhow::anyhow!("DATABASE_URL not set"))?;
 
     let pool = sqlx::PgPool::connect(&database_url).await?;
+    output::clear_files(output_dir, &OUTPUT_FILES)?;
 
     let stats = db::fetch_stats(&pool).await?;
     println!("✓ stats.json  ({} total incidents)", stats.total);

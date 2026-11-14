@@ -8,6 +8,8 @@ dependencies = [
     "mongo",
     "postgres",
     "pydantic>=2.14.3",
+    # pdf_urls records the pypdf version that read each PDF. A pypdf bump in uv.lock
+    # is a parser change: bump PARSER_VERSION and reprocess.
     "pypdf>=6.9.1",
     "scripts",
     "python-dotenv>=1.2.2",

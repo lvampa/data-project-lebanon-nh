@@ -2,6 +2,9 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
+# Bump when parsing behavior changes, then reprocess so stored entries pick it up.
+PARSER_VERSION = 1
+
 # Longest first so alternation matches the most specific disposition
 _KNOWN_DISPOSITIONS = [
     "Incident Report Taken",
@@ -89,14 +92,27 @@ def _strip_page_headers(text: str) -> str:
     return text
 
 
-def parse_log_entries(text: str) -> list[dict[str, Any]]:
+# Any line that opens with a case number, whether or not the rest of it parses.
+_HEADER_LINE_RE = re.compile(r"^\d{2}-\d+\s", re.MULTILINE)
+
+
+def parse_log_date(text: str) -> date | None:
     date_match = _DATE_RE.search(text)
     if not date_match:
-        return []
-
+        return None
     try:
-        log_date = datetime.strptime(date_match.group(1), _DATE_FMT).date()
+        return datetime.strptime(date_match.group(1), _DATE_FMT).date()
     except ValueError:
+        return None
+
+
+def count_header_lines(text: str) -> int:
+    return len(_HEADER_LINE_RE.findall(_strip_page_headers(text)))
+
+
+def parse_log_entries(text: str) -> list[dict[str, Any]]:
+    log_date = parse_log_date(text)
+    if log_date is None:
         return []
 
     clean = _strip_page_headers(text)

@@ -1,8 +1,8 @@
 # Police log pipeline: design
 
-**Status:** Draft
+**Status:** In progress
 **Created:** 2026-11-06
-**Updated:** 2026-11-06
+**Updated:** 2026-11-07
 
 ## Overview
 
@@ -25,11 +25,15 @@ What those branches already give us:
 
 What this design adds, in one paragraph:
 One ingest function parses and upserts a PDF's entries, used by both the process job and a new reprocess script.
-Raw values stay on `log_entries` and are never rewritten.
+Postgres holds every parsed, structured field.
+Raw, unparsed source lives in the MongoDB raw source archive: the original PDFs, each entry's raw text and unsplit reason and action text, and the AI call records.
+Reprocess re-extracts text from the archived PDFs; Postgres keeps the content hash as the reference.
+Parsed raw values stay on `log_entries` and are never rewritten.
 Normalized values live in the two existing lookup tables, each row carrying who produced it.
 A normalization job fills them through an AI backend interface and checks every answer in code; a separate job geocodes locations.
 Connor's edits go through the admin API, are marked `human`, and no job overwrites them.
-dbt builds the consumer models, runs the data checks, and gives the admin API, the search sync, and the public export one definition of an incident.
+dbt builds the consumer models, runs the data checks, and gives the admin API, admin search, and the public export one definition of an incident.
+Admin search is a Postgres query over those models, using full-text search and trigram matching, with no separate search index.
 The public export stays a manual step.
 An evaluation command scores each backend, model, and prompt version against a labeled set.
 
@@ -39,15 +43,16 @@ An evaluation command scores each backend, model, and prompt version against a l
 city page ──► discover spider ──► pdf_urls (pending)
                                       │ claim (claimed_at, attempts)
                                       ▼
-                    process spider: download, extract text
-                                      │ one PoliceLogPdfItem per PDF
-                                      ▼
-            pipeline ──► ingest_log_text() ──► log_entries (raw values)
-                              ▲                        │
-     reprocess script ────────┘                        │ distinct raw values
-     (stored text, no download)                        ▼
+                    process spider: download, extract text ──► archive middleware ──► Mongo raw_sources (PDF bytes)
+                                      │ one PoliceLogPdfItem per PDF                                    │
+                                      ▼                                                                 │
+            pipeline ──► ingest_log_text() ──► log_entries (raw values)                                 │
+                              ▲                        │                                                │
+     reprocess script ────────┴── pypdf ◄──────────────┼────────────────────────────────────────────────┘
+     (archived PDF, no download)                       │ distinct raw values
+                                                       ▼
                                     normalize job ──► AI backend (claude -p, or Ollama)
-                                           │           └─► ai_answers (append-only log)
+                                           │           └─► Mongo ai_calls (every call)
                                            ▼
                  incident_type_categories, address_normalizations ◄── admin API (source = human)
                                            ▲
@@ -55,8 +60,9 @@ city page ──► discover spider ──► pdf_urls (pending)
                                            │
                                            ▼
                         dbt: staging ──► incidents ──► public 90 day models, with tests
-                              ┌────────────┼────────────────┐
-                        incidents API   search sync    report-gen (public export)
+                              ┌────────────┴────────────────┐
+              incidents API and admin search          report-gen (public export)
+              (Postgres full-text and pg_trgm)
 
       evaluation command ──► AI backend ──► score report   (no database writes)
 ```
@@ -72,18 +78,29 @@ Changes:
 - A new column, `error_kind`: `download`, `parse`, or `save`.
   An expired claim is kind `download`.
 - `retry_failed_urls` requeues only kind `download` under 3 attempts (2.7, 2.8).
-- New count columns replace `entry_count`: `parsed_count`, `stored_count`, `skipped_count`, `header_lines`, plus `parser_version` (2.13, 2.14).
+- New count columns replace `entry_count`: `parsed_count`, `stored_count`, `skipped_count`, `header_lines` (2.13, 2.14).
+- `content_hash`, the SHA-256 of the PDF bytes that were ingested, is the reference to the archived version (1.4).
+- `parser_version` and `extractor_version` record what produced the PDF's entries (1.7).
 - An operator CLI, `scrapers/maintenance/police_log_admin.py`, with `errors`, `reset <url>...`, and `unmatched-dispositions` (2.11, 3.7).
 
 ### Process job
 
-- `PoliceLogPdfItem` keeps its name and carries `url_id`, `log_date`, `source_url`, and `raw_text`.
+- `PoliceLogPdfItem` keeps its name and carries `url_id`, the extracted text, the content hash, and whether the archive stored the PDF.
+  The spider computes the hash with the archive's own `content_hash(source, body)` from `shared/mongo`, so `pdf_urls.content_hash` always matches an archived version.
+  The archived flag comes from `response.meta["archived"]`, which the archive middleware sets after writing the PDF, one at a time, before the callback runs.
+  A missing flag, as when `RAW_ARCHIVE_ENABLED` is off, counts as not archived.
+  The pipeline reads the log date and source URL from the `pdf_urls` row.
   The spider no longer parses, so `PoliceLogItem` and `test_police_log_item.py` are deleted.
+- The archive middleware stores the PDF bytes in Mongo on the way in; Postgres stores neither the bytes nor the text (1.4).
 - The pipeline calls `ingest_log_text` and marks the URL record `complete` in the same transaction, as today.
-- A PDF that pypdf cannot read, or that yields no entries, is `error` kind `parse` with whatever text was extracted.
+- A PDF that parses to no entries, or to no valid entry, is `error` kind `parse`; a failed save is kind `save`.
+  Both wait for a reprocess of the archived original (2.8).
+- If the archived flag is false, those two become kind `download` instead, so the PDF is downloaded and archived again (2.8).
+- A PDF that pypdf cannot read is `error` kind `download` and is retried.
 - A small runner, `scrapers/run_process_urls.py`, starts the crawl and exits non-zero when any URL record moved to `error` during the run (2.15).
   `scrapy crawl` alone exits 0.
-- The runner takes a Postgres advisory lock on its own connection, held for the whole run, and exits with a clear message if reprocess holds it (4.11).
+  The runner also exits non-zero when the crawl itself breaks, for example when it cannot claim URLs.
+- The runner takes a Postgres advisory lock on its own autocommit connection, held for the whole run, and exits with a clear message if reprocess holds it (4.11).
 
 ### Shared ingest function
 
@@ -94,12 +111,19 @@ def ingest_log_text(session, pdf_url: PdfUrl, text: str) -> IngestCounts
 # IngestCounts: parsed, inserted, updated, unchanged, skipped, missing, header_lines
 ```
 
-- Each entry is validated with `PoliceLogRecord`, now with `extra="forbid"` and required `raw_text`, `case_number`, and `log_date`.
+- Each entry is validated with `PoliceLogRecord`, now with `extra="forbid"` and required `case_number` and `log_date`.
+  The parser cuts each entry's block of text to read its fields; the block and the unsplit reason and action text go to the archive, not to Postgres.
+  An entry's log date is the URL record's, or the PDF's "For Date:" line when the URL record has none.
   An invalid entry is skipped and counted (2.4, 2.5).
 - The function reads the case numbers already stored for the PDF's entries, then writes with `INSERT ... ON CONFLICT (case_number) DO UPDATE` from `record.model_dump()`.
   The update applies only when a parsed column differs and `excluded.log_date >= log_entries.log_date` (2.12).
+  When an older PDF repeats a case number, the stored row is left fully alone, including its parser version.
   Inserted, updated, and unchanged are counted from the comparison in Python.
-- `parser_version` is written whenever it differs, without moving `updated_at`; `updated_at` moves only when a parsed value changes (1.6, 4.9).
+- `parser_version` on the entry is written whenever it differs, without moving `updated_at`; `updated_at` moves only when a parsed value changes (1.6, 4.9).
+- The URL record also carries the parser and extractor versions of its last ingest (1.7).
+- After the transaction commits, the pipeline writes one `police_log_entry_text` version per entry to the archive, best-effort, keyed by case number (1.4).
+  A failed write is logged and counted.
+  With `RAW_ARCHIVE_ENABLED` off, no entry texts are written.
 - Entries stored for this source URL that are not in this parse get `missing_from_parse`; the flag clears if they return (4.7).
 - `header_lines` counts lines that start with a case number pattern (2.14).
 
@@ -108,26 +132,35 @@ def ingest_log_text(session, pdf_url: PdfUrl, text: str) -> IngestCounts
 Changes in `scrapers/parsers/police_log.py`, which stays a pure function:
 
 - `PARSER_VERSION`, an integer bumped by hand when parsing behavior changes.
+  It starts at 1 in PR 2, because ingest writes it, and PR 3 bumps it.
+- `EXTRACTOR_VERSION` is `pypdf.__version__`.
+  A pypdf bump in `uv.lock` can change whitespace or word order in the extracted text, so it counts as a parser change: bump `PARSER_VERSION` in the same pull request and reprocess (3.3).
+  A comment next to pypdf in `scrapers/pyproject.toml` says so, where whoever merges a Dependabot bump will see it.
 - Location also matches "Vicinity of:" (3.1).
 - The place code and officer code are captured instead of stripped (1.3).
+- Every "Refer To" line is captured as a kind and a number in `refer_to` (3.8).
+  `reference_number` stays the first reference.
 - Call source comes from the "Call Source:" line when present (3.2).
-- Every "Refer To" line is captured as a kind and a number (3.3).
-  `reference_number` stays the first reference; new readers use `refer_to`.
 - The disposition list moves to `scrapers/parsers/dispositions.py` and gains every value found in the stored PDFs (3.5).
-  The parser sets `disposition_unmatched` when none matches (3.6).
+  When none matches, the parser keeps the unsplit text as the raw incident type and sets `disposition_unmatched` (3.6).
 - Changing the disposition list includes a parser version bump and a reprocess, because data check 14.3 fails the daily build while older entries still carry the new value inside their type.
 
 ### Reprocess
 
 `scrapers/maintenance/reprocess_police_logs.py --from DATE --to DATE | --all`.
 It is a script and not a spider because nothing is downloaded.
+It is also the archive's replay for police log PDFs; the archive spec's replay command handles parcel pages only.
 
-- It reads URL records that are `complete`, or `error` with stored text, in log date order (4.1, 4.2).
-- It calls `ingest_log_text` for each in its own transaction and marks a repaired `error` record `complete` (4.4).
+- It reads URL records that are `complete` or `error`, in log date order (4.1, 4.2).
+- For each, it takes the newest archived version, extracts text with pypdf, and calls `ingest_log_text` in its own transaction, then records the content hash and versions and marks a repaired `error` record `complete` (4.4).
+  It writes the entry texts again; at the same parser version, unchanged ones only move their seen count.
+  A URL with no archived PDF body but a `police_log_text` version is reparsed from that text.
+- A record with no archived version goes back to `pending` and is counted (4.12).
+- It checks the archive is reachable before it starts, and exits with an error if not (4.13).
 - It takes the same advisory lock as the process runner.
   The lock covers runs from a shell as well as from Airflow.
 - It does not repair the 343 entries stored before this work.
-  The move to `pdf_urls` copies nothing from Mongo, so those three PDFs have no stored text; discovery adds them again, the process job downloads them, and the upsert in `ingest_log_text` updates their entries.
+  Those three PDFs were never archived; discovery adds them again, the process job downloads and archives them, and the upsert in `ingest_log_text` updates their entries.
 - It logs the counts in 4.10.
 
 ### AI backend
@@ -177,7 +210,9 @@ Flow for each field:
    A new raw value whose key already has a normalization copies the value and its source with no AI call (5.3).
 3. Batch up to 50 groups per call.
    Each field gets 5 calls per run, and calls a field does not use pass to the other (9.6).
-4. Check the reply, store accepted items with `source = 'ai'`, and append each to `ai_answers`.
+4. Check the reply, store accepted items with `source = 'ai'` and the call's `ai_call_id`.
+5. Write one `ai_calls` document per call, failed or not, through the archive's best-effort writer (8.13).
+   If Mongo is down, the normalizations are still stored and the lost call records are counted (8.14).
 
 Answer checking:
 
@@ -258,11 +293,8 @@ The "Shown as" label is the recommendation for the frontend.
 ```python
 def geocode(query: str) -> GeocodeResult | None     # lat, lng, precision: "exact" | "approximate"
 def in_city_bounds(lat: float, lng: float) -> bool
-def public_location(kind, normalized_address, lat, lng) -> PublicLocation
 ```
 
-- `public_location` is the one place that works out block level: it reads the leading house number from the normalized address when the kind is `address`, rounds it down to the hundred, drops it when under 100, and rounds coordinates to 3 places (11.6, 11.7).
-  It runs whenever a location row is saved, by a job or by the admin API (6.11).
 
 The geocode job, `python -m normalize.geocode`, is its own task so that AI calls and geocoding each fit the 60 minute limit.
 
@@ -290,7 +322,7 @@ DELETE /api/addresses/{raw_address}
 
 - PATCH and DELETE use `require_admin`.
 - A PATCH sets `source = 'human'` and clears `needs_review`.
-  The AI's answer is already in `ai_answers`, so nothing else is copied (7.6, 7.13).
+  The AI's answer is already in its `ai_calls` document, so nothing is copied (7.6, 7.13).
 - Coordinates Connor types get `geocoded_via = 'manual'`.
 - The categories list keeps a `subcategory` field that mirrors `normalized_type`, so the current admin screen keeps showing a value.
   It is removed when the admin screen is rebuilt.
@@ -299,7 +331,7 @@ DELETE /api/addresses/{raw_address}
 ### Consumer models (dbt)
 
 A dbt project, `transform/`, using dbt-postgres, as its own workspace member so its dependencies stay out of the scrapers and the API.
-Models build into a `marts` schema as views, so a correction Connor saves shows in the incidents API on the next request, with no build in between (10.6).
+Models build into a `marts` schema as views, so a correction Connor saves shows in the incidents API on the next request, with no build in between (10.10).
 
 ```
 models/
@@ -315,14 +347,56 @@ models/
 ```
 
 - `incidents` left-joins entries to both lookup tables, so an entry with no normalization has empty normalized columns (8.12).
-- `public_incidents` selects from `incidents`: the 90 day window from the newest log date, the public columns, the stored `public_location` and public coordinates, and empty values for the held-back fields (11.2 to 11.10).
-- The incidents and stats API read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
-  `sync_es.py` reads `marts.incidents`.
+- `public_incidents` selects from `incidents`: the 90 day window from the newest log date, the public columns, the public location and coordinates, and empty values for the held-back fields (11.2 to 11.10).
+- A dbt macro, `public_location`, is the one place that works out block level: for kind `address` it reads the leading house number from the normalized address, rounds it down to the hundred, drops it when under 100, and rounds coordinates to 3 places (6.11, 11.6, 11.7).
+  Data check 14.5 tests its output.
+- The incidents and stats API and admin search read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
+- `report-gen` becomes plain selects from the three public models and drops its own joins and its 2,000 row cap.
 - Postgres will not let a migration drop or retype a column a view reads.
   So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, run `dbt run`.
   The `migrate` service and the test fixture both follow it, and a test proves a migration that drops a column a model uses still upgrades.
-  `report-gen` becomes plain selects from the three public models and drops its own joins and its 2,000 row cap.
 - A paid tier later is another model over `incidents` with a different filter.
+
+### Admin search
+
+Search is a `q` parameter on the existing incidents endpoint, `GET /api/incidents?q=...`, handled in `api/services/incidents.py` alongside the filters in 10.2.
+The word matching lives in its own module, `api/services/text_search.py`, because the cross-entity search in the search spec reuses it for all nine record types.
+It reads `marts.incidents`, so a saved correction shows on the next request (10.10).
+
+- `marts.incidents` carries a `search_text` column: raw and normalized type, category, raw and normalized location, disposition, and officer, joined with spaces.
+  The officer is admin-only; the public models do not carry `search_text`.
+- The service splits the query into words, and every word must match the incident (10.5).
+  A word matches when any of these holds:
+  - it is in `to_tsvector('simple', search_text)`;
+  - it has 5 or more letters and is within one edit of a word in `search_text`, by `levenshtein_less_equal(word, stored_word, 1) <= 1` from the `fuzzystrmatch` extension, which catches "Hanovr", "Hanpver", and "Mxple" (10.6);
+  - it is at least 4 digits and hyphens and appears in the case number, by `ILIKE`, so "13339" finds "26-13339" but "26" does not match every 2026 case (10.7).
+- The edit-distance check needs the incident's words, about 20 per row, so it is the expensive path.
+  A cheap pg_trgm prefilter, `word_similarity(word, search_text) >= 0.3`, runs first, so the edit distance is only worked out for rows that are already close.
+  Trigrams alone fall short of 10.6: a wrong letter in the middle of a 5-letter word, such as "Mxple" or "Maxle" for "Maple", scores 0.333, measured on Postgres 16.
+  So the prefilter must never be raised above 0.333, or it drops the typos the edit distance is meant to catch.
+  It only narrows rows; the edit distance decides the match.
+- Swapped letters, such as "Mapel", are two edits and do not match; 10.6 does not promise them.
+- "hannafords" for "HANNAFORD'S" is one edit from the stored word "hannaford" with its "s" split off, so it is covered by the same rule.
+  The `simple` parser splits "26-13339" into "26" and "-13339", which is why case numbers are matched on their own.
+- Words of 4 letters or fewer, such as "St", "MV", and "Main", match exactly, because one edit on a short word matches far too many rows.
+- Because the service splits the words itself, `-word`, quotes, and `or` have no special meaning.
+  Every word is a plain match; operators can be added later if Connor wants them.
+- Order: the sum of each word's full-text rank and trigram score, with an edit-distance match counted after an exact one, then `reported_at` descending (10.9).
+- Normalized address (10.8): the view joins every raw spelling to its normalized address, so matching the normalized value returns every spelling.
+
+Speed:
+
+- `search_text` is an expression over three tables, so no index can serve it, and every search is a sequential scan of the view.
+  At 76,000 entries, about the full backlog, that should fit the timing criterion (10.11), but the fuzzy path is the risk.
+- The migration enables `pg_trgm` and `fuzzystrmatch`, both contrib extensions in the postgres:16 image; no trigram indexes are added, because none would be used.
+- The seeded timing test, 100,000 incidents and a five-word query that needs the edit-distance path, is the first step of the task, before the rest is built.
+  Its fuzzy word is a 5-letter word with a wrong middle letter, such as "Mxple": at 0.3 that typo lets the most rows past the prefilter, so it is the case the 1 second limit has to hold for.
+  The pre-push hook skips it, since wall-clock checks are flaky on a busy laptop; QA runs it.
+- First fallback if it fails: index each source table on its own, with a tsvector and a trigram index on the raw columns of `log_entries` and on the normalized columns of each lookup table.
+  Each word then matches entries directly, or entries whose raw type or location maps to a matching lookup row, and the per-word results are intersected.
+  Every piece is indexable, both fuzzy checks then run against the small lookup tables, and 10.10 still holds.
+- Second fallback: a dbt `incidents_search` table with its own index, rebuilt by the daily build.
+  It loses 10.10, so it is Connor's decision.
 
 dbt tests are the data checks in requirement 14:
 
@@ -353,7 +427,7 @@ The disposition seed is generated from `dispositions.py` by a small script that 
 - It prints accuracy per field, the discarded and unsure counts, and each wrong item (15.3 to 15.5), comparing text without regard to case or spacing (15.6).
 - Each recorded run adds a line to `eval/results.md`: date, backend, model, prompt version, scores.
 - A change to a prompt, the default model, or the default backend includes a new line there.
-- Later, rows in `ai_answers` that Connor corrected can be added to the set; that is a follow-up.
+- Later, `ai_calls` answers that Connor corrected can be added to the set by a script that joins the two stores; that is a follow-up.
 
 ### Schedule
 
@@ -364,11 +438,10 @@ The police log chain needs steps that keep going after a failure, so it is a pla
 One DAG, `police_log`, daily, replaces the `discover_urls` and `process_urls` specs:
 
 ```
-discover ─► process (limit 100) ─► normalize ─► geocode ─► dbt build ─► sync_es ─► watcher
+discover ─► process (limit 100) ─► normalize ─► geocode ─► dbt build ─► watcher
 ```
 
 - Process, normalize, and geocode failures do not stop the stages after them; those tasks use `all_done`.
-  A failed dbt build stops the sync (12.6).
 - A final watcher task fails the run when any task failed, so a bad day is red (12.7).
 - One run at a time, a 60 minute timeout on each task (12.4, 12.5), and an Airflow pool of size 1 shared with reprocess.
 - A manual DAG, `police_log_reprocess`, with date parameters, wraps the reprocess script.
@@ -391,6 +464,10 @@ The files in `frontend/web/public/data` are gitignored and not committed.
 
 | Column | Type | Notes |
 |---|---|---|
+Adds:
+
+| Column | Type | Notes |
+|---|---|---|
 | `log_date` | date, NOT NULL | Backfilled in the migration from the URL record's `log_date`, else `reported_at::date`. The migration fails if any row is still null. |
 | `place_code` | text | For example `L HANNAF`. |
 | `officer_code` | text | For example `SMN`. |
@@ -400,12 +477,16 @@ The files in `frontend/web/public/data` are gitignored and not committed.
 | `parser_version` | integer | |
 | `created_at`, `updated_at` | timestamp | `created_at` backfilled from `scraped_at`. |
 
+Drops `raw_text`, `raw_reason_action`, and `scraped_at`.
+The two text columns are raw source and move to the archive; the legacy import copies the 343 live rows' values there before the migration runs (archive 8.4).
+`scraped_at` duplicates `created_at`, and the archive records each version's fetch time.
 `case_number` becomes NOT NULL; the live table has no nulls.
+The dispatch times and response durations stay: they are parsed fields, and Connor plans reporting on them.
 
 ### `pdf_urls`
 
-Adds `error_kind`, `parsed_count`, `stored_count`, `skipped_count`, `header_lines`, `parser_version`.
-Drops `entry_count`.
+Adds `error_kind`, `content_hash`, `parser_version`, `extractor_version`, `parsed_count`, `stored_count`, `skipped_count`, `header_lines`.
+Drops `raw_text` and `entry_count`.
 
 ### Provenance columns
 
@@ -414,7 +495,7 @@ One SQLAlchemy mixin adds these to both lookup tables.
 | Column | Type | Notes |
 |---|---|---|
 | `source` | text | `ai` or `human`, with a check constraint. Null while a value waits. |
-| `ai_backend`, `model`, `prompt_version` | text | Describe the last AI answer. They stay when a human takes over the value. |
+| `ai_call_id` | text | The `ai_calls` document that produced the last AI answer. It stays when a human takes over the value. Its document holds the backend, model, and prompt version. |
 | `needs_review` | boolean | The review mark. |
 | `failed_attempts` | integer | Default 0. |
 
@@ -429,29 +510,20 @@ Adds `normalized_type` and the provenance columns.
 
 ### `address_normalizations`
 
-Adds `kind`, `place_code` (indexed), `street`, `geocode_query`, `geocode_attempts`, `coordinate_precision`, `public_location`, `public_lat`, `public_lng`, and the provenance columns.
+Adds `kind`, `place_code` (indexed), `street`, `geocode_query`, `geocode_attempts`, `coordinate_precision`, and the provenance columns.
+Public location is not stored; the dbt models compute it.
 The `geocoded_via` check widens to `manual`, `nominatim`, `place_code`.
 `source` says who owns the row; `geocoded_via` says how its coordinates were found.
 
-### `ai_answers`
+### `ai_calls` in MongoDB
 
-Append-only.
-
-| Column | Type |
-|---|---|
-| `id` | integer |
-| `field` | text: `incident_type` or `location` |
-| `raw_value` | text |
-| `answer` | jsonb |
-| `ai_backend`, `model`, `prompt_version` | text |
-| `created_at` | timestamp |
-
-Every accepted AI answer is logged here.
-A human edit overwrites the current value, and the AI's answer stays in the log with its model and prompt version (7.13).
+One document per AI call, written best-effort through the archive's writer; its shape and indexes are in the raw source archive design.
+It holds the field, the raw values sent, the prompt, the raw answer, the accepted items, the backend, model, prompt version, duration, and outcome.
+A human edit overwrites the current value in Postgres, and the AI's answer stays in its call document (7.13).
 
 ### Migrations
 
-Three: `log_entries` and `pdf_urls` columns; the lookup tables and `ai_answers`; nothing for the consumer models, which dbt owns.
+Two: `log_entries` and `pdf_urls` columns; the lookup tables; nothing for the consumer models, which dbt owns.
 Each lands with the pull request that uses it.
 
 ## Error handling
@@ -459,7 +531,12 @@ Each lands with the pull request that uses it.
 | Failure | What happens | Criteria |
 |---|---|---|
 | Download fails or times out | Errback marks `error` kind `download`; retried until 3 attempts. | 2.7, 2.10 |
-| PDF unreadable or yields no entries | `error` kind `parse`, text stored, waits for reprocess. | 2.8 |
+| PDF yields no valid entries | `error` kind `parse`, waits for a reprocess of the archived original. | 2.8 |
+| Parse or save error while the archive is down | `error` kind `download`, so it is downloaded and archived again. | 2.8 |
+| Reprocess finds no archived version | URL record back to `pending`, counted. | 4.12 |
+| Archive unreachable at reprocess start | Reprocess exits with an error before changing anything. | 4.13 |
+| `ai_calls` cannot be written | Normalizations stored anyway; lost call records counted. | 8.14 |
+| PDF unreadable | `error` kind `download`, retried until 3 attempts. | 2.7 |
 | One entry invalid | Skipped and counted; the rest of the PDF is stored. | 2.4 |
 | Transaction fails | Rollback, `error` kind `save`; other PDFs unaffected. | 2.3, 2.6 |
 | Process dies mid-PDF | Claim expires after 120 minutes; the attempt was counted at claim. | 2.9 |
@@ -471,7 +548,7 @@ Each lands with the pull request that uses it.
 | Every AI call fails | Job exits non-zero; later stages still run. | 8.11, 12.6 |
 | Geocoder miss or failure | Address kept, coordinates untouched, attempt counted. | 6.5, 6.6 |
 | Coordinates outside the city bounds | Discarded. | 6.4 |
-| A dbt test fails | Build fails and names the test and row count; the sync does not run. | 14.1, 14.6, 12.6 |
+| A dbt test fails | Build fails and names the test and row count; the run shows failed. | 14.1, 14.6, 12.7 |
 
 ## Testing strategy
 
@@ -479,6 +556,7 @@ One mechanism for database tests, replacing the three that exist (`TEST_DATABASE
 
 - `conftest.py` sets `POSTGRES_DB=app_test` before anything imports the client, and stops the run if the name does not end in `_test` (13.2).
   The check runs before any connection.
+- MongoDB tests use the archive spec's plugin and the `scraped_data_test` database; ingest and reprocess tests need it, so CI starts `mongo` next to `postgres`.
 - A session fixture creates `app_test` if missing and runs `alembic upgrade head`.
   A separate fixture, asked for only by API and dbt tests, runs `dbt run` so the `marts` views exist.
 - Each test rebinds the existing sessionmaker to one connection inside an outer transaction, `SessionLocal.configure(bind=connection, join_transaction_mode="create_savepoint")`, and restores it after, so code under test can commit and the test still rolls back (13.3).
@@ -540,12 +618,30 @@ Structured output gives the shape; Pydantic models and `checks.py` enforce the c
 - Rejected: storing a batch without set checks.
   An echoed raw value that was never sent would create a normalization for a string that does not exist.
 
-### Human corrections win, and AI answers are logged
+### Human corrections win, and AI calls are logged in MongoDB
 
 - Rejected: overwrite on conflict, as both old scripts do.
 - Rejected: `ai_value` columns beside each normalized value.
   They keep only the latest AI answer, so a redo erases the one before it.
-  The append-only log keeps every answer by prompt version, which is what the evaluation set grows from.
+- Rejected: an append-only `ai_answers` table in Postgres.
+  It holds raw, variable-shaped payloads that nothing joins; MongoDB keeps every call, failed ones too, and Postgres keeps one `ai_call_id`.
+
+### Structured data in Postgres, raw source in MongoDB
+
+Connor's rule: every parsed, structured field goes in Postgres, and raw, unparsed source goes in MongoDB, where nothing scraped is ever thrown away.
+The original PDFs, each entry's raw and unsplit text, and the AI call records live in MongoDB; the parsed fields, counts, and times live in Postgres for the reporting Connor plans.
+
+- Rejected: keeping the extracted PDF text in `pdf_urls`, which the reviewer and the PM recommended.
+  It kept reprocess Postgres-only and independent of pypdf, and left the archive a pure side copy.
+  Connor chose to move it, and the design pays for that with four rules:
+  the archive is backed up before it ships;
+  the extractor version is recorded and a pypdf bump counts as a parser change;
+  parse and save errors become download errors when the archive did not store the PDF;
+  reprocess sends a record with no archived original back to the download queue.
+- Rejected: keeping each entry's block text in Postgres.
+  It is raw source, the PDF text split up, and no query reads it; it lives on the archived version, keyed by case number.
+- Rejected: dropping parsed fields nothing reads yet, such as the officer code, every "Refer To" reference, and the dispatch times.
+  They are structured, and Connor plans reporting on them.
 
 ### `claude -p` with Haiku by default, Ollama opt-in, behind one interface
 
@@ -558,7 +654,7 @@ Structured output gives the shape; Pydantic models and `checks.py` enforce the c
 
 ### dbt builds the consumer models
 
-The admin API, the search sync, and the public export disagreed about what an incident is because each wrote its own query, one of them in Rust.
+The admin API, the Elasticsearch sync, and the public export disagreed about what an incident is because each wrote its own query, one of them in Rust.
 dbt gives one definition in staged SQL models, with the data checks as tests beside them and lineage docs for free.
 
 - Rejected: one plain Postgres view in an Alembic migration.
@@ -569,6 +665,22 @@ dbt gives one definition in staged SQL models, with the data checks as tests bes
 - Rejected: dbt tables instead of views.
   A correction would not show in the admin until the next build.
 - Rejected: the same join written in each consumer, as today.
+
+### Admin search in Postgres, not Elasticsearch
+
+Incident search runs as a Postgres query over the dbt models, with full-text search for words and pg_trgm for typos.
+
+- Rejected: keeping Elasticsearch for incidents.
+  It needs a sync stage, a second copy of every incident, and a JVM service in the stack, for one admin user and under 100,000 rows.
+  A correction would not show until the next sync, while the Postgres query sees it on the next request.
+- Rejected: Postgres full-text search alone.
+  It does not match typos in street names, the most common miss in police log locations, and its parser cannot match part of a case number.
+- Rejected: pg_trgm similarity alone for typos.
+  A wrong letter in the middle of a short word removes three trigrams, so "Mxple" scores 0.333 against "Maple".
+  Edit distance says exactly what 10.6 promises, and trigrams stay as its prefilter.
+- Rejected: a dedicated search table from the start.
+  It would make search wait for the daily build.
+  Per-table indexes are the first fallback if the timing test fails, and the search table the second.
 
 ### Tests against a real database
 
@@ -593,3 +705,5 @@ Tidying the other four is a follow-up.
    The export writes an empty `officer`, so the officer column and filter in `incidents-table.tsx` will have nothing to show until the frontend changes.
 5. **Who labels the evaluation set.**
    The plan is an AI-drafted set that Connor checks line by line, about 150 lines.
+6. **Cross-entity admin search.**
+   Settled: `/api/search` moves to Postgres for all nine record types, under the search spec, in one pull request after PR 9 and before the Elasticsearch removal.

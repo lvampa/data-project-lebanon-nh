@@ -1,20 +1,23 @@
 import asyncio
 import gzip
 import socket
-from datetime import UTC, datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from items import PoliceLogItem, PoliceLogPdfItem
-from middlewares.raw_archive import RawArchiveMiddleware
+from items import PoliceLogPdfItem
+from middlewares.raw_archive import (
+    RawArchiveMiddleware,
+)
 from models import PdfUrlClaim
-from mongo.archive import RawArchive, archive_collection
+from mongo.archive import RawArchive, RawCollection, archive_collection
 from mongo.client import MongoDB
 from pipelines import PoliceLogPipeline
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
+from pymongo.errors import OperationFailure
 from scrapy.crawler import Crawler
 from scrapy.downloadermiddlewares.httpcompression import HttpCompressionMiddleware
 from scrapy.exceptions import NotConfigured
@@ -34,12 +37,24 @@ PARCEL_URL = "https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=1000"
 STREET_URL = "https://gis.vgsi.com/LebanonNH/Streets.aspx?Name=MAIN"
 
 
+class FakeStats:
+    def __init__(self) -> None:
+        self.values: dict[str, object] = {}
+
+    def get_value(self, key: str) -> object:
+        return self.values.get(key)
+
+    def set_value(self, key: str, value: object) -> None:
+        self.values[key] = value
+
+
 def fake_crawler(spider: object, **settings: object) -> Crawler:
     stand_in = SimpleNamespace(
         spider=spider,
         spidercls=type(spider),
         settings=Settings({"RAW_ARCHIVE_ENABLED": True, **settings}),
         signals=MagicMock(),
+        stats=FakeStats(),
     )
     return cast(Crawler, stand_in)
 
@@ -242,32 +257,76 @@ def closed_port() -> int:
         return probe.getsockname()[1]
 
 
-def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch):
-    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
-    monkeypatch.setenv("MONGO_PORT", str(closed_port()))
-    archive = RawArchive(archive_collection(MongoDB()))
-    middleware = RawArchiveMiddleware(fake_crawler(process_spider()), archive)
+def add_claimed_url(db_session) -> PdfUrlClaim:
     url = PdfUrl(
-        canonical_url=CITY_URL, state="in_progress", created_at=datetime(2026, 5, 12)
+        canonical_url=CITY_URL,
+        log_date=date(2026, 5, 11),
+        state="in_progress",
+        created_at=datetime(2026, 5, 12),
     )
     db_session.add(url)
     db_session.commit()
-    entry = PoliceLogItem(
-        source_url=CITY_URL,
-        raw_text="26-13339 0106 Phone - Noise Complaint",
-        scraped_at=datetime.now(UTC),
-        case_number="26-13339",
-    )
+    return PdfUrlClaim(id=url.id, canonical_url=CITY_URL, archive_url=WAYBACK_URL)
 
-    response = pdf_response()
-    middleware.process_response(request_of(response), response)
+
+def crawl_one_pdf(middleware: RawArchiveMiddleware, claim: PdfUrlClaim, text: str):
+    """Download, callback and pipeline for one PDF, as the process job runs them."""
+    request = Request(CITY_URL, cb_kwargs={"pdf_url": claim})
+    response = Response(url=CITY_URL, body=PDF, request=request)
+    middleware.process_response(request, response)
+    with patch("spiders.process_url_records.PdfReader") as pdf_reader:
+        page = MagicMock()
+        page.extract_text.return_value = text
+        pdf_reader.return_value.pages = [page]
+        [item] = list(process_spider().parse(response, pdf_url=claim))
+    assert isinstance(item, PoliceLogPdfItem)
     pipeline = PoliceLogPipeline()
     pipeline.open_spider()
-    pipeline.process_item(
-        PoliceLogPdfItem(url_id=url.id, raw_text="text", entries=[entry])
-    )
+    try:
+        pipeline.process_item(item)
+    finally:
+        pipeline.close_spider()
+
+
+LOG_TEXT = (
+    "For Date: 05/11/2026  -  Monday\n"
+    "26-13339        0106 Phone - Noise Complaint Log Information\n"
+    "  Location/Address:    MAIN ST\n"
+)
+
+
+def test_entries_are_stored_when_mongodb_is_unreachable(db_session, monkeypatch):
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", str(closed_port()))
+    archive = RawArchive(archive_collection(MongoDB()), batch_size=1)
+    middleware = RawArchiveMiddleware(fake_crawler(process_spider()), archive)
+
+    crawl_one_pdf(middleware, add_claimed_url(db_session), LOG_TEXT)
     middleware.spider_closed()
 
     assert archive.is_down is True
     stored = db_session.scalars(select(LogEntry.case_number)).all()
     assert stored == ["26-13339"]
+
+
+class FailingCollection:
+    """A collection whose writes fail without a timeout, as on a full disk."""
+
+    def bulk_write(self, operations, ordered: bool):
+        raise OperationFailure("disk full")
+
+
+def test_a_pdf_whose_write_failed_is_downloaded_again_after_a_parse_error(
+    db_session,
+):
+    archive = RawArchive(cast(RawCollection, FailingCollection()), batch_size=1)
+    middleware = RawArchiveMiddleware(fake_crawler(process_spider()), archive)
+    claim = add_claimed_url(db_session)
+
+    crawl_one_pdf(middleware, claim, "not a police log")
+
+    # The write failed but the archive is not down, so only the flag can tell.
+    assert archive.is_down is False
+    db_session.expire_all()
+    url = db_session.get(PdfUrl, claim.id)
+    assert (url.state, url.error_kind) == ("error", "download")

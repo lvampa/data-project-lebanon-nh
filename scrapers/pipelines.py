@@ -1,8 +1,10 @@
 import re
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, Self, cast
 
 import logfire
+from ingest import ingest_pdf_url
+from ingest.pdf_urls import kept_for_reprocess, mark_error
 from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
@@ -14,18 +16,20 @@ from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
+from mongo.archive import RawArchive, archive_collection
+from mongo.client import MongoDB
+from mongo.raw_text import ENTRY_TEXT_SOURCE, entry_text
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
 from postgres.models.llc import Llc, PropertyLlc
-from postgres.models.log_entry import LogEntry
 from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
 from scrapy import Item
-from sqlalchemy import CursorResult, Update, delete, select, update
-from sqlalchemy.dialects.postgresql import Insert
+from scrapy.crawler import Crawler
+from sqlalchemy import CursorResult, delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 _LLC_PATTERN = re.compile(
@@ -68,6 +72,20 @@ class UrlRecordPipeline:
 
 
 class PoliceLogPipeline:
+    def __init__(
+        self, entry_texts: RawArchive | None = None, spider_name: str = "process_urls"
+    ) -> None:
+        # None while the raw archive is off.
+        self._entry_texts = entry_texts
+        self._spider_name = spider_name
+
+    @classmethod
+    def from_crawler(cls, crawler: Crawler) -> Self:
+        if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
+            return cls(spider_name=crawler.spidercls.name)
+        archive = RawArchive(archive_collection(MongoDB()))
+        return cls(archive, spider_name=crawler.spidercls.name)
+
     def open_spider(self) -> None:
         self._session = SessionLocal()
 
@@ -75,78 +93,60 @@ class PoliceLogPipeline:
         if not isinstance(item, PoliceLogPdfItem):
             return item
 
+        url_id = item["url_id"]
         try:
-            records = [
-                PoliceLogRecord.model_validate(dict(entry)) for entry in item["entries"]
-            ]
-            with logfire.span(
-                "save police log entries", url_id=item["url_id"], count=len(records)
-            ):
-                for record in records:
-                    self._session.execute(_log_entry_insert(record))
-                self._session.execute(
-                    _pdf_url_update(
-                        item["url_id"],
-                        state="complete",
-                        raw_text=item["raw_text"],
-                        entry_count=len(records),
-                    )
+            with logfire.span("ingest police log pdf", url_id=url_id):
+                pdf_url = self._session.get(PdfUrl, url_id)
+                if pdf_url is None:
+                    raise LookupError(f"pdf_urls row {url_id} does not exist")
+                counts = ingest_pdf_url(
+                    self._session,
+                    pdf_url,
+                    item["raw_text"],
+                    content_hash=item["content_hash"],
+                    original_archived=item["original_archived"],
                 )
+                # One commit, so the URL is never complete without its entries.
                 self._session.commit()
+                logfire.info(
+                    "police log pdf ingested",
+                    url_id=url_id,
+                    parsed=counts.parsed,
+                    stored=counts.stored,
+                    skipped=counts.skipped,
+                )
         except Exception as exc:
             self._session.rollback()
+            kind = kept_for_reprocess("save", item["original_archived"])
             self._session.execute(
-                _pdf_url_update(
-                    item["url_id"],
-                    state="error",
-                    error_message=f"Saving entries failed: {exc}",
-                )
+                mark_error(url_id, kind, f"Saving entries failed: {exc}")
             )
             self._session.commit()
             raise
 
+        # After the commit and outside the error handling: the archive is a side
+        # copy, and its own failures are logged and counted, never raised.
+        self._archive_entry_texts(counts.records)
         return item
+
+    def _archive_entry_texts(self, records: tuple[PoliceLogRecord, ...]) -> None:
+        if self._entry_texts is None:
+            return
+        fetched_at = datetime.now(UTC)
+        for record in records:
+            version = entry_text(
+                source_url=record.source_url,
+                raw_text=record.raw_text,
+                raw_reason_action=record.raw_reason_action,
+                parser_version=record.parser_version,
+                fetched_at=fetched_at,
+                spider=self._spider_name,
+            )
+            self._entry_texts.add(ENTRY_TEXT_SOURCE, record.case_number, version)
+        self._entry_texts.flush()
 
     def close_spider(self) -> None:
         self._session.close()
-
-
-def _pdf_url_update(url_id: int, **values: Any) -> Update:
-    # pdf_urls timestamps are naive columns that hold UTC, like the other tables.
-    completed_at = datetime.now(UTC).replace(tzinfo=None)
-    return (
-        update(PdfUrl)
-        .where(PdfUrl.id == url_id)
-        .values(completed_at=completed_at, **values)
-    )
-
-
-def _log_entry_insert(record: PoliceLogRecord) -> Insert:
-    return (
-        pg_insert(LogEntry)
-        .values(
-            source_url=record.source_url,
-            case_number=record.case_number,
-            reported_at=record.reported_at,
-            call_source=record.call_source,
-            incident_type=record.incident_type,
-            disposition=record.disposition,
-            raw_reason_action=record.raw_reason_action,
-            location=record.location,
-            officer=record.officer,
-            reference_number=record.reference_number,
-            dispatched_at=record.dispatched_at,
-            enroute_at=record.enroute_at,
-            arrived_at=record.arrived_at,
-            cleared_at=record.cleared_at,
-            response_seconds=record.response_seconds,
-            scene_seconds=record.scene_seconds,
-            raw_text=record.raw_text,
-            parse_error=record.parse_error,
-            scraped_at=record.scraped_at,
-        )
-        .on_conflict_do_nothing(index_elements=["case_number"])
-    )
 
 
 class PropertyPipeline:

@@ -1,4 +1,3 @@
-from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -43,11 +42,9 @@ def pipeline():
 
 
 def test_ignores_non_property_items(pipeline):
-    from items.police_log import PoliceLogItem
+    from items.police_log import PoliceLogPdfItem
 
-    other = PoliceLogItem(
-        raw_text="x", source_url="http://x", scraped_at=datetime.now()
-    )
+    other = PoliceLogPdfItem(url_id=1, raw_text="x")
     result = pipeline.process_item(other)
     assert result is other
 

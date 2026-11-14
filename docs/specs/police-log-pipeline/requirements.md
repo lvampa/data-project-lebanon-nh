@@ -1,20 +1,20 @@
 # Police log pipeline: requirements
 
-**Status:** Draft
+**Status:** In progress
 **Created:** 2026-11-06
-**Updated:** 2026-11-06
+**Updated:** 2026-11-07
 
 ## Introduction
 
 The city posts one police log PDF per day.
-The pipeline finds the PDFs, parses them into `log_entries`, and feeds two consumers: the admin API and search that Connor uses, and the static JSON that the public site and map read.
+The pipeline finds the PDFs, parses them into `log_entries`, and feeds two consumers: the admin API and admin search that Connor uses, and the static JSON that the public site and map read.
 
 Today the flow stops early.
 Postgres holds 343 entries from 3 PDFs, 650 PDFs are waiting, and 10 are stuck mid-claim.
 No incident type or address has ever been normalized, so the public map is empty and search cannot group "MV Complaint" with other traffic calls.
 A parser fix cannot repair rows already stored, because nothing can reprocess them.
 
-Success is that a new PDF flows from the city page to search and to the public JSON without manual steps, with every value the PDF gave kept as it was and a normalized value stored beside it.
+Success is that a new PDF flows from the city page to admin search and to the public JSON without manual steps, with every value the PDF gave kept as it was and a normalized value stored beside it.
 AI does the normalizing, either through `claude -p` on Connor's Max plan or through a free local model, and never through a paid API.
 Connor can correct any normalized value, and his correction always wins.
 When AI or the geocoder fails, the pipeline keeps going on raw values and tries again later.
@@ -30,6 +30,10 @@ AI is used only where the values are open-ended.
 | Disposition, call source, officer, times | Parser rules | Closed sets or fixed formats that a rule reads exactly. |
 
 This spec builds on the `fix/integration` and `fix/url-queue` branches, which already complete a PDF in the same commit as its entries, retry failed claims, and keep the URL queue in Postgres.
+Postgres holds every parsed, structured field.
+The MongoDB raw source archive, under its own spec, holds only raw, unparsed source: the original log PDFs, each entry's raw text, and a record of every AI call.
+Nothing raw is ever discarded.
+Reprocessing reads the archived PDFs, so the archive's write half ships before the ingest changes here.
 The work ships as a series of pull requests, each useful on its own; tasks.md lists them.
 
 ## Glossary
@@ -51,11 +55,13 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 - **Header-like line:** A line in a log PDF's text that starts with a case number pattern, such as `26-13339`.
 - **Place code:** The bracketed code the PDF prints before some locations, such as `[L HANNAF]`.
 - **Category:** One of Fire, EMS, Police, Traffic, Administrative.
-- **Reprocess:** Parsing a log PDF's stored text again and updating its entries, without downloading the PDF again.
+- **Archive:** The MongoDB raw source archive in `docs/specs/raw-source-archive/`, which keeps each downloaded log PDF's original bytes, each entry's raw text, and each AI call.
+- **Content hash:** The SHA-256 of a log PDF's bytes, which names one archived version.
+- **Reprocess:** Extracting text again from a log PDF's archived original and updating its entries, without downloading the PDF again.
 - **City bounds:** A fixed box around Lebanon, NH.
 - **Placed:** A location that has coordinates.
 - **Incident:** An entry whose `parse_error` is not set.
-- **Consumer models:** The tables or views that dbt builds from entries and normalizations, which the admin API, the search sync, and the public export read.
+- **Consumer models:** The tables or views that dbt builds from entries and normalizations, which the admin API, admin search, and the public export read.
 - **Evaluation set:** A file in the repo of raw incident types and raw locations, each with the normalized value a person decided is right.
 - **Public export:** The JSON files `report-gen` writes to `frontend/web/public/data`.
 - **Public window:** The most recent 90 days of incidents, counted back from the newest log date stored.
@@ -69,12 +75,15 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 #### Acceptance criteria
 
-1. THE pipeline SHALL store each entry's raw incident type, location, officer, disposition, call source, and full entry text as parsed from the log PDF.
+1. THE pipeline SHALL store each entry's raw incident type, location, officer, disposition, and call source as parsed from the log PDF.
 2. THE normalization job SHALL NOT change or delete any raw value.
 3. THE parser SHALL store the place code and the officer code the PDF prints, instead of discarding them.
-4. THE pipeline SHALL keep the full extracted text of each log PDF on its URL record.
+4. THE archive SHALL keep the original bytes of each log PDF, and THE pipeline SHALL record on its URL record the content hash of the version it ingested.
+   Postgres stores neither the PDF nor its extracted text.
+   The archive also keeps each entry's raw text and unsplit reason and action text, keyed by case number (archive requirement 8).
 5. THE pipeline SHALL record on each entry the log date of its PDF, next to the source URL it already stores.
 6. THE pipeline SHALL record on each entry when it was first stored, when its parsed values last changed, and the parser version that produced it.
+7. THE pipeline SHALL record on each URL record the parser version and the PDF text extractor version that produced its entries.
 
 ### Requirement 2: Ingest every log PDF once and recover from failures
 
@@ -89,7 +98,8 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 5. THE process job SHALL skip an entry with no case number in the same way.
 6. A failure in one log PDF SHALL NOT lose entries of other PDFs in the same run.
 7. IF a download fails or times out, THEN THE process job SHALL mark the URL record `error` with the reason and SHALL try it again on later runs until it has had 3 attempts.
-8. IF a log PDF downloads but yields no entries or fails to save, THEN THE process job SHALL mark the URL record `error`, store its extracted text, and SHALL NOT download it again.
+8. IF a log PDF downloads but yields no entries or fails to save, THEN THE process job SHALL mark the URL record `error`, and SHALL NOT download it again while the archive holds its original.
+   IF the archive did not store that PDF's original, THEN THE process job SHALL mark it as a download error, so that it is downloaded and archived again.
 9. WHEN a URL record has been `in_progress` for more than 120 minutes, THE process job SHALL return it to `pending` and count that as an attempt.
 10. WHEN a URL record reaches 3 attempts without completing, THE process job SHALL leave it in `error` until the operator resets it.
 11. THE operator SHALL be able to list URL records in `error` with their reasons and reset chosen ones to `pending` with one command.
@@ -106,12 +116,12 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 1. WHEN an entry gives its location on a "Vicinity of:" line, THE parser SHALL store that location.
 2. WHEN an entry has a "Call Source:" line, THE parser SHALL store that value as the call source.
-   The header's abbreviation stays in the entry text.
-3. THE parser SHALL store every "Refer To" reference an entry prints, of any kind, including Citation and Accident.
-4. THE parser SHALL split the header's reason and action text into a raw incident type and a raw disposition using a disposition list held in the repo, and SHALL keep the unsplit text as well.
+3. WHEN the PDF text extractor changes version, THE pipeline SHALL treat it as a parser change: the parser version is bumped and the archived PDFs are reprocessed.
+4. THE parser SHALL split the header's reason and action text into a raw incident type and a raw disposition using a disposition list held in the repo.
 5. THE disposition list SHALL include every disposition found in the stored PDFs, including Investigated, Summons Issued, Removed Hazard, Transported/Relayed, Paperwork Served, and Paperwork NOT Served.
-6. IF no disposition in the list matches an entry, THEN THE parser SHALL store the entry with an empty disposition and mark it as having an unmatched disposition.
+6. IF no disposition in the list matches an entry, THEN THE parser SHALL store the unsplit text as the raw incident type, leave the disposition empty, and mark the entry as having an unmatched disposition.
 7. THE operator SHALL be able to list the entries marked as having an unmatched disposition.
+8. THE parser SHALL store every "Refer To" reference an entry prints, of any kind, including Citation and Accident.
 
 ### Requirement 4: Reprocess stored PDFs
 
@@ -119,7 +129,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 #### Acceptance criteria
 
-1. WHEN the operator runs a reprocess for a date range or for all dates, THE reprocess job SHALL parse again the stored text of each matching URL record that is `complete`, or is `error` with stored text.
+1. WHEN the operator runs a reprocess for a date range or for all dates, THE reprocess job SHALL extract text again from the newest archived version of each matching URL record that is `complete` or `error`, and parse it.
 2. THE reprocess job SHALL work through URL records in log date order.
 3. THE reprocess job SHALL update the parsed values of each existing entry by case number, and SHALL insert entries that did not exist.
 4. WHEN a reprocess of an `error` URL record stores at least 1 entry, THE reprocess job SHALL mark the URL record `complete`.
@@ -130,6 +140,8 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 9. WHEN the same reprocess runs twice with the same parser version, THE second run SHALL change no entry, including its last-changed time.
 10. WHEN the reprocess finishes, THE reprocess job SHALL log how many entries it updated, inserted, left unchanged, and marked as not found.
 11. WHILE the process job is running, THE reprocess job SHALL NOT start, and the reverse.
+12. IF a matching URL record has no archived version, THEN THE reprocess job SHALL return it to `pending`, so that it is downloaded and archived again, and count it in its log.
+13. IF the archive is unreachable, THEN THE reprocess job SHALL exit with an error before changing any entry.
 
 ### Requirement 5: Normalize incident types
 
@@ -162,7 +174,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 8. THE normalization job SHALL send the geocoder at most 600 requests per run, and SHALL leave the rest for the next run.
 9. THE normalization job SHALL record with each set of coordinates whether they are `exact`, for a matched address, place, or intersection, or `approximate`, for a street or highway matched without a point on it.
 10. THE normalization job SHALL NOT change a location normalization whose source is `human`, including its coordinates.
-11. WHEN a location's normalization is saved, THE pipeline SHALL work out its public location and public coordinates as in 11.6 and 11.7 and store them with it, so that every consumer reads the same values.
+11. THE consumer models SHALL work out each location's public location and public coordinates as in 11.6 and 11.7, in one place, so that every consumer reads the same values.
 12. WHEN Connor saves a normalized address in the admin and geocoding fails, THE admin API SHALL keep the coordinates the location already had.
 
 ### Requirement 7: Record where each normalization came from and let Connor correct it
@@ -172,7 +184,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 #### Acceptance criteria
 
 1. THE pipeline SHALL record for each normalization its source, when it was created, and when it was last updated.
-2. WHEN the source is `ai`, THE pipeline SHALL also record the AI backend, the model, and the prompt version.
+2. WHEN the source is `ai`, THE pipeline SHALL also record a reference to the AI call that produced it, whose archive record holds the AI backend, the model, and the prompt version.
 3. THE admin API SHALL list the normalizations of each normalized field with the raw value, the normalized value, the source, the review mark, and the number of entries that use the raw value.
 4. THE admin API SHALL filter that list by source, by review mark, and by whether a normalization exists yet.
 5. THE admin API SHALL let Connor set or change the normalized value of any raw value in either normalized field, including one that has no normalization yet.
@@ -184,7 +196,8 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
     The two existing categorizer scripts go away.
 11. WHEN the operator asks to redo the `ai` normalizations for one normalized field, THE normalization job SHALL keep each old value until a valid new one replaces it, and SHALL leave `human` ones unchanged.
 12. WHEN Connor asks to hand a `human` normalization back to AI, THE admin API SHALL delete it and its failed attempt count, so that the normalization job treats the raw value as new.
-13. WHEN Connor replaces an `ai` normalization, THE admin API SHALL keep the AI's value, model, and prompt version beside his, so that AI answers can be compared with his corrections.
+13. WHEN Connor replaces an `ai` normalization, THE AI's answer SHALL stay in the archive's record of that AI call, so that AI answers can be compared with his corrections.
+    WHILE MongoDB is down, an AI call's record can be missing; the normalization is stored anyway.
 
 ### Requirement 8: Survive AI failures
 
@@ -203,7 +216,9 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 9. IF an AI call fails because the AI backend is not logged in or has hit a usage limit, THEN THE normalization job SHALL stop making AI calls for that run.
 10. WHEN the normalization job finishes, THE job SHALL log for each normalized field how many values it normalized, how many items it discarded, and how many values still wait.
 11. IF every AI call in a run fails, THEN THE normalization job SHALL exit with a non-zero status.
-12. WHILE a raw value has no normalization, THE admin API and the search index SHALL show the entry with its raw value and empty normalized fields.
+12. WHILE a raw value has no normalization, THE admin API and admin search SHALL show the entry with its raw value and empty normalized fields.
+13. THE normalization job SHALL record every AI call in the archive, including failed ones, with its prompt, raw answer, AI backend, model, prompt version, duration, and outcome.
+14. IF the archive cannot be written, THEN THE normalization job SHALL still store valid normalizations and SHALL log how many call records were lost.
 
 ### Requirement 9: Run AI without a paid API
 
@@ -227,11 +242,18 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 1. THE incidents API SHALL return each incident with both the raw and the normalized value of each normalized field, plus coordinates when the location is placed.
 2. THE incidents API SHALL filter by category, normalized type name, and normalized address.
-3. THE search index SHALL hold the category, normalized type name, normalized address, and coordinates of each incident, next to the raw values.
-4. WHEN Connor searches for a normalized address, THE search API SHALL return incidents at that address whatever raw spelling each entry used.
-5. THE stats API SHALL count incidents by category and by normalized type name.
-6. WHEN a normalization changes, THE search index SHALL reflect it after the next sync, with no reprocess.
-7. THE incidents API, the search index, and the public export SHALL all leave out entries with `parse_error` set, so that the three agree on what an incident is.
+3. THE admin search SHALL query the consumer models in Postgres, with no separate search index.
+4. THE admin search SHALL match a query against the case number, the raw and normalized incident type, the category, the raw and normalized location, the disposition, and the officer of each incident.
+   Officer names are searchable in the admin only, and the public export never shows them (11.4).
+5. WHEN a query has more than one word, THE admin search SHALL return only incidents that match every word.
+6. WHEN a query word of 5 or more letters has one letter missing, extra, or wrong compared with a stored word, such as "Hanovr" for "Hanover", THE admin search SHALL still match it.
+7. WHEN a query word of at least 4 digits and hyphens is part of a case number, such as "13339" for "26-13339", THE admin search SHALL return the incident with that case number.
+8. WHEN Connor searches for a normalized address, THE admin search SHALL return incidents at that address whatever raw spelling each entry used.
+9. THE admin search SHALL order results by how well they match, then by reported time, newest first.
+10. WHEN a normalization changes, THE admin search SHALL reflect it on the next request, with no sync, build, or reprocess.
+11. WHILE the database holds 100,000 incidents, THE admin search SHALL answer a query of up to five words within 1 second.
+12. THE stats API SHALL count incidents by category and by normalized type name.
+13. THE incidents API, the admin search, and the public export SHALL all leave out entries with `parse_error` set, so that the three agree on what an incident is.
 
 ### Requirement 11: Publish a subset for the public list and map
 
@@ -242,7 +264,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 1. THE public export SHALL read the same normalized incident data as the admin API, with a filter on top, and SHALL NOT run its own parsing or normalizing.
 2. THE public export SHALL include only incidents inside the public window, and SHALL NOT cap them at a fixed row count.
 3. THE public export SHALL write for each incident: case number, reported date and time, category, normalized type name, raw incident type, disposition, call source, public location, public coordinates, whether the coordinates are exact or approximate, and the source PDF address.
-4. THE public export SHALL NOT write officer names, officer codes, reference numbers, response times, raw entry text, or anything about where a normalization came from.
+4. THE public export SHALL NOT write officer names, officer codes, reference numbers, response times, or anything about where a normalization came from.
 5. THE public export SHALL keep every field name it writes today, with an empty value for the fields in 11.4, so that the current site keeps working.
 6. WHEN a location's kind is `address`, THE public location and public coordinates SHALL be at block level, and a house number under 100 SHALL be written as the street name alone.
 7. WHEN a location's kind is `intersection`, `place`, or `highway`, THE public location and public coordinates SHALL be the normalized address and coordinates as stored.
@@ -254,17 +276,16 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 ### Requirement 12: Run the stages in order on a schedule
 
-**User story:** As the operator, I want the stages scheduled and chained, so that new logs reach search without me starting anything.
+**User story:** As the operator, I want the stages scheduled and chained, so that new logs reach admin search without me starting anything.
 
 #### Acceptance criteria
 
 1. THE scheduler SHALL run discovery once a day.
-2. WHEN discovery finishes, THE scheduler SHALL run processing, then normalization, then geocoding, then the consumer model build, then the search sync, in that order.
+2. WHEN discovery finishes, THE scheduler SHALL run processing, then normalization, then geocoding, then the consumer model build, in that order.
 3. THE process job SHALL handle up to 100 URL records per run.
 4. THE scheduler SHALL allow at most one run of each police log job at a time, counting reprocess.
 5. THE scheduler SHALL stop any police log task that runs longer than 60 minutes and mark it failed.
 6. IF the processing, normalization, or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
-   IF the consumer model build fails, THEN THE scheduler SHALL NOT run the search sync.
 7. WHEN a stage fails after its retries, THE scheduler SHALL show the run as failed and log the stage name and reason.
 8. THE README SHALL document the one command that applies the database migrations, `uv run migrate`, and THE operator SHALL run it by hand before any police log job runs. Nothing applies them at startup.
 9. THE scheduler SHALL NOT run the public export or deploy the site.
@@ -334,13 +355,15 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
   AI suggesting additions to that list is a possible follow-up.
 - Adding Connor's corrections to the evaluation set automatically.
   7.13 keeps the data; turning it into labeled items is a follow-up.
-- Removing MongoDB from the stack.
-  The URL queue moves to Postgres before this work starts, and taking Mongo out is its own task.
+- How the archive stores and backs up its documents.
+  The raw source archive spec covers both.
 - Normalizing properties, staff, budgets, or planning records.
-- Keeping the PDF files themselves.
-  The extracted text is kept.
 - Time zone conversion.
   Times stay as the local times the PDF prints.
 - Any paid AI API.
+- Elasticsearch.
+  Admin search for incidents runs in Postgres (requirement 10), and removing Elasticsearch from the stack is its own follow-up task.
+- Search across the other entity types, such as properties and planning documents.
+  The search spec covers it and still describes Elasticsearch.
 - Alerts by email or chat when a run fails.
   Failures show in Airflow and Logfire.

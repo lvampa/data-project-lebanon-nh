@@ -45,7 +45,8 @@ SPECS = [
         dag_id="process_urls",
         schedule=None,
         cwd="scrapers",
-        command="scrapy crawl process_urls -a limit='{{ params.limit }}'",
+        # The runner exits non-zero when a PDF fails; `scrapy crawl` always exits 0.
+        command="python run_process_urls.py --limit '{{ params.limit }}'",
         timeout=timedelta(hours=2),
         tags=("police-log",),
         triggers=("sync_elasticsearch",),

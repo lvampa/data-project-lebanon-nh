@@ -84,15 +84,16 @@ scripts/                  generate_report.sh, deploy.sh
 ### Data Flow
 
 1. `build_daily_urls` spider → scrapes PDF links → inserts them into PostgreSQL `pdf_urls` as `pending`
-2. `process_urls` spider → claims `pending` URLs with `FOR UPDATE SKIP LOCKED` (recording `claimed_at` and `attempts`) → downloads PDFs → parses → yields one `PoliceLogPdfItem` per PDF carrying its entries
-3. `PoliceLogPipeline` → validates via Pydantic → upserts to PostgreSQL `log_entries` (keyed on `case_number`) → marks the URL `complete` in the same commit as its entries, or `error` on failure
+2. `process_urls` spider → claims `pending` URLs with `FOR UPDATE SKIP LOCKED` (recording `claimed_at` and `attempts`) → downloads PDFs → extracts text → yields one `PoliceLogPdfItem` per PDF carrying its text
+3. `PoliceLogPipeline` → calls `ingest_pdf_url` in `scrapers/ingest/police_log.py`, which parses the text, validates each entry via Pydantic, and upserts `log_entries` (keyed on `case_number`) → the URL becomes `complete` in the same commit, or `error` with a kind (`download`, `parse`, `save`)
 4. `scripts/deploy.sh` → runs `generate_report.sh` to export JSON into `public/data/` (gitignored) → `bun run build` → `wrangler pages deploy`
 
 ### Key Patterns
 
 - **Item → Model boundary:** Scrapy Items are untyped dicts. Always validate at the pipeline with `Model.model_validate(dict(item))` before writing to a database.
-- **Idempotent writes:** Use `on_conflict_do_nothing` (log entries) or `on_conflict_do_update` (properties, city staff). Never assume a record doesn't exist.
+- **Idempotent writes:** Use `on_conflict_do_update` (log entries, properties, city staff). Never assume a record doesn't exist.
 - **Atomic URL claiming:** an `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)` moves `pending → in_progress`, so concurrent runs never claim the same URL.
+- **One police log job at a time:** the process runner and the reprocess job take the advisory lock in `scrapers/ingest/lock.py`.
 - **Observability:** Use `logfire.span()` for database writes and PDF processing. Use `logfire.info/warning/error` at key decision points (not every line).
 - **Migrations:** Schema changes go through Alembic in `shared/postgres/migrations/`. Never modify tables directly.
 
@@ -104,7 +105,7 @@ docker compose up -d                          # from repo root
 
 # Run spiders (from scrapers/, where scrapy.cfg lives)
 uv run scrapy crawl build_daily_urls
-uv run scrapy crawl process_urls -a limit=10
+uv run python run_process_urls.py --limit 10   # exits non-zero if a PDF fails
 
 # Tests
 uv run pytest

@@ -7,7 +7,7 @@ from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
 from scrapy.http import HtmlResponse
 from spiders.vgsi_property import VgsiPropertySpider
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 # The tests folder is not a package pyrefly can follow; pytest imports it from scrapers/.
 # pyrefly: ignore[missing-import]
@@ -91,6 +91,71 @@ def test_a_newer_page_updates_the_parcel(db_session, raw_sources):
 
     assert counts.updated == 1
     assert stored_parcel(db_session)[2] == "DOE"
+
+
+def set_stored(session, **columns) -> None:
+    session.execute(update(Property).values(**columns))
+    session.commit()
+
+
+def stored_property(session) -> Property:
+    session.expire_all()
+    return session.scalars(select(Property)).one()
+
+
+def test_a_parcel_stored_after_the_archived_page_is_not_overwritten(
+    db_session, raw_sources
+):
+    # The archive was down for the newer scrape, so its newest page is older than
+    # the row. Replaying it would put old data over new.
+    ingest_live(db_session)
+    set_stored(db_session, owner="NEWER OWNER")
+    archive = RawArchive(raw_sources)
+    archive_parcel(archive)
+
+    counts = replay_parcels(archive)
+
+    assert stored_property(db_session).owner == "NEWER OWNER"
+    assert (counts.replayed, counts.skipped_newer) == (0, 1)
+
+
+def test_a_parcel_scraped_just_after_its_page_was_archived_is_still_replayed(
+    db_session, raw_sources
+):
+    # A normal scrape archives the page, then the pipeline writes the row a moment later.
+    archive = RawArchive(raw_sources)
+    archive_parcel(archive)
+    replay_parcels(archive)
+    set_stored(db_session, owner="OLD OWNER", updated_at=datetime(2026, 11, 1, 0, 5))
+
+    counts = replay_parcels(archive)
+
+    assert stored_property(db_session).owner != "OLD OWNER"
+    assert (counts.updated, counts.skipped_newer) == (1, 0)
+
+
+def test_replay_stamps_the_row_with_the_pages_own_time(db_session, raw_sources):
+    archive = RawArchive(raw_sources)
+    archive_parcel(archive)
+
+    replay_parcels(archive)
+
+    row = stored_property(db_session)
+    assert (row.created_at, row.updated_at) == (datetime(2026, 11, 1),) * 2
+
+
+def test_a_second_replay_is_not_skipped_by_the_first(db_session, raw_sources):
+    # Replay must be repeatable after each parser fix, so its own write cannot make
+    # the row look newer than the page.
+    archive = RawArchive(raw_sources)
+    archive_parcel(archive)
+    replay_parcels(archive)
+    set_stored(db_session, owner="CHANGED SINCE")
+
+    counts = replay_parcels(archive)
+
+    assert stored_property(db_session).owner != "CHANGED SINCE"
+    assert (counts.updated, counts.skipped_newer) == (1, 0)
 
 
 def test_replay_does_not_write_the_archive(db_session, raw_sources):

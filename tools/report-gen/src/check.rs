@@ -117,7 +117,7 @@ fn is_filled(value: &Value) -> bool {
 /// - the hundred in "1200 block of Main St", at the start of a comma-separated part;
 /// - an ordinal, such as "1st" or "11th";
 /// - a road number after Route, Rte, RT, NH, US, VT, I or Interstate;
-/// - a number after Exit or "mile marker".
+/// - a number after Exit, Mile or "mile marker".
 ///
 /// So "12 Main St", "12-14 Main St", "No. 12 Main St", "Smith Residence 12 Main St", "Lot 5"
 /// and "Apt 12" fail, and so does any digit that is not ASCII.
@@ -152,7 +152,17 @@ fn digits_are_explained(before: &str, digits: &str, after: &str) -> bool {
         || is_ordinal(after)
         || matches!(
             last_word(before).as_str(),
-            "route" | "rte" | "rt" | "nh" | "us" | "vt" | "i" | "interstate" | "exit" | "marker"
+            "route"
+                | "rte"
+                | "rt"
+                | "nh"
+                | "us"
+                | "vt"
+                | "i"
+                | "interstate"
+                | "exit"
+                | "mile"
+                | "marker"
         )
 }
 
@@ -377,6 +387,7 @@ mod tests {
             "I-89 Exit 18",
             "Exit 18 on I-89",
             "I-89 mile marker 12",
+            "I-89 Mile 12",
             "Interstate 89",
             "1st Ave",
             "2nd St",
@@ -406,6 +417,7 @@ mod tests {
             "Smith residence, 12 Main St",
             "Mascoma Apartments Apt 12",
             "Lot 5",
+            "Unit 4",
             "Route 12 Apt 5",
             "1050 block of Main St",
             "0200 block of Main St",

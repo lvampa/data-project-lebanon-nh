@@ -508,7 +508,7 @@ Pre-deploy check (11.16 to 11.18):
 - `deploy.sh` runs it after the export and before the build, so a failure stops the deploy before anything is uploaded.
 - It also fails when `incidents.json` `location`, or `addresses.json` `raw_address` or `normalized_address`, holds a number that could name a home.
   It fails closed: every run of digits has to be one of the forms the public set uses, or the value fails.
-  The allowed forms are the hundred of "1200 block of Main St" at the start of a comma-separated part, an ordinal such as "1st", a road number after Route, Rte, RT, NH, US, VT, I or Interstate, and a number after Exit or "mile marker".
+  The allowed forms are the hundred of "1200 block of Main St" at the start of a comma-separated part, an ordinal such as "1st", a road number after Route, Rte, RT, NH, US, VT, I or Interstate, and a number after Exit, Mile or "mile marker".
   So "12 Main St", "12-14 Main St", "No. 12 Main St", "Smith Residence 12 Main St", "Lot 5" and "Apt 12" fail, and so does any digit that is not ASCII.
   "1200 block of Main St", "Route 120", "I-89 Exit 18" and "1st Ave" pass.
 - Block level is not fully rechecked here, because the file doesn't carry the location kind: a block-shaped value that is not a whole hundred, such as "1050 block of Main St", fails, but a street-only value is not compared with the street list; the dbt check in 14.5 covers that.

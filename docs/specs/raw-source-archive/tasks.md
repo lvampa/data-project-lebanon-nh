@@ -74,7 +74,7 @@ This is the pull request Connor should read most closely, with police PR 2b: tog
   - The legacy copy, `maintenance.archive_raw_text`, and the migration guard ship in police PR 2b, with the drop they protect.
   - _Requirements: 8.2, 8.4 to 8.8, 8.10, 8.12_
 
-- [ ] 9. Add the daily backup
+- [x] 9. Add the daily backup
   - The `mongo_backup` DAG with `mongodump --gzip --archive` into `/opt/backups/mongo`, keeping the 7 newest.
   - The bind mount in `compose.yml`, `${MONGO_BACKUP_DIR:-${HOME}/backups/data-project/mongo}:/opt/backups/mongo`, on the Airflow services, and a commented `MONGO_BACKUP_DIR` entry in `.env.example` showing the default.
   - The DAG's first step checks the folder is writable and fails with a message naming it when it is missing or not writable.
@@ -84,9 +84,10 @@ This is the pull request Connor should read most closely, with police PR 2b: tog
   - A DAG structure test.
   - _Requirements: 7.1 to 7.5_
 
-- [ ] 10. Add the check command
+- [x] 10. Add the check command
   - Size and versions per source with the 5 GB warning.
   - Log PDFs with an archived body and text-only ones, counted, with the text-only ones listed by URL; log PDFs with neither; parcels with no version; `ai` normalizations with a null `ai_call_id`.
+  - The `ai_call_id` line lands with police log PR 4, which adds the normalization tables.
   - It is in this pull request because the gate below runs it.
   - Document `check` and `restore-check` in `scrapers/README.md`.
   - _Requirements: 2.5, 4.5_

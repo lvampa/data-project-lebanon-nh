@@ -88,6 +88,34 @@ List every version of one source key, newest first, with its fetch time, content
 uv run python -m maintenance.raw_sources versions --source vgsi_parcel --key 1000
 ```
 
+Report what the archive holds: versions and size per source, and which finished log PDFs have an archived body.
+It also lists parcels with no archived page.
+It lists the ones with no body, and exits non-zero while there are any.
+```bash
+uv run python -m maintenance.raw_sources check
+```
+
+### Backups
+
+The `mongo_backup` DAG writes a gzipped `mongodump` of the archive's database every day at 2am, and keeps the 7 newest.
+It writes to `~/backups/data-project/mongo` on the host, or to `MONGO_BACKUP_DIR` when `.env` sets it.
+
+Create the folder before the first run, as the user that runs Docker:
+```bash
+mkdir -p ~/backups/data-project/mongo
+```
+If Docker creates it for the bind mount instead, root owns it, and the Airflow user cannot write to it on Linux or in CI.
+The DAG then fails with a message that names the folder.
+The folder is on the same disk as the Docker volume unless you point it elsewhere, so it survives a lost volume but not a failed disk.
+
+Check that a backup restores, into the `scraped_data_restore_test` database, which is dropped afterwards.
+`mongorestore` is installed in the Airflow image, so run it there, where the folder is `/opt/backups/mongo`:
+```bash
+docker compose exec -w /opt/project/scrapers airflow-scheduler \
+  uv run --frozen python -m maintenance.raw_sources restore-check \
+  /opt/backups/mongo/scraped_data-20261107T020000Z.archive.gz
+```
+
 ## Project Structure
 
 ```

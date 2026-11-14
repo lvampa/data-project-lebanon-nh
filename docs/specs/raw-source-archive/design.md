@@ -149,8 +149,13 @@ raw_sources restore-check BACKUP
 - Parcel replay: build a Scrapy `HtmlResponse` from the newest version's body and URL, call `VgsiPropertySpider.parse_parcel`, and pass each item through `PropertyPipeline` (4.2).
 - Replay reads the archive and never writes it (4.3), and logs the counts in 4.4.
 - `check` reports size and versions per source, counts log PDFs with an archived body and text-only ones, lists the text-only ones by URL, lists log PDFs with neither, parcels with none, and `ai` normalizations with a null `ai_call_id` (2.5, 4.5).
+  A truncated PDF version counts as no body.
+  It exits non-zero while any `complete` or `error` log PDF has neither, so the gate before police PR 2b can run it.
+  The `ai_call_id` line lands with police log PR 4, which adds the normalization tables.
 - `versions` lists one key's versions (4.6).
 - `restore-check` restores a backup into `scraped_data_restore_test` and compares document counts with the live archive (7.5).
+  The live database only grows, so it fails when a live collection is empty in the restore, or the restore holds more than live.
+  It drops the restore database afterwards, and runs in the Airflow image, which has `mongorestore`.
 
 ### AI call log
 
@@ -169,7 +174,8 @@ The default uses `${HOME}` so the path is absolute whether or not the shell or C
 `mongodump` is part of MongoDB Database Tools, which the Airflow image does not have, so `docker/Dockerfile.airflow` installs the `mongodb-database-tools` package.
 Running it inside Airflow, rather than as a separate compose service from the `mongo:8` image, means a failed backup shows as a failed DAG run (7.4).
 It deletes backups older than the 7 newest (7.3) and fails the task on a non-zero exit (7.4).
-The DAG's first step checks the folder exists and is writable, and fails with a message that names it, before `mongodump` starts.
+The DAG has one task, `python maintenance/mongo_backup.py`, like the other DAGs; its first step checks the folder exists and is writable, and fails with a message that names it, before `mongodump` starts.
+`mongodump` and `mongorestore` get the password through a `--config` file, not the command line, so it stays out of the process list and the task log.
 The host folder is created by hand before the first run, because when Docker creates a missing bind-mount folder it is owned by root, and the Airflow user (uid 50000) cannot write to it.
 Docker Desktop on a Mac usually hides this, but CI and any Linux host do not.
 Unless it points at another disk, the bind mount is on the same disk as the `mongo_data` volume, so it protects against a lost volume but not a failed disk.

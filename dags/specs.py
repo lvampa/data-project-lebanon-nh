@@ -113,6 +113,15 @@ SPECS = [
         tags=("budget",),
     ),
     DagSpec(
+        dag_id="mongo_backup",
+        schedule="0 2 * * *",  # 2am daily
+        cwd="scrapers",
+        # The raw source archive holds the only copy of some originals.
+        command="python maintenance/mongo_backup.py",
+        timeout=timedelta(hours=1),
+        tags=("archive",),
+    ),
+    DagSpec(
         dag_id="sync_elasticsearch",
         schedule=None,
         command="python scripts/sync/sync_es.py",

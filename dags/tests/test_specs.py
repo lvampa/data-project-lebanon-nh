@@ -76,14 +76,21 @@ def test_triggered_dags_have_no_schedule():
         assert SPECS_BY_ID[dag_id].schedule is None, dag_id
 
 
+def test_the_mongo_backup_runs_daily():
+    spec = SPECS_BY_ID["mongo_backup"]
+    assert spec.schedule is not None
+    minute, hour, day, month, weekday = spec.schedule.split()
+    assert (day, month, weekday) == ("*", "*", "*")
+
+
 def test_llc_lookup_runs_after_vgsi_property():
     assert "llc_lookup" in SPECS_BY_ID["vgsi_property"].triggers
 
 
 def test_every_indexed_source_leads_to_elasticsearch_sync():
     # Budget documents are not indexed; budget data reaches Elasticsearch
-    # through scripts/ingest, which no DAG runs.
-    not_indexed = {"sync_elasticsearch", "budget_discovery"}
+    # through scripts/ingest, which no DAG runs. The backup writes no records.
+    not_indexed = {"sync_elasticsearch", "budget_discovery", "mongo_backup"}
     for spec in SPECS:
         if spec.dag_id not in not_indexed:
             assert "sync_elasticsearch" in downstream_of(spec.dag_id), spec.dag_id

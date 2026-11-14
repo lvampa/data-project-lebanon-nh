@@ -40,7 +40,7 @@ def list_incidents(
     ).all()
 
     return Page[Incident](
-        total=total,
+        total=total or 0,
         page=paging.page,
         per_page=paging.per_page,
         items=[Incident.model_validate(r) for r in rows],

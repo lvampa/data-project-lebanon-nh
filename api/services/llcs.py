@@ -16,7 +16,7 @@ def list_llcs(
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.scalars(paging.apply(stmt.order_by(LlcModel.name))).all()
     return Page[Llc](
-        total=total,
+        total=total or 0,
         page=paging.page,
         per_page=paging.per_page,
         items=[Llc.model_validate(r) for r in rows],

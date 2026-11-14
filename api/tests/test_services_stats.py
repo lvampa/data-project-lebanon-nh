@@ -11,7 +11,7 @@ def _db(*rows):
 
 
 def test_by_type_returns_top_twenty_types():
-    db = _db({"incident_type": "MV Stop", "count": 8})
+    db = _db({"incident_type": "MV Stop", "total": 8})
 
     result = stats.by_type(db)
 
@@ -23,7 +23,7 @@ def test_by_type_returns_top_twenty_types():
 
 
 def test_by_hour_buckets_on_reported_hour():
-    db = _db({"hour": 14.0, "count": 3})
+    db = _db({"hour": 14.0, "total": 3})
 
     result = stats.by_hour(db)
 
@@ -34,7 +34,7 @@ def test_by_hour_buckets_on_reported_hour():
 
 
 def test_by_weekday_names_days_from_sunday():
-    db = _db({"dow": 0, "count": 5}, {"dow": 6, "count": 2})
+    db = _db({"dow": 0, "total": 5}, {"dow": 6, "total": 2})
 
     result = stats.by_weekday(db)
 

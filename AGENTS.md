@@ -72,6 +72,7 @@ scrapers/items/           Scrapy Item definitions
 scrapers/models/          Pydantic validation models (spider → pipeline boundary)
 scrapers/pipelines.py     Items → PostgreSQL
 dags/                     Airflow DAGs (orchestration)
+shared/locations/         Canonical address rules and geocoding (workspace package)
 shared/mongo/             MongoDB client (workspace package)
 shared/postgres/          SQLAlchemy models + Alembic migrations (workspace package)
 api/                      FastAPI (geocoding)

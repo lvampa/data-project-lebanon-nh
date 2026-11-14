@@ -8,10 +8,10 @@ def test_incident_type_category_fields():
     cat = IncidentTypeCategory(
         raw_incident_type="Telephone Harassment",
         category="Disturbance",
-        subcategory=None,
+        normalized_type=None,
         created_at=now,
         updated_at=now,
     )
     assert cat.raw_incident_type == "Telephone Harassment"
     assert cat.category == "Disturbance"
-    assert cat.subcategory is None
+    assert cat.normalized_type is None

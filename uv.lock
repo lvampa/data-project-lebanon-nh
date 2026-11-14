@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -264,6 +264,7 @@ source = { virtual = "api" }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
+    { name = "locations" },
     { name = "logfire", extra = ["fastapi"] },
     { name = "postgres" },
     { name = "pydantic-settings" },
@@ -274,6 +275,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.162.0" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "locations", editable = "shared/locations" },
     { name = "logfire", extras = ["fastapi"], specifier = ">=5.4.0" },
     { name = "postgres", editable = "shared/postgres" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
@@ -1305,6 +1307,12 @@ wheels = [
 name = "locations"
 version = "0.1.0"
 source = { editable = "shared/locations" }
+dependencies = [
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "httpx", specifier = ">=0.27.0" }]
 
 [[package]]
 name = "logfire"

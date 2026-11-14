@@ -13,7 +13,7 @@ WRITE_ROUTES = [
         "/api/addresses/1%20Main%20St",
         {"normalized_address": "1 Main St", "geocode": False},
     ),
-    ("/api/categories/MV%20Stop", {"category": "Traffic", "subcategory": None}),
+    ("/api/categories/MV%20Stop", {"category": "Traffic", "normalized_type": None}),
     ("/api/llcs/1/status", {"lookup_status": "complete"}),
 ]
 
@@ -51,7 +51,7 @@ def test_write_with_correct_token_passes_through(mock_db):
     headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
     resp = TestClient(app).patch(
         "/api/categories/MV%20Stop",
-        json={"category": "Traffic", "subcategory": None},
+        json={"category": "Traffic", "normalized_type": None},
         headers=headers,
     )
 
@@ -65,7 +65,7 @@ def test_write_rejected_when_token_not_configured(mock_db, monkeypatch):
     headers = {"Authorization": "Bearer anything"}
     resp = TestClient(app).patch(
         "/api/categories/MV%20Stop",
-        json={"category": "Traffic", "subcategory": None},
+        json={"category": "Traffic", "normalized_type": None},
         headers=headers,
     )
 

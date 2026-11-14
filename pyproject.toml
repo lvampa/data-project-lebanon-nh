@@ -103,9 +103,5 @@ matches = "scrapers/settings.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
-matches = "scrapers/maintenance/categorize_incident_types.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
 matches = "scrapers/spiders/vgsi_property.py"
 errors = { implicit-any = false, missing-override-decorator = false }

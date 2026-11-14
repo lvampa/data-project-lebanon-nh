@@ -59,6 +59,8 @@ def test_command_target_exists(spec):
     match spec.command.split():
         case ["scrapy", "crawl", spider, *_]:
             assert spider in spider_names()
+        case ["python", "-m", module, *_]:
+            assert (REPO_ROOT / spec.cwd / f"{module.replace('.', '/')}.py").is_file()
         case ["python", script, *_]:
             assert (REPO_ROOT / spec.cwd / script).is_file()
         case _:
@@ -94,3 +96,16 @@ def test_every_indexed_source_leads_to_elasticsearch_sync():
     for spec in SPECS:
         if spec.dag_id not in not_indexed:
             assert "sync_elasticsearch" in downstream_of(spec.dag_id), spec.dag_id
+
+
+def test_the_police_log_reprocess_is_run_by_hand_and_nothing_triggers_it():
+    spec = SPECS_BY_ID["police_log_reprocess"]
+    assert spec.schedule is None
+    assert all("police_log_reprocess" not in other.triggers for other in SPECS)
+
+
+def test_the_police_log_reprocess_takes_a_date_range_or_everything():
+    spec = SPECS_BY_ID["police_log_reprocess"]
+    assert set(spec.params) == {"date_from", "date_to"}
+    assert "--from '{{ params.date_from }}' --to '{{ params.date_to }}'" in spec.command
+    assert "--all" in spec.command

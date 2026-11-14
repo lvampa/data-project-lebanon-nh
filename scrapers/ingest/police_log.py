@@ -4,12 +4,15 @@ The process job calls this for a fresh download and the reprocess job for stored
 text, so both write entries the same way.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any, cast
 
 import logfire
 from models.police_log import PoliceLogRecord
+from mongo.archive import RawArchive
+from mongo.raw_text import ENTRY_TEXT_SOURCE, entry_text
 from parsers.police_log import (
     EXTRACTOR_VERSION,
     PARSER_VERSION,
@@ -124,6 +127,24 @@ def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCount
     )
     _warn_on_unread_headers(pdf_url, counts)
     return counts
+
+
+def archive_entry_texts(
+    archive: RawArchive, texts: Iterable[EntryText], spider: str
+) -> None:
+    """Write each entry's raw text to the archive, best-effort like all archive writes."""
+    fetched_at = datetime.now(UTC)
+    for text in texts:
+        version = entry_text(
+            source_url=text.source_url,
+            raw_text=text.raw_text,
+            raw_reason_action=text.raw_reason_action,
+            parser_version=text.parser_version,
+            fetched_at=fetched_at,
+            spider=spider,
+        )
+        archive.add(ENTRY_TEXT_SOURCE, text.case_number, version)
+    archive.flush()
 
 
 def _utc_now() -> datetime:

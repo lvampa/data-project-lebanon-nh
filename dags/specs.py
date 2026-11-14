@@ -103,6 +103,32 @@ SPECS = [
         triggers=("sync_elasticsearch",),
     ),
     DagSpec(
+        dag_id="police_log_reprocess",
+        schedule=None,
+        cwd="scrapers",
+        # Reparses archived PDFs after a parser fix. Leave both dates empty for all.
+        command=(
+            "python -m maintenance.reprocess_police_logs "
+            "{% if params.date_from %}--from '{{ params.date_from }}' "
+            "--to '{{ params.date_to }}'{% else %}--all{% endif %}"
+        ),
+        timeout=timedelta(hours=2),
+        tags=("police-log",),
+        triggers=("sync_elasticsearch",),
+        params={
+            "date_from": {
+                "default": "",
+                "type": "string",
+                "description": "First log date to reprocess (YYYY-MM-DD); empty for all",
+            },
+            "date_to": {
+                "default": "",
+                "type": "string",
+                "description": "Last log date to reprocess (YYYY-MM-DD); empty for all",
+            },
+        },
+    ),
+    DagSpec(
         dag_id="budget_discovery",
         # Monthly because the budget publish date varies. Budget documents are
         # not indexed, so this does not trigger the Elasticsearch sync.

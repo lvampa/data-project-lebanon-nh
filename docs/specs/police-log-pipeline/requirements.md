@@ -266,7 +266,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 6. IF the processing, normalization, or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
    IF the consumer model build fails, THEN THE scheduler SHALL NOT run the search sync.
 7. WHEN a stage fails after its retries, THE scheduler SHALL show the run as failed and log the stage name and reason.
-8. WHEN the scheduler containers start, THE init service SHALL apply the database migrations before any police log job runs.
+8. THE README SHALL document the one command that applies the database migrations, and THE operator SHALL run it by hand before any police log job runs. Nothing applies them at startup.
 9. THE scheduler SHALL NOT run the public export or deploy the site.
    The public export is written from the consumer models when `deploy.sh` runs, and the files are not committed.
 

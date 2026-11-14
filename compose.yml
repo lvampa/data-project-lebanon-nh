@@ -56,8 +56,6 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
 
   mongo:
     image: mongo:8
@@ -137,31 +135,12 @@ services:
         --firstname Admin --lastname User --role Admin
         --email admin@example.com || true)
 
-  # Applies the Postgres migrations and creates the MongoDB indexes once, so no job
-  # or API request sees an old schema.
-  migrate:
-    <<: *airflow-common
-    restart: "no"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-    entrypoint: /bin/bash
-    command:
-      - -c
-      - >-
-        /opt/project/.venv/bin/alembic -c /opt/project/shared/postgres/alembic.ini upgrade head &&
-        /opt/project/.venv/bin/python -c "from mongo import init_indexes; init_indexes()"
-
   airflow-webserver:
     <<: *airflow-common
     restart: unless-stopped
     depends_on:
       <<: *airflow-depends
       airflow-init:
-        condition: service_completed_successfully
-      migrate:
         condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
@@ -173,8 +152,6 @@ services:
     depends_on:
       <<: *airflow-depends
       airflow-init:
-        condition: service_completed_successfully
-      migrate:
         condition: service_completed_successfully
     environment:
       <<: *airflow-env

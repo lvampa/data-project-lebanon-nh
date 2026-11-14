@@ -11,7 +11,7 @@ File counts are estimates and include tests.
 
 | PR | What ships | Files |
 |---|---|---|
-| 1 | Test harness, ported tests, migrations at startup | about 15 |
+| 1 | Test harness, ported tests, migrations by hand | about 15 |
 | 2 | Entry schema, one ingest function, process job | about 20 |
 | 3 | Parser fixes, reprocess, operator commands | about 20 |
 | 4 | Normalization records, locations package, correction API | about 34 |
@@ -33,7 +33,7 @@ QA still checks them in task 24.
 - [x] 6.12 A failed geocode on PATCH keeps the coordinates.
 - [x] 12.4 One run at a time, for the existing DAGs.
 
-## PR 1: Test harness, ported tests, migrations at startup
+## PR 1: Test harness, ported tests, migrations by hand
 
 About 15 files.
 No behavior change.
@@ -52,8 +52,9 @@ The three spec files ride along in this pull request.
   - Delete `FakeSession`.
   - _Requirements: 13.6_
 
-- [x] 3. Run migrations at startup
-  - A one-shot `migrate` service in compose that the Airflow services wait for.
+- [x] 3. Document running migrations by hand
+  - A README section with the one command, `uv run alembic -c shared/postgres/alembic.ini upgrade head`, run from the repo root against the compose Postgres. No compose service runs it.
+  - The test harness still migrates its own test database to head; that is separate.
   - _Requirements: 12.8_
 
 ## PR 2: Entry schema, one ingest function, process job

@@ -13,6 +13,14 @@ dev = [
     "ruff>=0.15.16",
 ]
 
+[tool.pytest.ini_options]
+# pytest stats every entry in the folder it collects from, `.env` included. In the
+# agents' Claude Code sandbox that read is denied, and collection stops with a
+# PermissionError (Python 3.12's Path.is_dir raises on it). Skip these before pytest
+# looks. The leading `/` is needed: pytest makes each glob absolute, and fnmatch's `*`
+# crosses slashes, so it matches a `.env` at any depth.
+addopts = ["--ignore-glob=/*/.env", "--ignore-glob=/*/.env.*"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py312"

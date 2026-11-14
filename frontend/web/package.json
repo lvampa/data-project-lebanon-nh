@@ -18,7 +18,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "lucide-react": "catalog:",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.16.0",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

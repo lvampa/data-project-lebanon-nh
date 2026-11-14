@@ -1,0 +1,14 @@
+# Read with DBT_PROFILES_DIR=transform. The same variables as shared/postgres/client.py,
+# so dbt, Alembic and the app always point at one database. Tests set POSTGRES_DB=app_test.
+lebanon:
+  target: default
+  outputs:
+    default:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | as_number }}"
+      user: "{{ env_var('POSTGRES_USER', 'app') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'app') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'app') }}"
+      schema: marts
+      threads: 4

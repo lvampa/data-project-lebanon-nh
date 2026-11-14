@@ -1,0 +1,31 @@
+-- Entries that are incidents: parse_error not set (requirements glossary).
+select
+    id as entry_id,
+    case_number,
+    log_date,
+    reported_at,
+    call_source,
+    incident_type as raw_incident_type,
+    {{ fold_key('incident_type') }} as incident_type_key,
+    disposition,
+    disposition_unmatched,
+    location as raw_location,
+    {{ fold_key('location') }} as location_key,
+    place_code,
+    officer,
+    officer_code,
+    reference_number,
+    refer_to,
+    dispatched_at,
+    enroute_at,
+    arrived_at,
+    cleared_at,
+    response_seconds,
+    scene_seconds,
+    missing_from_parse,
+    parser_version,
+    source_url,
+    created_at,
+    updated_at
+from {{ source('app', 'log_entries') }}
+where parse_error = false

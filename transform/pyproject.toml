@@ -1,0 +1,13 @@
+[project]
+name = "transform"
+version = "0.1.0"
+description = "dbt consumer models and data checks over the Postgres tables"
+requires-python = ">=3.12"
+dependencies = [
+    "dbt-core>=1.12,<2",
+    "dbt-postgres>=1.11,<2",
+]
+
+# A dbt project, not an importable package: uv installs its dependencies only.
+[tool.uv]
+package = false

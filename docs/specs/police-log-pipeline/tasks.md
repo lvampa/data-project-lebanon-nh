@@ -17,13 +17,14 @@ File counts are estimates and include tests.
 | Archive 1b | Raw source archive: reads, AI call log, LLC and budget sources, parcel replay (archive spec) | about 16 |
 | Archive 1c | Raw source archive: backup and check command (archive spec) | about 10 |
 | 2 | Entry schema, one ingest function, process job, entry texts to the archive | about 32 |
-| 2b | Move the raw text columns to the archive: legacy copy, guarded drop | about 18 |
+| 2b | Drop the raw text columns (plain drop) | about 6 |
 | 3 | Parser fixes, reprocess from the archive, operator commands | about 22 |
 | 4 | Normalization records, locations package, correction API | about 34 |
 | 5 | Rule pass, AI normalization job, and geocode job | about 28 |
 | 6 | Evaluation set and the Ollama backend | about 12 |
 | 7 | dbt consumer models and data checks | about 22 |
-| 8 | API, admin search, and export read the models | about 14 |
+| 8a | report-gen reads the public models, plus the pre-deploy check | about 8 |
+| 8b | Admin API and admin search read the models | about 10 |
 | 9 | Daily schedule (no normalize task) | about 8 |
 | Search | `/api/search` on Postgres, in the search spec | about 12 |
 | Follow-up | Remove Elasticsearch | about 25 |
@@ -61,18 +62,19 @@ The three spec files ride along in this pull request.
 
 - [x] 3. Document running migrations by hand
   - A README section with the one command, `uv run migrate`, run from the repo root against the compose Postgres. It runs `alembic upgrade head`, then creates the MongoDB indexes. No compose service runs it.
+    Task 19 adds the dbt steps.
   - The test harness still migrates its own test database to head; that is separate.
   - _Requirements: 12.8_
 
 ## PR 2: Entry schema, one ingest function, process job
 
 About 32 files.
-It builds on archive PR 1a and drops nothing, so it needs no gate.
+It builds on archive PR 1a and drops nothing.
 This is the pull request that changes how entries are written, so it ships alone; the column drop follows in PR 2b.
+Nothing is live, so no migration keeps or backfills data: the database is reset and rescraped (2026-11-13).
 
 - [x] 4. Add the `log_entries` and `pdf_urls` columns
-  - One Alembic migration with the columns in design.md, `case_number` and `log_date` NOT NULL, `created_at` from `scraped_at`.
-  - Backfill `log_date` from the URL record, else from `reported_at`, and fail the migration if any row is still null.
+  - One Alembic migration with the columns in design.md, and `case_number` and `log_date` NOT NULL, with no backfill.
   - Keep adding `officer_code`, `refer_to`, and the entry `parser_version`; the raw text columns are dropped in PR 2b.
   - Add `pdf_urls.content_hash`, `parser_version`, and `extractor_version`.
   - Update the ORM models and `PoliceLogRecord` (`extra="forbid"`, required `case_number` and `log_date`).
@@ -81,7 +83,7 @@ This is the pull request that changes how entries are written, so it ships alone
 - [x] 5. Add `ingest_log_text`
   - Parse, validate, and upsert one PDF's entries from `model_dump()`, guarded so unchanged rows are not touched and the later log date wins.
   - Count parsed, inserted, updated, unchanged, skipped, missing, and header lines; set and clear `missing_from_parse`.
-  - Tests: the upsert, a skipped invalid entry, an entry with no case number, the later-date rule with the older PDF second, an entry stored before this pull request is updated by a fresh ingest, and a second call that changes no row.
+  - Tests: the upsert, a skipped invalid entry, an entry with no case number, the later-date rule with the older PDF second, and a second call that changes no row.
   - _Requirements: 1.1, 1.4, 2.4, 2.5, 2.12, 2.13, 2.14, 13.6_
 
 - [x] 6. Move the process job onto `ingest_log_text`
@@ -93,17 +95,16 @@ This is the pull request that changes how entries are written, so it ships alone
   - Point the `process_urls` DAG spec at the runner.
   - _Requirements: 1.4, 2.7, 2.8, 2.15, 4.11_
 
-## PR 2b: Move the raw text columns to the archive
+## PR 2b: Drop the raw text columns
 
-About 18 files.
-It does not ship until the gate in the raw source archive's tasks.md holds.
+About 6 files.
 
-- [x] 6b. Copy and drop the raw text columns
-  - `maintenance.archive_raw_text`: copy every `pdf_urls.raw_text` and every Mongo `urls` stored text to `police_log_text`, and every `log_entries` row's `raw_text` and `raw_reason_action` to `police_log_entry_text`, with the counts, a non-zero exit when one falls short, and a second run that changes nothing.
-  - The migration that drops `pdf_urls.raw_text`, `log_entries.raw_text`, `raw_reason_action`, and `scraped_at`, stopping before any drop when a value is not archived. The downgrade re-adds the columns, empty.
+- [x] 6b. Drop the raw text columns
+  - A plain migration that drops `pdf_urls.raw_text`, `log_entries.raw_text`, `raw_reason_action`, and `scraped_at`. The downgrade re-adds them, empty.
+    There is no legacy copy and no archive check, because the database is reset (2026-11-13).
   - Drop `raw_text` from the incident document in `scripts/sync/sync_es.py`.
-  - Tests: the copy, its counts, the second run, and the migration refusing to drop when a value is missing.
-  - _Requirements: 1.4, 1.6; raw source archive 8.4 to 8.8, 8.12_
+  - Test: the migration runs up and down.
+  - _Requirements: 1.4, 1.6_
 
 ## PR 3: Parser fixes, reprocess from the archive, operator commands
 
@@ -129,9 +130,6 @@ About 22 files.
 - [x] 9. Add the operator CLI
   - `errors`, `reset <url>...`, and `unmatched-dispositions`.
   - _Requirements: 2.11, 3.7_
-
-The 343 entries stored before this work are not repaired by reprocess, because their PDFs were never archived.
-They are repaired when discovery adds their three PDFs again and the process job downloads and archives them.
 
 ## PR 4: Normalization records, locations package, correction API
 
@@ -239,10 +237,11 @@ Nothing reads the models yet, so this ships alone.
   - First step: confirm dbt-postgres resolves in the workspace's single `uv.lock`. If it does not, `transform/` becomes its own project outside the workspace.
   - `transform/` with the staging and marts models in design.md, built as views in a `marts` schema.
   - The dbt tests in design.md, with the disposition seed generated from the parser's list before each build.
-  - The `public_location` macro, including the under-100 rule, used by the public models.
-  - Change the `migrate` service in `compose.yml` from PR 1, and add a separate test fixture, so both drop `marts`, run the migrations, then `dbt run`.
+  - The `public_location` macro, including the under-100 rule, used by the public models, plus `public_properties` with `owner` and `owner_address` empty.
+  - Extend `uv run migrate` (`scripts.migrate:main`, from #27): drop `marts` before Alembic, and run `dbt build` after `init_indexes()`, stopping at the first failure. Update its README line.
+    It replaces the compose `migrate` service, which is removed in #26. The `app_dbt_test` fixture stays as it is.
   - Tests: a passing build on good rows, one bad row per check that fails it, and a migration that drops a column a model uses still upgrades.
-  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 14.1 to 14.6_
+  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 11.19 to 11.21, 12.8, 14.1 to 14.9_
 
 ## PR 8: API, admin search, and export read the models
 
@@ -261,11 +260,25 @@ About 14 files.
   - Tests: every word must match; "Hanovr", "Hanpver", "Mxple", and "Maxle" find "Hanover" and "Maple"; "hannafords" finds "HANNAFORD'S"; "13339" finds "26-13339"; "St", "Main", "26", and "Mapel" do not fuzzy-match; a normalized address finds every raw spelling; a saved correction shows on the next request; parse errors are left out.
   - _Requirements: 10.1 to 10.13_
 
-- [ ] 21. Read the public models in `report-gen`
-  - Plain selects from the three public models; remove the joins and the 2,000 row cap.
-  - Keep today's field names and the `addresses.json` shape; write the new fields.
-  - The export keeps running from `deploy.sh` at deploy time; its files are not committed.
-  - _Requirements: 11.3 to 11.12, 12.9_
+Task 21 ships first, as PR 8a, stacked on PR 7, because it is the go-live gate.
+Task 20 follows as PR 8b.
+
+- [ ] 21a. Read the public models in `report-gen`
+  - Replace the incidents, addresses, properties and stats queries with selects from the `marts.public_*` views, using the field mapping in design.md, "Public export".
+  - Remove `INCIDENT_LIMIT` and the joins. Add `category`, `normalized_type`, `lat`, `lng` and `coordinate_precision` to `Incident`, and `by_category` to `Stats`. Leave staff as it is.
+  - Rust unit test: the stats shaping from `public_stats` rows, including not-yet-normalized incidents.
+  - _Requirements: 11.1 to 11.5, 11.8, 11.11 to 11.15_
+
+- [ ] 21b. Add the pre-deploy check
+  - A `report-gen check --dir <dir>` subcommand, and the call in `deploy.sh` between `generate_report.sh` and `bun run build`.
+  - Rust unit tests on JSON in a temp dir: clean files pass; each of the four fields, when non-empty, fails with the file, field and count; a missing file fails.
+  - _Requirements: 11.16, 11.17, 11.18, 12.9_
+
+- [ ] 21c. Test the export end to end
+  - In `transform/tests/`, after `dbt run` on the `app_dbt_test` fixture, run `report-gen` with `DATABASE_URL` pointing at it, into `tmp_path`.
+  - Assert: today's field names are all present, plus the new ones; `officer`, `reference_number`, `owner` and `owner_address` are empty; only in-window incidents are present; `addresses.json` names hold the public location; `report-gen check` passes on the output and fails on a copy with one officer filled in.
+  - It builds report-gen with `cargo build -p report-gen` on first use. Confirm the CI test job has `cargo` and check the time it adds; if it's too slow, move this test into the Rust CI job with Postgres.
+  - _Requirements: 11.1 to 11.5, 11.12 to 11.18_
 
 ## PR 9: Daily schedule
 

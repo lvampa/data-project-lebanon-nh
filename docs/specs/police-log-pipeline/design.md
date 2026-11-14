@@ -371,7 +371,7 @@ The geocode job, `python -m scripts.normalize.geocode`, runs in the daily DAG. I
 It geocodes whatever has been normalized so far, so a value Connor normalizes today gets coordinates on the next daily run, or right away if he runs the same command on his Mac.
 
 - It takes `ai` and `rule` locations that have a normalized address and no coordinates, fewer than 3 attempts, and are not bare highways (6.3).
-- It takes the police log lock for its run, so it never overlaps the normalization job (16.5, 16.6).
+- It takes the police log lock for its run, so it never overlaps the normalization job (16.2, 16.3).
 - A place code that already has coordinates on another row supplies them, with `geocoded_via = 'place_code'` (6.2).
 - Otherwise it tries `geocode_query`, then the street alone, which gives an `approximate` result (6.9).
 - A limiter holds requests to 1 per second, and the job stops at 600 requests per run (6.7, 6.8).
@@ -514,7 +514,7 @@ One DAG, `police_log`, daily, replaces the `discover_urls` and `process_urls` sp
 discover ─► process (limit 100) ─► geocode ─► dbt build ─► watcher
 ```
 
-- There is no normalize task (12.2, 16.10).
+- There is no normalize task (12.2, 16.5).
   Geocode and the build work on whatever has been normalized so far.
   An entry whose values aren't normalized yet is still built, with empty normalized fields (8.12), and stays out of the public map until it is (11.9).
 - Process and geocode failures don't stop the stages after them; those tasks use `all_done` (12.6).
@@ -540,29 +540,11 @@ uv run python -m scripts.normalize.job --field location
 uv run python -m scripts.normalize.geocode          # optional: place today's values now
 ```
 
-- It reads `.env` from the repo root, like the other scripts.
-  `.env.example` already points `POSTGRES_HOST` and `MONGO_HOST` at `localhost`, and compose publishes both on `127.0.0.1` (16.2).
-  Inside the containers, compose sets the hosts to the service names, so nothing changes for the DAG.
-- It uses Connor's normal `claude` login from his Mac account.
-  There's no token in `.env`, and it refuses to run when `ANTHROPIC_API_KEY` is set (9.2, 16.3).
-- Each AI call still runs as in "AI backend": tools off, a new empty working directory, and no settings, hooks, or MCP servers.
-  The job runs in Connor's own account with his settings on disk, so this matters more on the host, not less (16.4).
-- It takes the police log lock first.
-  If the lock is held it exits with status 1 and "another police log job is running (process, reprocess, or geocode); try again when it finishes" (16.5).
-  `police_log_lock` moves from `scrapers/ingest/lock.py` to `shared/postgres` so `scripts/` can import it; the key stays the same.
-- If Postgres doesn't answer, it exits with status 1 and names the host and port (16.7).
-  If only MongoDB is down, it carries on and counts the lost call records (8.14).
-- It ends by printing a summary of at most 15 lines (16.8). For example:
-
-```
-incident_type  rules 0   ai 41  discarded 2  waiting 7
-location       rules 63  ai 38  discarded 4  waiting 12
-ai calls 4 of 10, call records lost 0
-exit 0
-```
-
-- Exit status: 1 when every AI call failed (8.11), the API key is set (9.2), the backend is missing or logged out (9.7), the lock is held (16.5), or Postgres is down (16.7). Otherwise 0, including a run with values still waiting (16.9).
-- Logfire gets the same summary, so a run shows next to the DAG runs.
+- It reads `.env` from the repo root like the other scripts; `.env.example` already points Postgres and MongoDB at `localhost`.
+- It uses Connor's `claude` login, with no token in `.env` (16.1). The AI calls still run as in "AI backend" (9.8).
+- It takes the police log lock first; if the lock is held, it exits with status 1 and says so (16.2, 16.3).
+  `police_log_lock` moves from `scrapers/ingest/lock.py` to `shared/postgres` so `scripts/` can import it, with the same key.
+- It logs the per-field counts in 8.10 and exits with status 1 when it can't run or every AI call fails (16.4).
 
 Optional later: a LaunchAgent. This is a sketch for docs only, and nothing is installed by the repo.
 
@@ -689,7 +671,7 @@ Each lands with the pull request that uses it.
 | AI gives a street not on the street list | Stored with a review mark. | 6.22 |
 | Street list empty (VGSI not scraped yet) | No location AI calls this run; an error is logged; the rule pass's place-code reuse still runs. | 6.23 |
 | Backend logged out or at its usage limit | No more AI calls this run. | 8.9 |
-| Every AI call fails | Job exits non-zero on the Mac; the daily DAG is unaffected. | 8.11, 16.9 |
+| Every AI call fails | Job exits non-zero on the Mac; the daily DAG is unaffected. | 8.11, 16.4 |
 | Geocoder miss or failure | Address kept, coordinates untouched, attempt counted. | 6.5, 6.6 |
 | Coordinates outside the city bounds | Discarded. | 6.4 |
 | A dbt test fails | Build fails and names the test and row count; the run shows failed. | 14.1, 14.6, 12.7 |

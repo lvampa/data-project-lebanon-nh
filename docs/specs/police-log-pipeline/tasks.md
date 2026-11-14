@@ -194,25 +194,22 @@ Task 15 needs PR 4's columns, and task 16 needs PR 4's `shared/locations` packag
   - Tests with `FakeBackend`: a rule-settled location never reaches the backend, a value with a stored normalization is never sent again, and a second `--redo` sends nothing.
   - Writes never touch `human` rows; `--redo` keeps the old value until a valid new one arrives; every call, failed or not, goes to `ai_calls` in MongoDB, best-effort.
   - The per-field summary log and the exit code.
-  - It runs on Connor's Mac as `uv run python -m scripts.normalize.job` from the repo root. Confirm the module path, read `.env`, and use the compose Postgres and MongoDB on localhost.
-  - Move `police_log_lock` from `scrapers/ingest/lock.py` to `shared/postgres` with the same key, update its two callers, and take it for the run. A held lock exits with status 1 and a message.
-  - An unreachable Postgres exits with status 1 before any AI call, naming the host and port.
-  - The printed summary of at most 15 lines, and the exit codes in design.md.
-  - Tests with `FakeBackend` for every AI row in design.md's error table, plus a held lock, Postgres down, and the summary's lines.
+  - It runs on Connor's Mac as `uv run python -m scripts.normalize.job` from the repo root; confirm the module path.
+  - Move `police_log_lock` from `scrapers/ingest/lock.py` to `shared/postgres` with the same key, and take it for the run. A held lock exits with status 1.
+  - Tests with `FakeBackend` for every AI row in design.md's error table, plus a held lock.
   - Each accepted item stores its call's `ai_call_id`; a test with MongoDB unreachable stores the normalizations and counts the lost call records.
-  - _Requirements: 1.2, 5.1, 5.3, 5.4, 6.1, 6.13, 6.18, 6.23, 6.24, 7.2, 7.9, 7.11, 7.13, 7.14, 8.6, 8.7, 8.8, 8.10, 8.11, 8.13, 8.14, 9.5, 9.6, 9.9, 16.1 to 16.9_
+  - _Requirements: 1.2, 5.1, 5.3, 5.4, 6.1, 6.13, 6.18, 6.23, 6.24, 7.2, 7.9, 7.11, 7.13, 7.14, 8.6, 8.7, 8.8, 8.10, 8.11, 8.13, 8.14, 9.5, 9.6, 9.9, 16.1 to 16.4_
 
 - [ ] 16. Add the geocode job
   - Place-code reuse, query then street fallback, the bounds check, 3 attempts, 600 requests per run, no bare highways, no `human` rows.
   - It takes `ai` and `rule` rows, and the police log lock.
   - Tests with a fake geocoder.
-  - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6, 6.8, 6.10, 16.6_
+  - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6, 6.8, 6.10, 16.3_
 
 - [ ] 16b. Document the Mac run
-  - Add the command, the prerequisites (`docker compose up -d postgres mongo`, `uv sync`, `claude` logged in) and the summary's meaning to the README's running section.
-    The LaunchAgent stays a sketch in design.md, and nothing is installed.
-  - QA: one real run on Connor's Mac with a batch of 10, which he does himself, since it uses his login.
-  - _Requirements: 16.1, 16.2, 16.3_
+  - Add the command to the README's running section: `docker compose up -d postgres mongo`, `uv sync`, then the command.
+  - QA: Connor runs one real batch of 10 himself, since it uses his login.
+  - _Requirements: 16.1_
 
 ## PR 6: Evaluation set and the Ollama backend
 
@@ -281,7 +278,7 @@ About 10 files.
   - A 60 minute timeout per task and a pool of size 1 shared with reprocess.
   - Remove the `discover_urls` and `process_urls` specs.
   - Structure tests, including one that the DAG has no normalize task.
-  - _Requirements: 12.1 to 12.7, 16.6, 16.10_
+  - _Requirements: 12.1 to 12.7, 16.3, 16.5_
 
 - [ ] 23. Deferred: make the AI call run in the Airflow image
   - Not built. Connor chose to run the normalization job on his Mac with his own login (design.md, "The AI normalizing runs by hand on Connor's Mac").

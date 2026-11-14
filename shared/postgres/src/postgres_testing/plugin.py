@@ -19,7 +19,9 @@ TEST_DATABASE = os.environ.get("TEST_POSTGRES_DB", "app_test")
 # so this has to be set before any test module or conftest imports it.
 os.environ["POSTGRES_DB"] = TEST_DATABASE
 
-ALEMBIC_INI = Path(__file__).resolve().parents[2] / "alembic.ini"
+# The workspace is installed from its source tree, so alembic.ini sits beside src/.
+POSTGRES_PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+ALEMBIC_INI = POSTGRES_PACKAGE_ROOT / "alembic.ini"
 
 # What a sessionmaker uses when it is not told otherwise.
 _DEFAULT_JOIN_TRANSACTION_MODE = "conditional_savepoint"

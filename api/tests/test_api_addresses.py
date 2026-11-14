@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from locations.geocode import GeocodeResult
+from locations.geocode import GeocodeResult, GeocodeUnavailable
 
 from api.config import Settings, get_settings
 from api.main import app
@@ -129,6 +129,23 @@ def test_patch_address_geocode_hit_sets_coords(mock_db, client):
     assert (params["lat"], params["lng"]) == (43.7, -72.3)
     assert params["geocoded_via"] == "nominatim"
     assert params["coordinate_precision"] == "approximate"
+
+
+def test_patch_address_with_the_geocoder_unavailable_keeps_existing_coords(
+    mock_db, client
+):
+    _stored(mock_db, 43.64, -72.25, "nominatim")
+    with patch("api.services.addresses.geocode", side_effect=GeocodeUnavailable("429")):
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={"normalized_address": "Timberwood Drive", "geocode": True},
+        )
+
+    assert resp.status_code == 200
+    stmt = executed_stmt(mock_db)
+    assert upsert_set_columns(stmt).isdisjoint(
+        {"lat", "lng", "geocoded_via", "coordinate_precision"}
+    )
 
 
 def test_patch_address_manual_coords_skip_geocoding(mock_db, client):

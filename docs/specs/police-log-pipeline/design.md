@@ -558,7 +558,7 @@ dbt tests are the data checks in requirement 14:
 | Every row inside the public window | `public_incidents` | 14.5 |
 | `officer` is empty | `public_incidents` | 14.5 |
 | A public location of kind `address` is exactly its street or "<n00> block of" its street, with 3-place coordinates | `public_incidents` | 14.5, 14.8 |
-| No `place`, `intersection` or `highway` location has a part that starts with a house number | `public_incidents` | 14.9 |
+| No public location has a number outside the allowlist ("N00 block of", ordinals, road numbers, exit and mile numbers), the same rule as `report-gen check` | `public_incidents` | 14.9 |
 | `owner` and `owner_address` are empty | `public_properties` | 14.7 |
 | dbt unit tests for `public_location`: block rounding, under 100, a unit dropped, other kinds as stored, no normalization gives no location, and the 90 day edge | `public_incidents` | 6.11, 11.6 to 11.9, 11.2 |
 

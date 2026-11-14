@@ -395,21 +395,6 @@ def test_coordinates_set_by_hand_may_be_outside_the_city(dbt):
                 "Main St Apt 3 B",
             )
         ],
-        *[
-            pytest.param(
-                "public_incidents",
-                f"select case_number, '{leak}'::text as location,"
-                " 'place'::text as location_kind"
-                " from marts.incidents where case_number = '26-1001'",
-                "assert_public_non_address_has_no_house_number",
-                id=f"house-number-in-a-place-{leak}",
-            )
-            for leak in (
-                "Smith residence, 12 Main St",
-                "Smith residence at 12 Main St",
-                "Smith Residence 12 Main St",
-            )
-        ],
         pytest.param(
             "public_properties",
             "select parcel_id, owner, owner_address from public.properties",
@@ -437,25 +422,55 @@ def test_a_leaky_model_fails_its_check(dbt, view, leaky_select, check):
     assert result.status(check)[1] >= 1
 
 
+# The same cases as report-gen check's unit tests (tools/report-gen/src/check.rs), so
+# the dbt check and the pre-deploy check agree.
+UNEXPECTED_NUMBERS = [
+    "12 Main St", "12B Main St", "12-14 Main St", "12 1/2 Main St", "No. 12 Main St",
+    "#12 Main St", "Smith Residence 12 Main St", "Smith residence, 12 Main St",
+    "Smith Residence at 12 Main St", "Mascoma Apartments Apt 12", "Lot 5", "Unit 4",
+    "Route 12 Apt 5", "1050 block of Main St", "0200 block of Main St",
+    "Smith residence 1200 block of Main St", "  45 Elm St", "Exit 18 and 19",
+    "１２ Main St", "١٢ Main St",
+]  # fmt: skip
+ALLOWED_NUMBERS = [
+    "1200 block of Main St", "100 block of Mascoma St", "Main St",
+    "Main St and Hanover St", "Route 120", "NH Route 12A", "US Route 4", "Rte 4",
+    "RT 4", "I-89 Exit 18", "Exit 18 on I-89", "I-89 mile marker 12", "I-89 Mile 12",
+    "Interstate 89", "1st Ave", "2nd St", "3rd Ave", "11th St",
+    "Smith residence, Main St", "Smith residence, 1200 block of Main St",
+    "Route 4 Market Basket",
+]  # fmt: skip
+
+
+def locations_view(locations: list[str]) -> str:
+    rows = ", ".join(
+        f"('n-{i}', '{text}', 'place')" for i, text in enumerate(locations)
+    )
+    return f"select * from (values {rows}) as v(case_number, location, location_kind)"
+
+
 @pytest.mark.parametrize(
-    "place",
-    ["Route 120", "I-89 Exit 18", "mile marker 18", "Route 4 Market Basket"],
+    ("locations", "expected_failures"),
+    [
+        pytest.param(UNEXPECTED_NUMBERS, len(UNEXPECTED_NUMBERS), id="each-fails"),
+        pytest.param(ALLOWED_NUMBERS, 0, id="each-passes"),
+    ],
 )
-def test_numbered_roads_and_markers_are_not_house_numbers(dbt, place):
+def test_the_number_allowlist_matches_report_gen(dbt, locations, expected_failures):
     dbt.seed_rows(good_rows())
     assert dbt.run("run").returncode == 0
-    dbt.replace_view(
-        "public_incidents",
-        f"select case_number, '{place}'::text as location,"
-        " 'place'::text as location_kind"
-        " from marts.incidents where case_number = '26-1001'",
-    )
+    dbt.replace_view("public_incidents", locations_view(locations))
 
     result = dbt.run(
-        "test", "--select", "assert_public_non_address_has_no_house_number"
+        "test", "--select", "assert_public_locations_have_no_unexpected_number"
     )
 
-    assert result.status("assert_public_non_address_has_no_house_number") == ("pass", 0)
+    status, failures = result.status(
+        "assert_public_locations_have_no_unexpected_number"
+    )
+    # The failure count is the number of rows, so each failing string is counted once.
+    assert failures == expected_failures, result.output
+    assert status == ("fail" if expected_failures else "pass")
 
 
 def test_the_public_set_holds_no_held_back_values(dbt):

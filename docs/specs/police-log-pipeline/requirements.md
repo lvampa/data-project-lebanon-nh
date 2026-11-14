@@ -350,7 +350,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 6. WHEN a data check fails, THE build SHALL name the check and the number of rows that failed it.
 7. THE data checks SHALL fail if the public parcels hold an owner name or an owner mailing address.
 8. THE data checks SHALL fail if a public location of kind `address` is anything other than its street or "<n00> block of" its street.
-9. THE data checks SHALL fail if a public location of kind `place`, `intersection`, or `highway` has a part, split on commas, that starts with a house number.
+9. THE data checks SHALL fail if a public location holds any number other than a block hundred at the start or after a comma, an ordinal, a road number, or an exit or mile number, or holds any non-ASCII digit, using the same allowlist as the pre-deploy check.
 
 ### Requirement 15: Measure how well AI normalizes
 

@@ -293,6 +293,9 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 10. IF an incident's type has no normalization yet, THEN THE public export SHALL write the raw incident type with an empty category and normalized type name.
 11. THE public export SHALL count incidents in `stats.json` by category, by normalized type name, and by weekday, over the public window only.
 12. THE public export SHALL keep writing `addresses.json` in its current shape, from the incidents and public locations in the public window.
+13. THE public export SHALL write `properties.json` from the public parcel model, and SHALL NOT run its own query on the parcels table.
+14. THE public export SHALL NOT write a parcel's owner name or owner mailing address.
+15. THE public export SHALL keep the `owner` and `owner_address` field names in `properties.json` with empty values, so that the current site keeps working.
 
 ### Requirement 12: Run the stages in order on a schedule
 
@@ -336,6 +339,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 4. THE data checks SHALL fail if a category is outside the five, or a case number appears more than once among incidents.
 5. THE data checks SHALL fail if the public set holds an incident outside the public window, an officer name, or a house address that is not at block level.
 6. WHEN a data check fails, THE build SHALL name the check and the number of rows that failed it.
+7. THE data checks SHALL fail if the public parcels hold an owner name or an owner mailing address.
 
 ### Requirement 15: Measure how well AI normalizes
 

@@ -411,14 +411,22 @@ models/
     public_incidents.sql         incidents in the public window, public columns only
     public_addresses.sql         today's addresses.json shape, from public_incidents
     public_stats.sql             counts by category, type name, and weekday
+    public_properties.sql        parcels for properties.json, with owner and owner_address empty
 ```
+
+- Every model, staging included, builds as a view in the one `marts` schema, so dropping `marts` with cascade removes all of them.
+- `stg_incident_types` and `stg_locations` keep one row per folded key, preferring a `human` row, so the joins in `incidents` can never duplicate an entry.
+- `public_properties` reads `properties` straight from the source.
+  Owner names and owner mailing addresses are mostly residents', and residents are kept off the public site, the same rule the people pages follow (11.13 to 11.15).
+  The two columns stay with empty values until the frontend drops them, like the held-back incident fields (11.5).
+  It's not part of the police log, but it's here because it goes out in the same export and the same deploy.
 
 - `incidents` left-joins entries to both lookup tables, so an entry with no normalization has empty normalized columns (8.12).
 - `public_incidents` selects from `incidents`: the 90 day window from the newest log date, the public columns, the public location and coordinates, and empty values for the held-back fields (11.2 to 11.10).
 - A dbt macro, `public_location`, is the one place that works out block level: for kind `address` it reads the leading house number from the normalized address, rounds it down to the hundred, drops it when under 100, and rounds coordinates to 3 places (6.11, 11.6, 11.7).
   Data check 14.5 tests its output.
 - The incidents and stats API and admin search read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
-- `report-gen` becomes plain selects from the three public models and drops its own joins and its 2,000 row cap.
+- `report-gen` becomes plain selects from the four public models and drops its own joins and its 2,000 row cap.
 - Postgres will not let a migration drop or retype a column a view reads.
   So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, run `dbt run`.
   The `migrate` service and the test fixture both follow it, and a test proves a migration that drops a column a model uses still upgrades.
@@ -476,6 +484,8 @@ dbt tests are the data checks in requirement 14:
 | Every row inside the public window | `public_incidents` | 14.5 |
 | `officer` is empty | `public_incidents` | 14.5 |
 | No public location of kind `address` starts with a number that is not a multiple of 100 | `public_incidents` | 14.5 |
+| `owner` and `owner_address` are empty | `public_properties` | 14.7 |
+| dbt unit tests for `public_location`: block rounding, under 100, a unit dropped, other kinds as stored, no normalization gives no location, and the 90 day edge | `public_incidents` | 6.11, 11.6 to 11.9, 11.2 |
 
 The disposition seed is generated from `dispositions.py` by a small script that runs before each dbt build, and it is not committed, so the list lives in one place.
 

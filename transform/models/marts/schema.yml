@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: incidents
+    description: One row per incident, raw and normalized side by side. Admin only.
+    columns:
+      - name: case_number
+        data_tests:
+          # 14.4: a case number appears at most once among incidents.
+          - unique
+          - not_null
+
+  - name: public_incidents
+    description: >
+      Incidents in the public window with public columns only. Checked by the singular
+      tests assert_public_incidents_inside_window, assert_public_incidents_officer_empty
+      and assert_public_locations_at_block_level (14.5).
+    columns:
+      - name: case_number
+        data_tests:
+          - unique
+          - not_null
+      - name: coordinate_precision
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["exact", "approximate"]
+
+  - name: public_addresses
+    description: addresses.json, built from public_incidents only (11.12).
+
+  - name: public_stats
+    description: Counts over the public window (11.11).
+    columns:
+      - name: dimension
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["category", "normalized_type", "weekday"]
+
+  - name: public_properties
+    description: >
+      properties.json without owner names or owner addresses (11.13 to 11.15). Checked
+      by the singular test assert_public_properties_have_no_owner (14.7).
+    columns:
+      - name: parcel_id
+        data_tests:
+          - unique
+          - not_null
+
+unit_tests:
+  # The public_location rules (6.11, 11.6 to 11.9), checked on fixed rows.
+  # Needs dbt 1.8 or later.
+  - name: public_location_rounds_house_numbers_to_the_block
+    model: public_incidents
+    given:
+      - input: ref('incidents')
+        rows:
+          - {case_number: "26-1", log_date: "2026-11-01", location_kind: "address", normalized_address: "1234 Main St", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-2", log_date: "2026-11-01", location_kind: "address", normalized_address: "45 Hanover St", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-3", log_date: "2026-11-01", location_kind: "address", normalized_address: "12 Main St Unit 3", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-4", log_date: "2026-11-01", location_kind: "address", normalized_address: "100 Mascoma St", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+    expect:
+      rows:
+        - {case_number: "26-1", location: "1200 block of Main St", lat: 43.642, lng: -72.251}
+        - {case_number: "26-2", location: "Hanover St", lat: 43.642, lng: -72.251}
+        - {case_number: "26-3", location: "Main St", lat: 43.642, lng: -72.251}
+        - {case_number: "26-4", location: "100 block of Mascoma St", lat: 43.642, lng: -72.251}
+
+  - name: public_location_keeps_other_kinds_and_hides_unnormalized
+    model: public_incidents
+    given:
+      - input: ref('incidents')
+        rows:
+          - {case_number: "26-5", log_date: "2026-11-01", location_kind: "intersection", normalized_address: "Main St and Hanover St", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-6", log_date: "2026-11-01", location_kind: null, normalized_address: null, raw_location: "12 MAIN ST", lat: null, lng: null, coordinate_precision: null}
+    expect:
+      rows:
+        - {case_number: "26-5", location: "Main St and Hanover St", lat: 43.6421567, lng: -72.2512345}
+        - {case_number: "26-6", location: null, lat: null, lng: null}
+
+  - name: public_window_keeps_the_last_90_log_dates
+    model: public_incidents
+    given:
+      - input: ref('incidents')
+        rows:
+          - {case_number: "26-7", log_date: "2026-11-01"}
+          - {case_number: "26-8", log_date: "2026-08-04"}
+          - {case_number: "26-9", log_date: "2026-08-03"}
+    expect:
+      rows:
+        - {case_number: "26-7"}
+        - {case_number: "26-8"}

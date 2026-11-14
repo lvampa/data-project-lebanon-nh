@@ -1,0 +1,36 @@
+name: lebanon
+version: "0.1.0"
+config-version: 2
+profile: lebanon
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # The public window: the most recent 90 days, counted back from the newest log date
+  # stored (requirements glossary, 11.2).
+  public_window_days: 90
+  # TODO(PR 4 task 11): copy the box from shared/locations in_city_bounds so the
+  # check and the geocoder agree. These values are unverified placeholders.
+  city_bounds:
+    min_lat: 43.58
+    max_lat: 43.70
+    min_lng: -72.36
+    max_lng: -72.18
+
+models:
+  lebanon:
+    # Everything lives in the one `marts` schema from the profile, so the migrate
+    # step can drop it with cascade before `alembic upgrade head` (design.md).
+    +materialized: view
+
+seeds:
+  lebanon:
+    # Generated from the parser's disposition list before each build; not committed.
+    dispositions:
+      +column_types:
+        disposition: text

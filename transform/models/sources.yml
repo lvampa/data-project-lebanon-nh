@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: app
+    schema: public
+    tables:
+      - name: log_entries
+      - name: incident_type_categories
+      - name: address_normalizations
+      - name: properties

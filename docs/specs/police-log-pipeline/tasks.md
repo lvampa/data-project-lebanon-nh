@@ -230,10 +230,10 @@ Nothing reads the models yet, so this ships alone.
   - First step: confirm dbt-postgres resolves in the workspace's single `uv.lock`. If it does not, `transform/` becomes its own project outside the workspace.
   - `transform/` with the staging and marts models in design.md, built as views in a `marts` schema.
   - The dbt tests in design.md, with the disposition seed generated from the parser's list before each build.
-  - The `public_location` macro, including the under-100 rule, used by the public models.
+  - The `public_location` macro, including the under-100 rule, used by the public models, plus `public_properties` with `owner` and `owner_address` empty.
   - Change the `migrate` service in `compose.yml` from PR 1, and add a separate test fixture, so both drop `marts`, run the migrations, then `dbt run`.
   - Tests: a passing build on good rows, one bad row per check that fails it, and a migration that drops a column a model uses still upgrades.
-  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 14.1 to 14.6_
+  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 14.1 to 14.7_
 
 ## PR 8: API, admin search, and export read the models
 
@@ -253,10 +253,10 @@ About 14 files.
   - _Requirements: 10.1 to 10.13_
 
 - [ ] 21. Read the public models in `report-gen`
-  - Plain selects from the three public models; remove the joins and the 2,000 row cap.
+  - Plain selects from the four public models, including `public_properties` for `properties.json`; remove the joins and the 2,000 row cap.
   - Keep today's field names and the `addresses.json` shape; write the new fields.
   - The export keeps running from `deploy.sh` at deploy time; its files are not committed.
-  - _Requirements: 11.3 to 11.12, 12.9_
+  - _Requirements: 11.3 to 11.15, 12.9_
 
 ## PR 9: Daily schedule and the Airflow image
 

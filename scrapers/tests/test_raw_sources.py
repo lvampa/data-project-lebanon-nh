@@ -360,3 +360,15 @@ def test_a_missing_backup_file_fails(tmp_path):
     assert restore_check(missing, MongoDB(), FakeRestore(None)) == [
         f"No backup at {missing}."
     ]
+
+
+def test_a_restore_never_targets_the_live_database(backup_file, monkeypatch):
+    monkeypatch.setenv("MONGO_DB", RESTORE_DATABASE)
+    restore = FakeRestore(None)
+
+    problems = restore_check(backup_file, MongoDB(), restore)
+
+    assert problems == [
+        f"Refusing to restore over {RESTORE_DATABASE}: it is the live database."
+    ]
+    assert restore.commands == []

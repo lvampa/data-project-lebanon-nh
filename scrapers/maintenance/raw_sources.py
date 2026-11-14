@@ -246,6 +246,10 @@ def restore_check(backup: Path, settings: MongoDB, run: Runner) -> list[str]:
     Returns the problems found; an empty list means the backup is usable. The live
     database only grows, so a restored collection may hold fewer documents.
     """
+    if settings.default_db == RESTORE_DATABASE:
+        return [
+            f"Refusing to restore over {RESTORE_DATABASE}: it is the live database."
+        ]
     if not backup.is_file():
         return [f"No backup at {backup}."]
     returncode = run_tool(

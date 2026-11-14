@@ -95,23 +95,40 @@ uv run python -m maintenance.raw_sources check
 
 ### Backups
 
-The `mongo_backup` DAG writes a gzipped `mongodump` of the archive's database every day at 2am, and keeps the 7 newest.
-It writes to `~/backups/data-project/mongo` on the host, or to `MONGO_BACKUP_DIR` when `.env` sets it.
+Two scripts, run by hand, each write a new dated file every time.
+Nothing is overwritten or deleted, so clear out old backups yourself.
+A failed run deletes its own partial file and exits non-zero.
+They write to `~/backups/data-project/mongo` and `~/backups/data-project/postgres` on the host, or to `MONGO_BACKUP_DIR` and `POSTGRES_BACKUP_DIR` when `.env` sets them.
 
-Create the folder before the first run, as the user that runs Docker:
+Create the folders before the first run, as the user that runs Docker:
 ```bash
-mkdir -p ~/backups/data-project/mongo
+mkdir -p ~/backups/data-project/mongo ~/backups/data-project/postgres
 ```
-If Docker creates it for the bind mount instead, root owns it, and the Airflow user cannot write to it on Linux or in CI.
-The DAG then fails with a message that names the folder.
-The folder is on the same disk as the Docker volume unless you point it elsewhere, so it survives a lost volume but not a failed disk.
+If Docker creates them for the bind mounts instead, root owns them, and the Airflow user cannot write to them on Linux or in CI.
+The scripts then fail with a message that names the folder.
+The folders are on the same disk as the Docker volumes unless you point them elsewhere, so they survive a lost volume but not a failed disk.
 
-Check that a backup restores, into the `scraped_data_restore_test` database, which is dropped afterwards.
-`mongorestore` is installed in the Airflow image, so run it there, where the folder is `/opt/backups/mongo`:
+Run them inside the Airflow image, where the dump tools are installed:
+```bash
+docker compose exec -w /opt/project/scrapers airflow-scheduler \
+  uv run --frozen python maintenance/mongo_backup.py
+docker compose exec -w /opt/project/scrapers airflow-scheduler \
+  uv run --frozen python -m maintenance.postgres_backup
+```
+
+Check that a Mongo backup restores, into the `scraped_data_restore_test` database, which is dropped afterwards:
 ```bash
 docker compose exec -w /opt/project/scrapers airflow-scheduler \
   uv run --frozen python -m maintenance.raw_sources restore-check \
   /opt/backups/mongo/scraped_data-20261107T020000Z.archive.gz
+```
+To restore a Postgres backup into a new database, `app_restored` here, which must not exist yet (the password comes from the container's own environment, so it is never typed):
+```bash
+docker compose exec airflow-scheduler sh -c '
+  export PGPASSWORD="$POSTGRES_PASSWORD"
+  createdb --host="$POSTGRES_HOST" --username="$POSTGRES_USER" app_restored &&
+  pg_restore --host="$POSTGRES_HOST" --username="$POSTGRES_USER" --no-owner \
+    --dbname=app_restored /opt/backups/postgres/app-20261113T221000Z.dump'
 ```
 
 ## Project Structure

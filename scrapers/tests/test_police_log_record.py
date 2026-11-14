@@ -8,13 +8,11 @@ from pydantic import ValidationError
 def make_log(**kwargs):
     defaults = {
         "source_url": "https://example.com/log.pdf",
-        "scraped_at": datetime.now(UTC),
         "case_number": "2025-001",
         "reported_at": datetime.now(UTC),
         "call_source": "911",
         "incident_type": "TRAFFIC STOP",
         "disposition": "GONE ON ARRIVAL",
-        "raw_reason_action": "SPEEDING",
         "location": "123 MAIN ST",
         "officer": "SMITH",
         "reference_number": "REF-001",
@@ -24,7 +22,6 @@ def make_log(**kwargs):
         "cleared_at": None,
         "response_seconds": None,
         "scene_seconds": None,
-        "raw_text": "raw text here",
         "parse_error": False,
         "log_date": date(2025, 1, 2),
         "parser_version": 1,
@@ -52,7 +49,7 @@ def test_police_log_record_null_optional_fields():
     assert record.location is None
 
 
-@pytest.mark.parametrize("field", ["case_number", "raw_text", "log_date"])
+@pytest.mark.parametrize("field", ["case_number", "log_date"])
 def test_police_log_record_requires_what_the_table_requires(field):
     with pytest.raises(ValidationError):
         PoliceLogRecord.model_validate(make_log(**{field: None}))
@@ -80,13 +77,6 @@ def test_police_log_record_strips_whitespace():
 def test_police_log_record_missing_source_url_raises():
     data = make_log()
     del data["source_url"]
-    with pytest.raises(ValidationError):
-        PoliceLogRecord.model_validate(data)
-
-
-def test_police_log_record_missing_scraped_at_raises():
-    data = make_log()
-    del data["scraped_at"]
     with pytest.raises(ValidationError):
         PoliceLogRecord.model_validate(data)
 

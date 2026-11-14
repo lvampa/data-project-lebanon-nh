@@ -2,7 +2,10 @@
 
 **Status:** In progress
 **Created:** 2026-06-10
-**Updated:** 2026-10-16
+**Updated:** 2026-11-07
+
+Tasks 1 to 7 built the first version on Elasticsearch, and their requirement numbers refer to that version of requirements.md in git history.
+Tasks 9 to 11 move search to Postgres and ship as one pull request of about 12 files, after police log pipeline PR 9 and before its Elasticsearch removal.
 
 - [x] 1. Group `scripts/` by action
   - Move the scrape, import, and export scripts into `scripts/scrape/`, `scripts/ingest/`, and `scripts/export/`, and add an empty `scripts/sync/` package.
@@ -50,4 +53,21 @@
   - [ ] 8.1 Link each result card to the admin page for its record.
   - [ ] 8.2 Make each entity type section collapsible.
   - Add a test for the link targets per entity type.
-  - _Requirements: 6.11, 6.12_
+  - _Requirements: 5.11, 5.12_
+  - Frontend work for Connor; not part of the Postgres pull request.
+
+- [ ] 9. Index planning document text
+  - One Alembic migration that adds the stored `raw_text_tsv` column on `planning_documents`, covered by the migration up and down test. Add a GIN index only if the timing test's `EXPLAIN` uses it.
+  - _Requirements: 2.6_
+
+- [ ] 10. Move the search endpoint to Postgres
+  - First step: the seeded timing test, 100,000 incidents and 10,000 properties, a five-word query on the typo path, under 1 second.
+    If it fails, stop and rework the design before building the rest. The pre-push hook skips it; QA runs it.
+  - Add `SEARCH_TYPES` in `api/services/search.py`, one entry per type, using the word matching from `api/services/text_search.py`.
+  - Rewrite `api/routers/search.py` to run one query per type, each in a savepoint so a failing type returns an empty list, and drop its Elasticsearch client; keep the response schemas.
+  - Keep address query normalization as it is.
+  - _Requirements: 1.1 to 1.4, 2.1 to 2.6, 3.1 to 3.12, 4.1 to 4.4_
+
+- [ ] 11. Test search against the test database
+  - Replace the mocked tests in `api/tests/test_search.py` with the real-database tests in design.md.
+  - _Requirements: 1.2, 2.1 to 2.6, 3.7, 3.8, 3.11, 3.12_

@@ -166,7 +166,8 @@ def test_search_queries_explicit_fields_and_hides_raw_text(mock_es):
     for body in bodies.values():
         assert "*" not in body["query"]["multi_match"]["fields"]
         assert body["_source"] == {"excludes": ["raw_text", "owner_address"]}
-    assert "raw_text" in bodies["incidents"]["query"]["multi_match"]["fields"]
+    assert "raw_text" not in bodies["incidents"]["query"]["multi_match"]["fields"]
+    assert "raw_text" in bodies["planning_documents"]["query"]["multi_match"]["fields"]
     assert "owner^2" in bodies["properties"]["query"]["multi_match"]["fields"]
 
 

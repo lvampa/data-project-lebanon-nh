@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 import pytest
 from postgres.models.log_entry import LogEntry
@@ -15,13 +15,10 @@ def _make_entry(**kwargs) -> LogEntry:
         "call_source": "Phone",
         "incident_type": "Telephone Harassment",
         "disposition": "Incident Report Taken",
-        "raw_reason_action": "Telephone Harassment Incident Report Taken",
         "location": "TIMBERWOOD DR",
         "officer": "Stephan Nix",
         "reference_number": "26L-426-OF",
-        "raw_text": "26-13339 0106 ...",
         "parse_error": False,
-        "scraped_at": datetime.now(UTC),
     }
     defaults.update(kwargs)
     return LogEntry(**defaults)

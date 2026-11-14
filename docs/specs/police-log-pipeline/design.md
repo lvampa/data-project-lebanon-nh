@@ -479,6 +479,7 @@ Adds:
 
 Drops `raw_text`, `raw_reason_action`, and `scraped_at`.
 The two text columns are raw source and move to the archive; the legacy import copies the 343 live rows' values there before the migration runs (archive 8.4).
+The parser still cuts both for each entry; the ingest moves them into an `EntryText` before validating the record, so they reach the archive as `police_log_entry_text` and never Postgres.
 `scraped_at` duplicates `created_at`, and the archive records each version's fetch time.
 `case_number` becomes NOT NULL; the live table has no nulls.
 The dispatch times and response durations stay: they are parsed fields, and Connor plans reporting on them.

@@ -1,13 +1,10 @@
-"""Police log text in the raw archive: the text a PDF held, and each entry's cut of it."""
+"""Police log entry text in the raw archive: each entry's cut of its PDF's text."""
 
 import json
 from datetime import datetime
 
 from .archive import ArchivedResponse
 
-# One version per PDF, keyed by its canonical URL: the text pypdf extracted. Only
-# written for PDFs whose text was stored before the archive kept the PDF itself.
-PDF_TEXT_SOURCE = "police_log_text"
 # One version per entry, keyed by case number: its text as the parser cut it.
 ENTRY_TEXT_SOURCE = "police_log_entry_text"
 

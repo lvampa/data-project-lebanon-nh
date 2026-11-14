@@ -98,7 +98,7 @@ This is the pull request that changes how entries are written, so it ships alone
 About 18 files.
 It does not ship until the gate in the raw source archive's tasks.md holds.
 
-- [ ] 6b. Copy and drop the raw text columns
+- [x] 6b. Copy and drop the raw text columns
   - `maintenance.archive_raw_text`: copy every `pdf_urls.raw_text` and every Mongo `urls` stored text to `police_log_text`, and every `log_entries` row's `raw_text` and `raw_reason_action` to `police_log_entry_text`, with the counts, a non-zero exit when one falls short, and a second run that changes nothing.
   - The migration that drops `pdf_urls.raw_text`, `log_entries.raw_text`, `raw_reason_action`, and `scraped_at`, stopping before any drop when a value is not archived. The downgrade re-adds the columns, empty.
   - Drop `raw_text` from the incident document in `scripts/sync/sync_es.py`.

@@ -28,7 +28,6 @@ SEARCH_FIELDS = {
         "incident_type",
         "officer",
         "disposition",
-        "raw_text",
     ],
     "planning_meetings": ["normalized_address^3", "location^2", "title", "category"],
     "planning_documents": ["normalized_address^3", "file_name^2", "raw_text"],

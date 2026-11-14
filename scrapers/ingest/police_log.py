@@ -29,9 +29,21 @@ from ingest.pdf_urls import kept_for_reprocess
 # A stored row, or the values just written for a case number seen earlier in this PDF.
 StoredEntry = LogEntry | dict[str, Any]
 
-# Bookkeeping about the write, not values read from the PDF. A change in these
+# Bookkeeping about the write, not values read from the PDF. A change in it
 # alone does not make an entry "updated".
-_BOOKKEEPING_FIELDS = {"scraped_at", "parser_version"}
+_BOOKKEEPING_FIELDS = {"parser_version"}
+
+# Raw text the parser cuts for each entry. It goes to the raw archive, not Postgres.
+_RAW_TEXT_FIELDS = ("raw_text", "raw_reason_action")
+
+
+@dataclass(frozen=True)
+class EntryText:
+    case_number: str
+    source_url: str
+    raw_text: str
+    raw_reason_action: str | None
+    parser_version: int
 
 
 @dataclass(frozen=True)
@@ -43,8 +55,8 @@ class IngestCounts:
     skipped: int
     missing: int
     header_lines: int
-    # The valid entries this parse cut, so the caller can archive their texts.
-    records: tuple[PoliceLogRecord, ...] = field(default=(), compare=False)
+    # The raw text of each valid entry, for the caller to archive.
+    entry_texts: tuple[EntryText, ...] = field(default=(), compare=False)
 
     @property
     def stored(self) -> int:
@@ -76,7 +88,7 @@ def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCount
     log_date = pdf_url.log_date or parse_log_date(text)
     parsed_entries = parse_log_entries(text)
 
-    records = _valid_records(parsed_entries, pdf_url, log_date, scraped_at=now)
+    records, entry_texts = _valid_records(parsed_entries, pdf_url, log_date)
     stored = _stored_entries(session, [record.case_number for record in records])
 
     inserted = updated = unchanged = 0
@@ -108,7 +120,7 @@ def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCount
         skipped=len(parsed_entries) - len(records),
         missing=missing,
         header_lines=count_header_lines(text),
-        records=tuple(records),
+        entry_texts=tuple(entry_texts),
     )
     _warn_on_unread_headers(pdf_url, counts)
     return counts
@@ -123,17 +135,17 @@ def _valid_records(
     parsed_entries: list[dict[str, Any]],
     pdf_url: PdfUrl,
     log_date: date | None,
-    scraped_at: datetime,
-) -> list[PoliceLogRecord]:
-    records = []
+) -> tuple[list[PoliceLogRecord], list[EntryText]]:
+    records: list[PoliceLogRecord] = []
+    entry_texts: list[EntryText] = []
     for entry in parsed_entries:
+        parsed = {k: v for k, v in entry.items() if k not in _RAW_TEXT_FIELDS}
         try:
             record = PoliceLogRecord.model_validate(
                 {
-                    **entry,
+                    **parsed,
                     "source_url": pdf_url.canonical_url,
                     "log_date": log_date,
-                    "scraped_at": scraped_at,
                     "parser_version": PARSER_VERSION,
                 }
             )
@@ -146,7 +158,16 @@ def _valid_records(
             )
             continue
         records.append(record)
-    return records
+        entry_texts.append(
+            EntryText(
+                case_number=record.case_number,
+                source_url=record.source_url,
+                raw_text=entry["raw_text"],
+                raw_reason_action=entry["raw_reason_action"],
+                parser_version=record.parser_version,
+            )
+        )
+    return records, entry_texts
 
 
 def _stored_entries(
@@ -176,9 +197,7 @@ def _stored_value(existing: StoredEntry, field: str) -> object:
 
 def _upsert_entry(session: Session, values: dict[str, Any], now: datetime) -> None:
     insert = pg_insert(LogEntry).values(**values, created_at=now, updated_at=now)
-    parsed_values = {
-        field: insert.excluded[field] for field in values if field != "scraped_at"
-    }
+    parsed_values = {field: insert.excluded[field] for field in values}
     session.execute(
         insert.on_conflict_do_update(
             index_elements=["case_number"],

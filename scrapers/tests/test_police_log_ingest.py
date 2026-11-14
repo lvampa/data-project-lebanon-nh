@@ -72,7 +72,6 @@ def test_stores_each_entry_with_its_source_and_log_date(db_session):
     assert harassment.source_url == "https://example.com/2026-05-11"
     assert harassment.log_date == date(2026, 5, 11)
     assert harassment.incident_type == "Telephone Harassment"
-    assert harassment.raw_text.startswith("26-13339")
     assert harassment.parser_version == PARSER_VERSION
     assert harassment.created_at == harassment.updated_at
 
@@ -161,15 +160,21 @@ def test_later_log_date_replaces_the_older_pdfs_values(db_session):
     assert entry.source_url == "https://example.com/2026-05-12"
 
 
+def parsed_entry(case_number: str | None, **values) -> dict:
+    """An entry as the parser returns it, with the raw text it always cuts."""
+    raw = {"raw_text": f"{case_number} ...", "raw_reason_action": None}
+    return {"case_number": case_number, **raw, **values}
+
+
 def test_invalid_entry_is_skipped_and_the_rest_are_stored(db_session, monkeypatch):
     url = add_url(db_session)
     monkeypatch.setattr(
         "ingest.police_log.parse_log_entries",
         lambda text: [
-            {"case_number": "26-13339", "raw_text": "26-13339 ..."},
-            {"case_number": "26-13340", "raw_text": None},
-            {"case_number": None, "raw_text": "no case number"},
-            {"case_number": "26-13342", "raw_text": "26-13342 ..."},
+            parsed_entry("26-13339"),
+            parsed_entry("26-13340", reported_at="not a time"),
+            parsed_entry(None),
+            parsed_entry("26-13342"),
         ],
     )
 
@@ -260,8 +265,6 @@ def test_url_is_completed_with_its_counts_and_where_its_text_came_from(db_sessio
     assert url.parser_version == PARSER_VERSION
     assert url.content_hash == "ab" * 32
     assert url.extractor_version == pypdf.__version__
-    # The original is in the raw archive, so its text is not copied into Postgres.
-    assert url.raw_text is None
     assert url.completed_at is not None
 
 
@@ -310,3 +313,16 @@ def test_error_url_is_completed_once_it_stores_an_entry(db_session):
 )
 def test_stored_counts_every_entry_that_is_in_the_table(counts, stored):
     assert counts.stored == stored
+
+
+def test_each_entrys_raw_text_is_returned_for_the_archive_not_stored(db_session):
+    url = add_url(db_session)
+
+    counts = ingest_log_text(db_session, url, log_text(HARASSMENT))
+
+    [text] = counts.entry_texts
+    assert text.case_number == "26-13339"
+    assert text.raw_text.startswith("26-13339")
+    assert text.raw_reason_action == "Telephone Harassment Incident Report Taken"
+    assert (text.source_url, text.parser_version) == (url.canonical_url, PARSER_VERSION)
+    assert not hasattr(LogEntry, "raw_text")

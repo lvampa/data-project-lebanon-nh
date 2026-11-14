@@ -6,6 +6,7 @@ from typing import Any, Self, cast
 import logfire
 from ingest import ingest_pdf_url
 from ingest.pdf_urls import kept_for_reprocess, mark_error
+from ingest.police_log import EntryText
 from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
@@ -14,7 +15,6 @@ from items.property import PropertyItem
 from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
-from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
 from mongo.archive import RawArchive, archive_collection
@@ -127,23 +127,23 @@ class PoliceLogPipeline:
 
         # After the commit and outside the error handling: the archive is a side
         # copy, and its own failures are logged and counted, never raised.
-        self._archive_entry_texts(counts.records)
+        self._archive_entry_texts(counts.entry_texts)
         return item
 
-    def _archive_entry_texts(self, records: tuple[PoliceLogRecord, ...]) -> None:
+    def _archive_entry_texts(self, texts: tuple[EntryText, ...]) -> None:
         if self._entry_texts is None:
             return
         fetched_at = datetime.now(UTC)
-        for record in records:
+        for text in texts:
             version = entry_text(
-                source_url=record.source_url,
-                raw_text=record.raw_text,
-                raw_reason_action=record.raw_reason_action,
-                parser_version=record.parser_version,
+                source_url=text.source_url,
+                raw_text=text.raw_text,
+                raw_reason_action=text.raw_reason_action,
+                parser_version=text.parser_version,
                 fetched_at=fetched_at,
                 spider=self._spider_name,
             )
-            self._entry_texts.add(ENTRY_TEXT_SOURCE, record.case_number, version)
+            self._entry_texts.add(ENTRY_TEXT_SOURCE, text.case_number, version)
         self._entry_texts.flush()
 
     def close_spider(self) -> None:

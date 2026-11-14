@@ -80,7 +80,6 @@ def build_incident_doc(row, address_lookup: dict) -> dict:
         "officer": row.officer,
         "disposition": row.disposition,
         "reported_at": row.reported_at.isoformat() if row.reported_at else None,
-        "raw_text": row.raw_text,
         "normalized_address": norm,
         "lat": lat,
         "lng": lng,

@@ -1,18 +1,20 @@
 # Search: design
 
-**Status:** In progress
+**Status:** Draft
 **Created:** 2026-06-10
 **Updated:** 2026-11-14
 
 ## Overview
 
-One FastAPI endpoint, `GET /api/search?q=&limit=`, normalizes the query against `address_normalizations`, runs one Postgres query per entity type, and returns the results grouped by type.
+This is planned and not built.
+`/api/search` was removed with Elasticsearch, so the admin search page gets a 404 until this version lands.
+
+The planned design is one FastAPI endpoint, `GET /api/search?q=&limit=`, that normalizes the query against `address_normalizations`, runs one Postgres query per entity type, and returns the results grouped by type.
 Every query uses the same word matching as incident search: whole words by full text, one-edit typos for longer words, and partial identifiers.
-The admin page calls the endpoint and renders the groups; the response shape does not change.
+The admin page already calls the endpoint and renders the groups, so the response shape does not change.
 
 The first version synced nine entity types into Elasticsearch each night.
-That version was replaced.
-Elasticsearch has been removed from the stack, so the endpoint returns with this version and the admin search page gets a 404 until then.
+That version was removed.
 
 ## Data flow
 
@@ -32,7 +34,7 @@ GET /api/search ──> api/services/search.py ──> SEARCH_TYPES (nine entrie
   Each names its select, its short, long, identifier and ranking fields, its order, and the fields it hides (`owner_address`, `raw_text`).
   A tenth type is one more entry.
 - **Address normalization:** the uppercased query is looked up in `address_normalizations.raw_address`; if found, the normalized address is searched and returned as `normalized_query`.
-- **One type failing** (for example `marts.incidents` missing) returns an empty list for that type, logs it, and the other types still return.
+- **One type failing** (for example a table that was dropped) returns an empty list for that type, logs it, and the other types still return.
 - **Long text:** `planning_documents` gets a stored generated tsvector column, so nothing is recomputed per query.
   A GIN index is added only if the timing test shows Postgres using it.
 

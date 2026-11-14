@@ -191,7 +191,7 @@ Each requirement has a user story and numbered acceptance criteria in EARS form:
 - One behavior per criterion, testable, with numbers instead of adjectives.
 - Name the component, not "the system".
 - Cover failure and empty cases.
-- Number criteria `<requirement>.<criterion>`, like `2.3`, so design and tasks can cite them.
+- Number criteria `<requirement>.<criterion>`, like `2.3`, so tasks can cite them.
 - Requirements describe observable behavior; implementation choices go in the design.
 
 ### design.md

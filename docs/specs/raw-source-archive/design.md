@@ -34,7 +34,7 @@ It is never the source of truth for a curated value.
 - **A version is one distinct body** for one source and key, identified by a SHA-256 of the body.
   One upsert on `(source, source_key, content_hash)` stores a new version or records a repeat with a seen count and a last-seen time.
   Page-state fields of parcel pages are removed before hashing, so an unchanged page is not a new version.
-- **Sources:** `police_log_pdf` (keyed by canonical URL), `vgsi_parcel` (parcel ID), `nh_sos_business`, `budget_pdf`, and two police log text sources, `police_log_text` and `police_log_entry_text`.
+- **Sources:** `police_log_pdf` (keyed by canonical URL), `vgsi_parcel` (parcel ID), `nh_sos_business`, `budget_pdf`, and `police_log_entry_text` (each entry's raw text).
 - **Middleware** (`scrapers/middlewares/raw_archive.py`, priority 50) sees the same decompressed, final body as the callback.
   A spider opts in with `archive_source` and `archive_key(response)`.
   The process spider returns `None` for a body that is not a PDF, because the city sometimes answers 200 with an HTML page.

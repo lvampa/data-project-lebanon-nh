@@ -23,15 +23,17 @@ process_urls errors ── UPDATE pdf_urls SET state='error' ──> pdf_urls
   A URL already in the table is left alone.
 - **Claim:** `process_urls` opens one transaction, runs two requeue statements, then claims `pending` rows with `FOR UPDATE SKIP LOCKED`, setting `in_progress`, `claimed_at` and `attempts + 1`.
   Concurrent runs never claim the same URL.
-- **Requeue:** an `in_progress` row older than the 2 hour lease becomes `error` ("Claim expired").
-  An `error` row under 3 attempts goes back to `pending`.
+- **Requeue:** an `in_progress` row older than the 2 hour lease becomes a `download` error ("Claim expired").
+  An `error` row with `error_kind = 'download'` and under 3 attempts goes back to `pending`.
+  A `parse` or `save` error stays put until a parser fix and a reprocess, because its text is already archived.
 - **Save:** `PoliceLogPipeline` saves a PDF's entries and marks its URL `complete` in one transaction.
   On any failure it rolls back, marks the URL `error` in a new transaction, and re-raises.
 - **Timestamps:** the lease cutoff and `claimed_at` are naive UTC values from Python, like every other timestamp in the schema, not `now()`.
 
 ## Data model
 
-`pdf_urls`: `id`, `canonical_url` (unique), `archive_url` (the Wayback Machine copy, used when the canonical URL stops serving a PDF), `log_date`, `state`, `attempts`, `claimed_at`, `completed_at`, `error_message`, `entry_count`, `raw_text`, `created_at`.
+`pdf_urls`: `id`, `canonical_url` (unique), `archive_url` (the Wayback Machine copy, used when the canonical URL stops serving a PDF), `log_date`, `state`, `attempts`, `claimed_at`, `completed_at`, `error_kind` (`download`, `parse` or `save`), `error_message`, `parsed_count`, `stored_count`, `skipped_count`, `header_lines`, `parser_version`, `content_hash`, `extractor_version`, `created_at`.
+The PDF's own text is not stored here; it is archived in MongoDB.
 `state` is checked against `pending`, `in_progress`, `complete`, `error`.
 An index on `(state, created_at)` serves the claim query.
 

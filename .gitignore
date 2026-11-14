@@ -231,6 +231,6 @@ tmp/
 # Claude Code worktrees
 .claude/worktrees/
 
-# Spec working files, kept locally. Only design.md is tracked.
+# Spec working files. Only design.md is tracked.
 docs/specs/*/requirements.md
 docs/specs/*/tasks.md

@@ -17,8 +17,8 @@ Normalized values sit in two lookup tables, keyed by the raw value, so each dist
 ```
 1 collect    city page ─► discover_urls ─► pdf_urls (pending)
                  process_urls: claim, download, extract text ─► archive middleware ─► MongoDB raw_sources (PDF bytes)
-2 parse      PoliceLogPdfItem ─► ingest_log_text() ─► log_entries (raw parsed values)
-             reprocess: archived PDF ─► pypdf ─► ingest_log_text()       (no download)
+2 parse      PoliceLogPdfItem ─► ingest_pdf_url() ─► log_entries (raw parsed values)
+             reprocess: archived PDF ─► pypdf ─► ingest_pdf_url()       (no download)
 3 normalize  uv run normalize ─► rule pass, then AI for the leftovers ─► incident_type_categories, address_normalizations
   and        uv run geocode ─► Nominatim ─► coordinates on address_normalizations
   geocode    admin API edits ─► same tables, source = human (no job overwrites them)
@@ -42,7 +42,7 @@ There is no Elasticsearch and no dbt.
   The archive middleware stores the PDF bytes in MongoDB first and tells the pipeline whether it worked.
   If it did not, a parse or save error becomes a `download` error, so the PDF is fetched and archived again.
   `run_process_urls.py` starts the crawl, holds the police log advisory lock, and exits non-zero if any URL moved to `error`.
-- **One ingest function:** `scrapers/ingest/police_log.py` is the only place that parses and writes entries.
+- **One ingest function:** `ingest_pdf_url` in `scrapers/ingest/police_log.py` wraps `ingest_log_text`, the only place that parses and writes entries.
   The process job and the reprocess job both call it.
   Entries are validated with `PoliceLogRecord`, then upserted on `case_number`.
   An update applies only when a parsed column differs and the PDF's log date is not older than the stored row's.
@@ -108,6 +108,33 @@ Not built yet:
 - A single daily `police_log` DAG that runs collect, parse, normalize and geocode in order.
   Normalize and geocode are run by hand until then.
 - The one-year export window.
+
+## AI answer shape
+
+The model returns JSON with one item per raw value it was sent.
+Every item echoes the raw value and says whether the model is unsure.
+Code rejects an item whose `raw` was never sent.
+
+```
+incident types   {"items": [{"raw": str, "unsure": bool, "category": IncidentCategory, "normalized_type": str}]}
+locations        {"items": [{"raw": str, "unsure": bool, "kind": "address" | "intersection" | "place" | "highway",
+                             "normalized_address": str, "geocode_query": str, "street": str}]}
+```
+
+`street` is a street from the street list, or an empty string when none fits.
+The models are in `scripts/normalize/prompts.py`.
+
+## Testing
+
+Tests run against a real Postgres database, never a mock.
+
+- The database name must end in `_test`.
+  The pytest plugin in `shared/postgres` checks it before any connection and exits otherwise, so a test run cannot touch the live `app` database.
+- Each test runs inside one transaction that is rolled back afterward.
+  `SessionLocal` is rebound to that connection, so a commit in the code under test only releases a savepoint.
+- Outside that fixture `SessionLocal` has no database, so a test that forgets it fails instead of committing rows for good.
+- If Postgres is down, the tests fail with a message that says so.
+  They do not skip.
 
 ## Data model notes
 

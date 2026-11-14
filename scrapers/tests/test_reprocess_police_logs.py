@@ -17,7 +17,6 @@ from pymongo.errors import ServerSelectionTimeoutError
 from sqlalchemy import select
 
 PDF_SOURCE = "police_log_pdf"
-TEXT_SOURCE = "police_log_text"
 ENTRY_TEXT_SOURCE = "police_log_entry_text"
 
 HEADER = """\
@@ -257,21 +256,6 @@ def test_a_truncated_pdf_counts_as_having_no_archived_version(
     assert result == counts(urls=1, requeued=1)
     db_session.refresh(url)
     assert url.state == "pending"
-
-
-def test_a_record_with_only_archived_text_is_reparsed_from_that_text(
-    db_session, archive
-):
-    url = add_url(db_session, URL_A, day=date(2026, 5, 11))
-    text = log_text(HARASSMENT)
-    archive.add(TEXT_SOURCE, URL_A, archived_response(URL_A, text.encode()))
-
-    result = reprocess(archive, None, None)
-
-    assert result == counts(urls=1, inserted=1)
-    db_session.refresh(url)
-    assert url.state == "complete"
-    assert url.content_hash == content_hash(TEXT_SOURCE, text.encode())
 
 
 def test_an_entry_the_new_parse_no_longer_finds_is_kept_and_counted(

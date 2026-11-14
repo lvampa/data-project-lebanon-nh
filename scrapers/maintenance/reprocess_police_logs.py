@@ -27,7 +27,6 @@ from ingest.pdf_text import extract_pdf_text
 from ingest.police_log import archive_entry_texts
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB
-from mongo.raw_text import PDF_TEXT_SOURCE
 from postgres import SessionLocal, engine
 from postgres.models.pdf_url import PdfUrl
 from pymongo.errors import PyMongoError
@@ -61,14 +60,13 @@ class ReprocessCounts:
 
 @dataclass(frozen=True)
 class _Original:
-    """What the archive holds for one URL: the bytes to read and which version they are."""
+    """What the archive holds for one URL: the PDF bytes and which version they are."""
 
     body: bytes
     content_hash: str
-    is_text: bool
 
     def text(self) -> str:
-        return self.body.decode() if self.is_text else extract_pdf_text(self.body)
+        return extract_pdf_text(self.body)
 
 
 def reprocess(
@@ -143,13 +141,12 @@ def _reprocess_url(archive: RawArchive, url_id: int) -> ReprocessCounts:
 
 
 def _archived_original(archive: RawArchive, canonical_url: str) -> _Original | None:
-    """The newest archived PDF, else the text stored before the archive kept PDFs."""
-    for source, is_text in ((PDF_SOURCE, False), (PDF_TEXT_SOURCE, True)):
-        version = archive.newest(source, canonical_url)
-        body = stored_body(version) if version is not None else None
-        if version is not None and body is not None:
-            return _Original(body, version["content_hash"], is_text)
-    return None
+    """The newest archived PDF, or None when there is none or it was too big to keep."""
+    version = archive.newest(PDF_SOURCE, canonical_url)
+    body = stored_body(version) if version is not None else None
+    if version is None or body is None:
+        return None
+    return _Original(body, version["content_hash"])
 
 
 def _archive_is_reachable(collection: RawCollection) -> bool:

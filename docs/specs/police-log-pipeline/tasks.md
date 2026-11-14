@@ -61,8 +61,8 @@ The three spec files ride along in this pull request.
   - _Requirements: 13.6_
 
 - [x] 3. Document running migrations by hand
-  - A README section with the one command, `uv run alembic -c shared/postgres/alembic.ini upgrade head`, run from the repo root against the compose Postgres. No compose service runs it.
-    #27 wraps it, with the MongoDB indexes, as `uv run migrate`, and task 19 adds the dbt steps.
+  - A README section with the one command, `uv run migrate`, run from the repo root against the compose Postgres. It runs `alembic upgrade head`, then creates the MongoDB indexes. No compose service runs it.
+    Task 19 adds the dbt steps.
   - The test harness still migrates its own test database to head; that is separate.
   - _Requirements: 12.8_
 
@@ -241,7 +241,7 @@ Nothing reads the models yet, so this ships alone.
   - Extend `uv run migrate` (`scripts.migrate:main`, from #27): drop `marts` before Alembic, and run `dbt build` after `init_indexes()`, stopping at the first failure. Update its README line.
     It replaces the compose `migrate` service, which is removed in #26. The `app_dbt_test` fixture stays as it is.
   - Tests: a passing build on good rows, one bad row per check that fails it, and a migration that drops a column a model uses still upgrades.
-  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 11.19, 12.8, 14.1 to 14.7_
+  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 11.19 to 11.21, 12.8, 14.1 to 14.9_
 
 ## PR 8: API, admin search, and export read the models
 

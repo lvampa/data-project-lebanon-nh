@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 import logfire
-from locations.geocode import geocode, in_city_bounds
+from locations.geocode import geocode
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import CursorResult, delete, func, select
@@ -112,14 +112,20 @@ def update_address(
 def _new_coordinates(update: AddressUpdate, nominatim_contact: str | None) -> dict:
     """Coordinates to write, or {} to keep whatever the row already has."""
     if update.lat is not None:
-        return {"lat": update.lat, "lng": update.lng, "geocoded_via": "manual"}
+        return {
+            "lat": update.lat,
+            "lng": update.lng,
+            "geocoded_via": "manual",
+            # A point Connor typed is a point, whatever the last lookup said.
+            "coordinate_precision": "exact",
+        }
     if update.geocode:
         found = geocode(
             f"{update.normalized_address}, Lebanon, NH, USA", contact=nominatim_contact
         )
-        # Coordinates Connor types are accepted anywhere. A lookup that lands outside
-        # the city is a miss, such as a street of the same name in another state.
-        if found is not None and in_city_bounds(found.lat, found.lng):
+        # Coordinates Connor types are accepted anywhere. geocode() already treats a
+        # match outside Lebanon, NH as a miss.
+        if found is not None:
             return {
                 "lat": found.lat,
                 "lng": found.lng,

@@ -302,6 +302,8 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 17. IF `incidents.json` holds a non-empty officer or reference number, or `properties.json` holds a non-empty owner or owner address, THEN THE pre-deploy check SHALL stop the deploy and name the file, the field, and the number of rows.
 18. IF any of `incidents.json`, `addresses.json`, `properties.json`, or `stats.json` is missing, THEN THE pre-deploy check SHALL stop the deploy.
 19. WHILE an incident's location normalization has a review mark, THE public export SHALL write the incident with an empty public location and empty coordinates, and SHALL leave it out of `addresses.json`.
+20. WHEN a location's kind is `address`, THE public location SHALL be built only from its matched street, as "<Street>" or "<n00> block of <Street>", and SHALL never include the normalized address text.
+21. IF a location of kind `address` has no matched street, THEN THE public export SHALL write an empty public location and empty coordinates.
 
 ### Requirement 12: Run the stages in order on a schedule
 
@@ -347,6 +349,8 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 5. THE data checks SHALL fail if the public set holds an incident outside the public window, an officer name, or a house address that is not at block level.
 6. WHEN a data check fails, THE build SHALL name the check and the number of rows that failed it.
 7. THE data checks SHALL fail if the public parcels hold an owner name or an owner mailing address.
+8. THE data checks SHALL fail if a public location of kind `address` is anything other than its street or "<n00> block of" its street.
+9. THE data checks SHALL fail if a public location of kind `place`, `intersection`, or `highway` has a part, split on commas, that starts with a house number.
 
 ### Requirement 15: Measure how well AI normalizes
 

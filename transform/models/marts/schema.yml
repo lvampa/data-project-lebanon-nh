@@ -56,16 +56,35 @@ unit_tests:
     given:
       - input: ref('incidents')
         rows:
-          - {case_number: "26-1", log_date: "2026-11-01", location_kind: "address", normalized_address: "1234 Main St", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
-          - {case_number: "26-2", log_date: "2026-11-01", location_kind: "address", normalized_address: "45 Hanover St", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
-          - {case_number: "26-3", log_date: "2026-11-01", location_kind: "address", normalized_address: "12 Main St Unit 3", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
-          - {case_number: "26-4", log_date: "2026-11-01", location_kind: "address", normalized_address: "100 Mascoma St", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-1", log_date: "2026-11-01", location_kind: "address", normalized_address: "1234 Main St", street: "MAIN ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-2", log_date: "2026-11-01", location_kind: "address", normalized_address: "45 Hanover St", street: "HANOVER ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-3", log_date: "2026-11-01", location_kind: "address", normalized_address: "12 Main St Unit 3", street: "MAIN ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-4", log_date: "2026-11-01", location_kind: "address", normalized_address: "100 Mascoma St", street: "MASCOMA ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
     expect:
       rows:
         - {case_number: "26-1", location: "1200 block of Main St", lat: 43.642, lng: -72.251}
         - {case_number: "26-2", location: "Hanover St", lat: 43.642, lng: -72.251}
         - {case_number: "26-3", location: "Main St", lat: 43.642, lng: -72.251}
         - {case_number: "26-4", location: "100 block of Mascoma St", lat: 43.642, lng: -72.251}
+
+  # The reviewer's leaks: the AI's address text never reaches the site, only the street.
+  - name: public_location_never_publishes_the_address_text
+    model: public_incidents
+    given:
+      - input: ref('incidents')
+        rows:
+          - {case_number: "26-11", log_date: "2026-11-01", location_kind: "address", normalized_address: "Rear 12 Main St", street: "MAIN ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-12", log_date: "2026-11-01", location_kind: "address", normalized_address: "Main St 12", street: "MAIN ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-13", log_date: "2026-11-01", location_kind: "address", normalized_address: "12 Mascoma St Lot 5", street: "MASCOMA ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-14", log_date: "2026-11-01", location_kind: "address", normalized_address: "250 Main St Apt 3 B", street: "MAIN ST", lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+          - {case_number: "26-15", log_date: "2026-11-01", location_kind: "address", normalized_address: "12 Unknown Rd", street: null, lat: 43.6421567, lng: -72.2512345, coordinate_precision: "exact"}
+    expect:
+      rows:
+        - {case_number: "26-11", location: "Main St", lat: 43.642, lng: -72.251}
+        - {case_number: "26-12", location: "Main St", lat: 43.642, lng: -72.251}
+        - {case_number: "26-13", location: "Mascoma St", lat: 43.642, lng: -72.251}
+        - {case_number: "26-14", location: "200 block of Main St", lat: 43.642, lng: -72.251}
+        - {case_number: "26-15", location: null, lat: null, lng: null}
 
   - name: public_location_keeps_other_kinds_and_hides_unnormalized
     model: public_incidents

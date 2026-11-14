@@ -438,7 +438,11 @@ models/
 - `incidents` left-joins entries to both lookup tables, so an entry with no normalization has empty normalized columns (8.12).
 - `public_incidents` selects from `incidents`: the 90 day window from the newest log date, the public columns, the public location and coordinates, and empty values for the held-back fields (11.2 to 11.10).
   A location with a review mark is treated as not normalized, so its incidents are listed with no location or pin until it's reviewed (11.19).
-- A dbt macro, `public_location`, is the one place that works out block level: for kind `address` it reads the leading house number from the normalized address, rounds it down to the hundred, drops it when under 100, and rounds coordinates to 3 places (6.11, 11.6, 11.7).
+- A dbt macro, `public_location`, is the one place that works out block level (6.11, 11.6, 11.7, 11.20, 11.21).
+  - For kind `address` it builds the text only from the matched `street`, from the street list, and never from the AI's address text, so it fails closed.
+  - A leading house number of 100 or more becomes "<n00> block of <Street>". Under 100, or no number, gives "<Street>". No street gives nothing, and no pin.
+  - Coordinates round to 3 places.
+  - So "Rear 12 Main St" or "12 Mascoma St Lot 5" from the AI can't reach the site.
   Data check 14.5 tests its output.
 - The incidents and stats API and admin search read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
 - `report-gen` becomes plain selects from the four public models and drops its own joins and its 2,000 row cap (see "Public export").
@@ -553,7 +557,8 @@ dbt tests are the data checks in requirement 14:
 | `unique` and `not_null` on case number | `incidents` | 14.4 |
 | Every row inside the public window | `public_incidents` | 14.5 |
 | `officer` is empty | `public_incidents` | 14.5 |
-| No public location of kind `address` starts with a number that is not a multiple of 100 | `public_incidents` | 14.5 |
+| A public location of kind `address` is exactly its street or "<n00> block of" its street, with 3-place coordinates | `public_incidents` | 14.5, 14.8 |
+| No `place`, `intersection` or `highway` location has a part that starts with a house number | `public_incidents` | 14.9 |
 | `owner` and `owner_address` are empty | `public_properties` | 14.7 |
 | dbt unit tests for `public_location`: block rounding, under 100, a unit dropped, other kinds as stored, no normalization gives no location, and the 90 day edge | `public_incidents` | 6.11, 11.6 to 11.9, 11.2 |
 

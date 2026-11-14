@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Created:** 2026-11-06
-**Updated:** 2026-11-07
+**Updated:** 2026-11-13
 
 ## Overview
 
@@ -14,7 +14,8 @@ A daily `mongodump` backs the archive up, because it holds the only copy of the 
 Tests run against a `_test` MongoDB database through a pytest plugin, like the Postgres one (requirement 5).
 
 The writing half ships between police log pipeline PR 1 and PR 2: it needs only `pdf_urls`, the process spider's `pdf_url` in `cb_kwargs`, and the `migrate` service.
-The reads, extra sources, backup, and check command ship before police PR 2b, which drops the raw text columns: the gate before that pull request runs the check command and needs a restored backup.
+The reads, extra sources, backup, and check command ship before police PR 2b, which drops the raw text columns.
+Nothing is live, so there is no legacy data to copy first: the databases are reset and rescraped (decided 2026-11-13).
 
 ## Architecture
 
@@ -112,26 +113,9 @@ Two text sources sit beside `police_log_pdf`, and both follow the archive's one 
   After the police log pipeline commits a PDF's entries, it writes one version per entry, best-effort.
   Reprocess writes them again; at the same parser version an unchanged text only moves the seen count, and a changed one becomes a new version.
   Because `parser_version` is in the body, a parser bump stores a new version for every entry even when its text is the same, so the history shows which parser cut what.
-- `police_log_text`: key = canonical URL, body = a log PDF's extracted text.
-  Only the legacy import writes it, for PDFs whose text was stored before the archive existed.
 
-Police log reprocess takes the newest `police_log_pdf` body for a URL and extracts it with pypdf; if there is none, it takes the newest `police_log_text` (4.1).
-
-### Legacy import
-
-`python -m maintenance.archive_raw_text` from `scrapers/`, built in police log pipeline PR 2b, run once before the migration that drops the raw text columns (8.4 to 8.8).
-The sources and the lookup it uses live in `shared/mongo/src/mongo/raw_text.py`, which the migration imports too, so both agree on where each value goes:
-
-1. For each non-null `pdf_urls.raw_text`, and each Mongo `urls` document with stored PDF text, write a `police_log_text` version keyed by canonical URL.
-   When both hold different text for one URL, each becomes its own version.
-2. For each `log_entries` row, write a `police_log_entry_text` version keyed by case number, with `raw_text`, `raw_reason_action`, `source_url`, and the row's parser version.
-3. Leave the `urls` collection and every Postgres row exactly as they are.
-4. Report copied against existing for `log_entries` rows and `pdf_urls` texts, and exit non-zero if either falls short.
-
-Every write is the archive's usual upsert on source, key, and content hash, so a second run matches and changes nothing (8.8).
-
-The migration's `upgrade` first compares every key in the raw text columns with the archive, and stops before dropping anything if one is missing, naming the command to run (8.12).
-So the drop cannot run ahead of the copy on any database, including the live one.
+There is no legacy import.
+The migration that drops the raw text columns is a plain drop, because the databases are reset and rescraped.
 When no raw text remains to drop, as in CI or a new database, the guard does not connect to MongoDB at all.
 
 ### Replay and check commands
@@ -148,9 +132,9 @@ raw_sources restore-check BACKUP
 - Police log PDFs are not replayed here: the police log pipeline's reprocess job reads them with `RawArchive.newest(source, key)` and `RawArchive.by_hash(source, key, content_hash)` (4.1).
 - Parcel replay: build a Scrapy `HtmlResponse` from the newest version's body and URL, call `VgsiPropertySpider.parse_parcel`, and pass each item through `PropertyPipeline` (4.2).
 - Replay reads the archive and never writes it (4.3), and logs the counts in 4.4.
-- `check` reports size and versions per source, counts log PDFs with an archived body and text-only ones, lists the text-only ones by URL, lists log PDFs with neither, parcels with none, and `ai` normalizations with a null `ai_call_id` (2.5, 4.5).
+- `check` reports size and versions per source, counts log PDFs with an archived body, lists log PDFs with none, parcels with none, and `ai` normalizations with a null `ai_call_id` (2.5, 4.5).
   A truncated PDF version counts as no body.
-  It exits non-zero while any `complete` or `error` log PDF has neither, so the gate before police PR 2b can run it.
+  It exits non-zero while any `complete` or `error` log PDF has no archived body.
   The `ai_call_id` line lands with police log PR 4, which adds the normalization tables.
 - `versions` lists one key's versions (4.6).
 - `restore-check` restores a backup into `scraped_data_restore_test` and compares document counts with the live archive (7.5).
@@ -214,7 +198,6 @@ Source-specific fields on the same document:
 | Source | Extra fields |
 |---|---|
 | `police_log_pdf` | None. |
-| `police_log_text` | None; the body is the extracted text. |
 | `police_log_entry_text` | None; the body is JSON with `raw_text`, `raw_reason_action`, `source_url`, and `parser_version`. |
 | `budget_pdf` | `text_gzip`: the extracted text, because it came from a separate extraction step. |
 | `vgsi_parcel`, `nh_sos_business` | None. |
@@ -293,8 +276,6 @@ Expected size, from one fetch of each:
 - Parcel replay: archive one saved parcel page, replay it, and compare with a normal ingest.
 - AI call log: a record is written and its ID returned; an unreachable Mongo returns `None` without raising.
 - Entry texts: one `police_log_entry_text` version per entry after commit; reprocess at the same parser version with unchanged text only moves the seen count.
-- Legacy import: copies seeded `log_entries` rows to `police_log_entry_text` and `pdf_urls` and `urls` texts to `police_log_text`; leaves `urls` and Postgres unchanged; exits non-zero when a row or text is missing; and a second run changes nothing.
-- Reprocess fallback: a URL with only a `police_log_text` version is reparsed from that text.
 - LLC and budget scripts: each archives its download, and an unreachable Mongo leaves their own output unchanged.
 - Backup: the DAG's structure test, and a QA run that backs up, prunes, and restores into a test database.
 - Overhead (3.6): a QA run of the process job on 100 PDFs with the archive on and off; not in the test suite.
@@ -341,7 +322,7 @@ Connor chose to drop the extracted text from Postgres, so the police log reproce
   It kept reprocessing Postgres-only and left the archive a pure side copy.
 - What the choice costs, and how the design pays for it:
   the archive's writing ships earlier, before Postgres stops storing the text;
-  it is backed up daily, and police PR 2 waits on a gate in tasks.md: a restored backup, the legacy import, and every `complete` URL record archived;
+  it is backed up daily;
   reprocess depends on pypdf, so the extractor version is recorded and a pypdf bump counts as a parser change;
   police PDFs are written one at a time, so the process job knows whether each was archived, and a PDF the archive missed goes back to the download queue instead of getting stuck.
 

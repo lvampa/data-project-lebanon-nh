@@ -164,13 +164,10 @@ It is also the archive's replay for police log PDFs; the archive spec's replay c
 - It reads URL records that are `complete` or `error`, in log date order (4.1, 4.2).
 - For each, it takes the newest archived version, extracts text with pypdf, and calls `ingest_log_text` in its own transaction, then records the content hash and versions and marks a repaired `error` record `complete` (4.4).
   It writes the entry texts again; at the same parser version, unchanged ones only move their seen count.
-  A URL with no archived PDF body but a `police_log_text` version is reparsed from that text.
 - A record with no archived version goes back to `pending` and is counted (4.12).
 - It checks the archive is reachable before it starts, and exits with an error if not (4.13).
 - It takes the same advisory lock as the process runner.
   The lock covers runs from a shell as well as from Airflow.
-- It does not repair the 343 entries stored before this work.
-  Those three PDFs were never archived; discovery adds them again, the process job downloads and archives them, and the upsert in `ingest_log_text` updates their entries.
 - It logs the counts in 4.10.
 
 ### AI backend
@@ -559,7 +556,7 @@ The disposition seed is generated from `dispositions.py` by a small script that 
   A draft is labeled with AI help and then checked line by line by Connor, since a person has to decide what is right.
 - The draft labels come from a different model and prompt than the one being scored, and `results.md` says which, so the first score does not flatter the default backend.
 - Known limit: the set comes from the same three PDFs the prompts were written against.
-  Lines from new PDFs are added after the backfill.
+  Lines from new PDFs are added after the first full scrape.
 - The command runs the same prompt building, backend, and `checks.py` as the job, and neither reads nor writes the database (15.2).
   The list of type names already in use is a fixed file stored with the set.
 - It prints accuracy per field, the discarded and unsure counts, and each wrong item (15.3 to 15.5), comparing text without regard to case or spacing (15.6).
@@ -655,17 +652,17 @@ Adds:
 
 | Column | Type | Notes |
 |---|---|---|
-| `log_date` | date, NOT NULL | Backfilled in the migration from the URL record's `log_date`, else `reported_at::date`. The migration fails if any row is still null. |
+| `log_date` | date, NOT NULL | The log date of the PDF. |
 | `place_code` | text | For example `L HANNAF`. |
 | `officer_code` | text | For example `SMN`. |
 | `refer_to` | jsonb | List of `{kind, number}`. |
 | `disposition_unmatched` | boolean | Default false. |
 | `missing_from_parse` | boolean | Default false. |
 | `parser_version` | integer | |
-| `created_at`, `updated_at` | timestamp | `created_at` backfilled from `scraped_at`. |
+| `created_at`, `updated_at` | timestamp | |
 
 Drops `raw_text`, `raw_reason_action`, and `scraped_at`.
-The two text columns are raw source and move to the archive; the legacy import copies the 343 live rows' values there before the migration runs (archive 8.4).
+The two text columns are raw source and move to the archive. They are dropped with no copy, because the database is reset and rescraped (2026-11-13).
 The parser still cuts both for each entry; the ingest moves them into an `EntryText` before validating the record, so they reach the archive as `police_log_entry_text` and never Postgres.
 `scraped_at` duplicates `created_at`, and the archive records each version's fetch time.
 `case_number` becomes NOT NULL; the live table has no nulls.
@@ -972,7 +969,7 @@ The agents don't touch the frontend.
 
 1. **Do 2025 PDFs use the same layout?**
    The parser is proven only on May 2026.
-   The header-line check (2.14) will show it during the backfill.
+   The header-line check (2.14) will show it during the first full scrape.
 2. **How the CLI reports a login or usage-limit failure.**
    Needed for 8.9; Connor may have to run one command and paste the output.
 3. **The token for the scheduled AI call.**

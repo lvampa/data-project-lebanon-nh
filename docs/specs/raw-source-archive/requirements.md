@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Created:** 2026-11-06
-**Updated:** 2026-11-07
+**Updated:** 2026-11-13
 
 ## Introduction
 
@@ -27,13 +27,11 @@ CivicClerk agendas and minutes join the archive later, with their own scraper.
 ## Glossary
 
 - **Archive:** The `raw_sources` collection in MongoDB.
-- **Source:** One kind of archived original: `police_log_pdf`, `police_log_text`, `police_log_entry_text`, `vgsi_parcel`, `nh_sos_business`, or `budget_pdf`.
-  `police_log_text` holds a log PDF's extracted text when the archive has no PDF body for it; `police_log_entry_text` holds one entry's raw text.
-- **Source key:** What identifies one original within its source: the canonical URL for a log PDF, the parcel ID for a parcel page, the NH business ID for a business page, the source URL for a budget PDF, the canonical URL for a log PDF's text, and the case number for an entry's raw text.
+- **Source:** One kind of archived original: `police_log_pdf`, `police_log_entry_text`, `vgsi_parcel`, `nh_sos_business`, or `budget_pdf`.
+  `police_log_entry_text` holds one entry's raw text.
+- **Source key:** What identifies one original within its source: the canonical URL for a log PDF, the parcel ID for a parcel page, the NH business ID for a business page, the source URL for a budget PDF, and the case number for an entry's raw text.
 - **Raw field:** A value as the source gave it, before parsing: a PDF's bytes, a page's HTML, an entry's block of text, an unsplit reason and action line.
 - **Structured field:** A value a parser extracted into its own column, such as a case number, an officer code, or a dispatch time.
-- **Legacy raw data:** Raw fields stored before the archive existed: `log_entries.raw_text`, `log_entries.raw_reason_action`, `pdf_urls.raw_text`, and the Mongo `urls` collection.
-- **Text-only PDF:** A log PDF with a `police_log_text` version and no `police_log_pdf` body.
 - **Version:** One archived document: one distinct body for one source key.
 - **Body:** The bytes as downloaded: the PDF file, or the parcel page's HTML.
 - **Content hash:** The SHA-256 of the body, after removing the page-state fields of its source.
@@ -100,7 +98,7 @@ CivicClerk agendas and minutes join the archive later, with their own scraper.
 2. WHEN the operator replays parcel pages, THE replay command SHALL parse the latest archived version of each parcel with the VGSI spider's parcel parser and store the result through its Postgres pipeline, without downloading anything.
 3. THE replay command SHALL NOT write to the archive.
 4. WHEN a replay finishes, THE replay command SHALL log how many parcels it replayed, how many records it inserted, updated, and left unchanged, and how many had no usable body.
-5. THE check command SHALL report how many log PDFs that are `complete` or `error` in `pdf_urls` have an archived body and how many are text-only, SHALL list the text-only ones by URL, and SHALL list log PDFs with neither, parcels in `properties` that have no archived version, and `ai` normalizations whose AI call record is missing.
+5. THE check command SHALL report how many log PDFs that are `complete` or `error` in `pdf_urls` have an archived body, and SHALL list log PDFs with none, parcels in `properties` that have no archived version, and `ai` normalizations whose AI call record is missing.
 6. THE operator SHALL be able to list every version of one source key, newest first, with its fetch time, content hash, size, and seen count.
 
 ### Requirement 5: Test against a real test database
@@ -149,19 +147,13 @@ CivicClerk agendas and minutes join the archive later, with their own scraper.
 1. THE archive SHALL store every response the police log, VGSI, NH Secretary of State, and budget scrapers download with status 200, as requirement 1 describes for each source.
 2. WHEN a police log PDF is ingested, THE archive SHALL store a `police_log_entry_text` version for each entry, keyed by case number, holding its raw text, its unsplit reason and action text, its source URL, and the parser version that cut it.
 3. THE police log pipeline SHALL store every structured field the parser extracts in Postgres, including the officer code, every "Refer To" reference, and the parser version per entry.
-4. WHEN the legacy import runs, THE legacy import command SHALL copy every `log_entries` row's `raw_text` and `raw_reason_action` into the archive as a `police_log_entry_text` version, keyed by case number, and SHALL report how many rows it copied and how many rows `log_entries` holds.
-   Those rows were parsed before the parser had a version, so their entry texts carry a null `parser_version`.
-5. WHEN the legacy import runs, THE legacy import command SHALL copy the stored PDF text of every Mongo `urls` document that has one into the archive as a `police_log_text` version, and SHALL NOT change or delete the `urls` collection.
-   The `urls` documents are copied, not moved: they stay in the archive's database as the record of the old queue, and the daily backup covers them.
-6. WHEN the legacy import runs, THE legacy import command SHALL copy every non-null `pdf_urls.raw_text` into the archive as a `police_log_text` version for that URL, and SHALL report how many it copied and how many `pdf_urls` rows have text.
-7. IF the legacy import copied fewer `log_entries` rows or `pdf_urls` texts than exist, THEN THE legacy import command SHALL exit with a non-zero status.
-8. WHEN the legacy import runs a second time on the same data, THE legacy import command SHALL change no archived version and store no new one.
+4 to 8. Removed on 2026-11-13: there is no legacy data to copy. Nothing is live, so the databases are reset and rescraped.
 9. THE archive SHALL record each version's fetch time, which replaces `log_entries.scraped_at`.
 10. EXCEPT for police log entry texts, THE archive SHALL NOT store parsed or derived values.
     Entry texts are the one named exception: they are raw text, cut into entries by the parser, and each version records the parser version that cut it (8.2).
 11. EXCEPT for planning document text, Postgres SHALL NOT store raw fields.
    Planning document text is the one named exception: admin search indexes it (search criterion 2.6), and it stays in Postgres until CivicClerk joins the archive under its own task.
-12. IF any value in a raw text column is not in the archive, THEN THE migration that drops that column SHALL stop with an error that says to run the legacy import, and SHALL drop nothing.
+12. Removed on 2026-11-13: the raw text columns are dropped by a plain migration, with no archive check.
 
 ## Out of scope
 

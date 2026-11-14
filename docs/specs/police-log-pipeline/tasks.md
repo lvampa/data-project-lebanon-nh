@@ -17,7 +17,7 @@ File counts are estimates and include tests.
 | Archive 1b | Raw source archive: reads, AI call log, LLC and budget sources, parcel replay (archive spec) | about 16 |
 | Archive 1c | Raw source archive: backup and check command (archive spec) | about 10 |
 | 2 | Entry schema, one ingest function, process job, entry texts to the archive | about 32 |
-| 2b | Move the raw text columns to the archive: legacy copy, guarded drop | about 18 |
+| 2b | Drop the raw text columns (plain drop) | about 6 |
 | 3 | Parser fixes, reprocess from the archive, operator commands | about 22 |
 | 4 | Normalization records, locations package, correction API | about 34 |
 | 5 | Rule pass, AI normalization job, and geocode job | about 28 |
@@ -67,12 +67,12 @@ The three spec files ride along in this pull request.
 ## PR 2: Entry schema, one ingest function, process job
 
 About 32 files.
-It builds on archive PR 1a and drops nothing, so it needs no gate.
+It builds on archive PR 1a and drops nothing.
 This is the pull request that changes how entries are written, so it ships alone; the column drop follows in PR 2b.
+Nothing is live, so no migration keeps or backfills data: the database is reset and rescraped (2026-11-13).
 
 - [x] 4. Add the `log_entries` and `pdf_urls` columns
-  - One Alembic migration with the columns in design.md, `case_number` and `log_date` NOT NULL, `created_at` from `scraped_at`.
-  - Backfill `log_date` from the URL record, else from `reported_at`, and fail the migration if any row is still null.
+  - One Alembic migration with the columns in design.md, and `case_number` and `log_date` NOT NULL, with no backfill.
   - Keep adding `officer_code`, `refer_to`, and the entry `parser_version`; the raw text columns are dropped in PR 2b.
   - Add `pdf_urls.content_hash`, `parser_version`, and `extractor_version`.
   - Update the ORM models and `PoliceLogRecord` (`extra="forbid"`, required `case_number` and `log_date`).
@@ -81,7 +81,7 @@ This is the pull request that changes how entries are written, so it ships alone
 - [x] 5. Add `ingest_log_text`
   - Parse, validate, and upsert one PDF's entries from `model_dump()`, guarded so unchanged rows are not touched and the later log date wins.
   - Count parsed, inserted, updated, unchanged, skipped, missing, and header lines; set and clear `missing_from_parse`.
-  - Tests: the upsert, a skipped invalid entry, an entry with no case number, the later-date rule with the older PDF second, an entry stored before this pull request is updated by a fresh ingest, and a second call that changes no row.
+  - Tests: the upsert, a skipped invalid entry, an entry with no case number, the later-date rule with the older PDF second, and a second call that changes no row.
   - _Requirements: 1.1, 1.4, 2.4, 2.5, 2.12, 2.13, 2.14, 13.6_
 
 - [x] 6. Move the process job onto `ingest_log_text`
@@ -93,17 +93,16 @@ This is the pull request that changes how entries are written, so it ships alone
   - Point the `process_urls` DAG spec at the runner.
   - _Requirements: 1.4, 2.7, 2.8, 2.15, 4.11_
 
-## PR 2b: Move the raw text columns to the archive
+## PR 2b: Drop the raw text columns
 
-About 18 files.
-It does not ship until the gate in the raw source archive's tasks.md holds.
+About 6 files.
 
-- [x] 6b. Copy and drop the raw text columns
-  - `maintenance.archive_raw_text`: copy every `pdf_urls.raw_text` and every Mongo `urls` stored text to `police_log_text`, and every `log_entries` row's `raw_text` and `raw_reason_action` to `police_log_entry_text`, with the counts, a non-zero exit when one falls short, and a second run that changes nothing.
-  - The migration that drops `pdf_urls.raw_text`, `log_entries.raw_text`, `raw_reason_action`, and `scraped_at`, stopping before any drop when a value is not archived. The downgrade re-adds the columns, empty.
+- [x] 6b. Drop the raw text columns
+  - A plain migration that drops `pdf_urls.raw_text`, `log_entries.raw_text`, `raw_reason_action`, and `scraped_at`. The downgrade re-adds them, empty.
+    There is no legacy copy and no archive check, because the database is reset (2026-11-13).
   - Drop `raw_text` from the incident document in `scripts/sync/sync_es.py`.
-  - Tests: the copy, its counts, the second run, and the migration refusing to drop when a value is missing.
-  - _Requirements: 1.4, 1.6; raw source archive 8.4 to 8.8, 8.12_
+  - Test: the migration runs up and down.
+  - _Requirements: 1.4, 1.6_
 
 ## PR 3: Parser fixes, reprocess from the archive, operator commands
 
@@ -129,9 +128,6 @@ About 22 files.
 - [ ] 9. Add the operator CLI
   - `errors`, `reset <url>...`, and `unmatched-dispositions`.
   - _Requirements: 2.11, 3.7_
-
-The 343 entries stored before this work are not repaired by reprocess, because their PDFs were never archived.
-They are repaired when discovery adds their three PDFs again and the process job downloads and archives them.
 
 ## PR 4: Normalization records, locations package, correction API
 

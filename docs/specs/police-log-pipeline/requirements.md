@@ -10,7 +10,8 @@ The city posts one police log PDF per day.
 The pipeline finds the PDFs, parses them into `log_entries`, and feeds two consumers: the admin API and admin search that Connor uses, and the static JSON that the public site and map read.
 
 Today the flow stops early.
-Postgres holds 343 entries from 3 PDFs, 650 PDFs are waiting, and 10 are stuck mid-claim.
+Postgres holds only test data: 343 entries from 3 PDFs, with about 650 PDFs not yet processed.
+Nothing is live, so the databases are reset and rescraped, and no data is carried over (2026-11-13).
 No incident type or address has ever been normalized, so the public map is empty and search cannot group "MV Complaint" with other traffic calls.
 A parser fix cannot repair rows already stored, because nothing can reprocess them.
 

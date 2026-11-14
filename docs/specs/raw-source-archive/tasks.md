@@ -2,11 +2,11 @@
 
 **Status:** Draft
 **Created:** 2026-11-06
-**Updated:** 2026-11-07
+**Updated:** 2026-11-13
 
 The work ships as three pull requests of 10 to 40 files each.
-PR 1a ships between police log pipeline PR 1 and PR 2; PRs 1b and 1c ship before police PR 2b, which drops the raw text columns and waits for the gate below.
-1c holds the data safety work the gate below depends on, so it is reviewed on its own.
+PR 1a ships between police log pipeline PR 1 and PR 2; PRs 1b and 1c ship before police PR 2b, which drops the raw text columns.
+There is no gate before 2b: nothing is live, so the databases are reset and rescraped (2026-11-13).
 File counts are estimates and include tests.
 
 | PR | What ships | Files |
@@ -69,10 +69,10 @@ About 16 files.
 About 10 files.
 This is the pull request Connor should read most closely, with police PR 2b: together they keep the only copy of the parser's input.
 
-- [x] 8. Entry texts and the legacy import moved to the police log pipeline
+- [x] 8. Entry texts moved to the police log pipeline
   - The `police_log_entry_text` writes ship in police PR 2, with the ingest they follow.
-  - The legacy copy, `maintenance.archive_raw_text`, and the migration guard ship in police PR 2b, with the drop they protect.
-  - _Requirements: 8.2, 8.4 to 8.8, 8.10, 8.12_
+  - The legacy copy and the migration guard are dropped (2026-11-13); police PR 2b's migration becomes a plain column drop.
+  - _Requirements: 8.2, 8.10_
 
 - [x] 9. Add the daily backup
   - The `mongo_backup` DAG with `mongodump --gzip --archive` into `/opt/backups/mongo`, keeping the 7 newest.
@@ -86,22 +86,11 @@ This is the pull request Connor should read most closely, with police PR 2b: tog
 
 - [x] 10. Add the check command
   - Size and versions per source with the 5 GB warning.
-  - Log PDFs with an archived body and text-only ones, counted, with the text-only ones listed by URL; log PDFs with neither; parcels with no version; `ai` normalizations with a null `ai_call_id`.
+  - Log PDFs with an archived body, counted; log PDFs with none; parcels with no version; `ai` normalizations with a null `ai_call_id`.
+    The text-only count goes, with `police_log_text` (2026-11-13).
   - The `ai_call_id` line lands with police log PR 4, which adds the normalization tables.
-  - It is in this pull request because the gate below runs it.
   - Document `check` and `restore-check` in `scrapers/README.md`.
   - _Requirements: 2.5, 4.5_
-
-## Gate before police log pipeline PR 2b
-
-Police PR 2b's migration drops `log_entries.raw_text`, `raw_reason_action`, and `pdf_urls.raw_text`, so it does not ship until archive PRs 1a to 1c have merged and all of these hold, checked by hand on the live databases.
-The migration also refuses to drop anything that is not archived (8.12), so the second check is enforced in code as well.
-Police PR 2 does not drop anything and needs only archive PR 1a.
-
-- [ ] A real backup has run and been restored into a `_test` database with `raw_sources restore-check`.
-- [ ] `maintenance.archive_raw_text` has copied the 343 rows' raw text, every non-null `pdf_urls.raw_text`, and the `urls` texts, with matching counts.
-- [ ] `raw_sources check` shows every `complete` URL record has either an archived body or a `police_log_text` version.
-  The check reports both counts and lists the legacy-only records by URL, so Connor sees which PDFs exist only as text, for example ones the city has since removed.
 
 ## QA
 
@@ -110,5 +99,5 @@ Police PR 2 does not drop anything and needs only archive PR 1a.
   - For PR 1a, a real run of the process job on the three known PDFs and of the VGSI spider on a few parcels, then a second run to show the seen counts move and no new versions appear.
   - Measure the overhead in 3.6 on 100 PDFs with the archive on and off.
   - For PR 1b, replay parcels and compare with the live-download results.
-  - For PR 1c, a backup, a prune, a restore check into a test database, and the legacy import run twice against a copy of the live data.
+  - For PR 1c, a backup, a prune, and a restore check into a test database.
   - Report pass or fail for each criterion.

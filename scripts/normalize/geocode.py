@@ -4,7 +4,7 @@
 
 It takes `ai` and `rule` rows that have a normalized address and no coordinates, and
 never a `human` row. It reuses the coordinates of a place code another row already
-has, asks the geocoder for the row's query and then for its street alone, and drops a
+has, or the coordinates of another spelling of the same address, asks the geocoder for the row's query and then for its street alone, and drops a
 result outside the city. A row that misses three times is marked for review. It stops
 after 600 requests, and leaves the rest for the next run.
 """
@@ -25,7 +25,7 @@ from locations.geocode import (
 from postgres import SessionLocal, engine
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
-from sqlalchemy import or_, select
+from sqlalchemy import ColumnElement, or_, select
 from sqlalchemy.orm import Session
 
 MAX_ATTEMPTS = 3
@@ -113,7 +113,7 @@ def _place(
     counts: GeocodeCounts,
     max_requests: int,
 ) -> None:
-    if _reuse_place_code(session, row):
+    if _reuse_place_code(session, row) or _reuse_same_address(session, row):
         counts.reused += 1
         return
     if row.kind == "highway" and not _names_a_point(row.normalized_address or ""):
@@ -141,10 +141,37 @@ def _reuse_place_code(session: Session, row: AddressNormalization) -> bool:
     """6.2: a place code another row has already placed supplies its coordinates."""
     if not row.place_code:
         return False
-    donor = session.scalars(
+    donor = _placed_donor(
+        session, row, AddressNormalization.place_code == row.place_code
+    )
+    if donor is None:
+        return False
+    _copy_pin(row, donor)
+    row.geocoded_via = "place_code"
+    return True
+
+
+def _reuse_same_address(session: Session, row: AddressNormalization) -> bool:
+    """Another spelling of the same normalized address has a pin, so skip the lookup."""
+    donor = _placed_donor(
+        session,
+        row,
+        AddressNormalization.normalized_address == row.normalized_address,
+    )
+    if donor is None:
+        return False
+    _copy_pin(row, donor)
+    row.geocoded_via = donor.geocoded_via
+    return True
+
+
+def _placed_donor(
+    session: Session, row: AddressNormalization, same: ColumnElement[bool]
+) -> AddressNormalization | None:
+    return session.scalars(
         select(AddressNormalization)
         .where(
-            AddressNormalization.place_code == row.place_code,
+            same,
             AddressNormalization.id != row.id,
             # A place must not inherit an address's pin, which is unrounded.
             AddressNormalization.kind == row.kind,
@@ -153,12 +180,11 @@ def _reuse_place_code(session: Session, row: AddressNormalization) -> bool:
         .order_by(AddressNormalization.id)
         .limit(1)
     ).first()
-    if donor is None:
-        return False
+
+
+def _copy_pin(row: AddressNormalization, donor: AddressNormalization) -> None:
     row.lat, row.lng = donor.lat, donor.lng
     row.coordinate_precision = donor.coordinate_precision
-    row.geocoded_via = "place_code"
-    return True
 
 
 def _look_up(
@@ -208,7 +234,7 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
             return 1
         counts = run(geocoder)
     print(
-        f"Geocoding: {counts.placed} placed, {counts.reused} reused from a place code, "
+        f"Geocoding: {counts.placed} placed, {counts.reused} reused from another row, "
         f"{counts.missed} missed, {counts.bare_highways} bare highways left for review. "
         f"{counts.requests} requests."
     )

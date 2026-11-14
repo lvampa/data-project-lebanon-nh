@@ -450,3 +450,68 @@ def test_a_place_does_not_inherit_the_coordinates_of_an_address(db_session):
     row = the_row(db_session, "HANNAFORDS")
     assert (row.lat, row.lng) == IN_CITY
     assert counts.reused == 0
+
+
+# --- a second spelling of an address that is already placed ---
+
+
+def test_a_second_spelling_of_a_placed_address_is_reused_with_no_request(db_session):
+    add_row(
+        db_session,
+        "12 MAIN ST",
+        normalized_address="12 Main St",
+        lat=43.6001,
+        lng=-72.2001,
+        geocoded_via="nominatim",
+        coordinate_precision="exact",
+    )
+    add_row(db_session, "12 MAIN STREET", normalized_address="12 Main St")
+    geocoder = FakeGeocoder()
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "12 MAIN STREET")
+    assert (row.lat, row.lng) == (43.6001, -72.2001)
+    assert (row.geocoded_via, row.coordinate_precision) == ("nominatim", "exact")
+    assert geocoder.queries == []
+    assert (counts.reused, counts.requests) == (1, 0)
+
+
+def test_a_donor_of_another_kind_is_not_used_for_the_same_address(db_session):
+    add_row(
+        db_session,
+        "HANNAFORDS",
+        normalized_address="Hannafords",
+        kind="place",
+        lat=43.6001,
+        lng=-72.2001,
+        geocoded_via="nominatim",
+        coordinate_precision="exact",
+    )
+    add_row(db_session, "HANNAFORDS ST", normalized_address="Hannafords")
+    geocoder = FakeGeocoder({"HANNAFORDS ST, Lebanon, NH": hit()})
+
+    counts = geocode_job.run(geocoder)
+
+    assert the_row(db_session, "HANNAFORDS ST").lat == IN_CITY[0]
+    assert (counts.reused, counts.requests) == (0, 1)
+
+
+def test_a_human_row_is_not_filled_from_a_donor_with_the_same_address(db_session):
+    add_row(
+        db_session,
+        "12 MAIN ST",
+        normalized_address="12 Main St",
+        lat=43.6001,
+        lng=-72.2001,
+        geocoded_via="nominatim",
+        coordinate_precision="exact",
+    )
+    add_row(
+        db_session, "12 MAIN STREET", normalized_address="12 Main St", source="human"
+    )
+
+    counts = geocode_job.run(FakeGeocoder())
+
+    assert the_row(db_session, "12 MAIN STREET").lat is None
+    assert counts.reused == 0

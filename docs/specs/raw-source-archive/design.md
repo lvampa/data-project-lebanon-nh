@@ -30,7 +30,7 @@ The reads, extra sources, backup, and check command ship before police PR 2b, wh
   replay command ───► raw_sources ─► HtmlResponse ─► parse_parcel ─► PropertyPipeline ─► Postgres
 
   normalize job ────► AiCallLog ─► MongoDB ai_calls          Postgres keeps ai_call_id
-  backup DAG ───────► mongodump ─► backup folder, 7 days kept
+  backup script ────► mongodump ─► backup folder, one dated file per run
 ```
 
 MongoDB holds originals and records; it is never the source of truth for a curated value.
@@ -167,14 +167,14 @@ Calls are written one at a time; a run makes at most 10.
 
 ### Backup
 
-A `mongo_backup` Airflow DAG runs daily: `mongodump --gzip --archive` of the archive's database into `/opt/backups/mongo` inside the container (7.1, 7.2).
+A `mongo_backup` script, run by hand in the Airflow container, runs `mongodump --gzip --archive` of the archive's database into a new dated file in `/opt/backups/mongo` (7.1, 7.2).
 That path is a bind mount of the host folder, so the backup is outside the `mongo_data` volume.
 `compose.yml` mounts it on the Airflow services as `${MONGO_BACKUP_DIR:-${HOME}/backups/data-project/mongo}:/opt/backups/mongo`, so the host folder is `~/backups/data-project/mongo` unless `.env` sets `MONGO_BACKUP_DIR`.
 The default uses `${HOME}` so the path is absolute whether or not the shell or Compose expands `~`.
 `mongodump` is part of MongoDB Database Tools, which the Airflow image does not have, so `docker/Dockerfile.airflow` installs the `mongodb-database-tools` package.
-Running it inside Airflow, rather than as a separate compose service from the `mongo:8` image, means a failed backup shows as a failed DAG run (7.4).
-It deletes backups older than the 7 newest (7.3) and fails the task on a non-zero exit (7.4).
-The DAG has one task, `python maintenance/mongo_backup.py`, like the other DAGs; its first step checks the folder exists and is writable, and fails with a message that names it, before `mongodump` starts.
+Running it inside the Airflow image, rather than as a separate compose service from the `mongo:8` image, reuses the tools and environment the other maintenance scripts already have (7.4).
+It never overwrites or deletes a backup (7.3), and on a non-zero exit it deletes its own partial file and exits non-zero (7.4).
+The script is `python maintenance/mongo_backup.py`; its first step checks the folder exists and is writable, and fails with a message that names it, before `mongodump` starts.
 `mongodump` and `mongorestore` get the password through a `--config` file, not the command line, so it stays out of the process list and the task log.
 The host folder is created by hand before the first run, because when Docker creates a missing bind-mount folder it is owned by root, and the Airflow user (uid 50000) cannot write to it.
 Docker Desktop on a Mac usually hides this, but CI and any Linux host do not.
@@ -262,7 +262,7 @@ Expected size, from one fetch of each:
 - AI call records are a few kilobytes each, at most 10 a day after the backlog.
 - Entry texts add about 40 KB per PDF, the size of its extracted text, before compression.
 - Business pages and budget PDFs number in the hundreds, not thousands.
-- That is well under 1 GB a year, which is why there is no pruning yet, and why 7 daily backups fit on any disk.
+- That is well under 1 GB a year, which is why there is no pruning, and why dated backups fit on any disk.
 
 ## Error handling
 
@@ -277,7 +277,7 @@ Expected size, from one fetch of each:
 | Replay finds a truncated version | Skipped and counted as no usable body. | 4.4 |
 | Replay finds no version | Counted as no usable body. | 4.4 |
 | An AI call record cannot be written | `record` returns `None`; the normalization is stored without `ai_call_id`. | 6.5 |
-| Backup fails | The DAG task fails and shows red; the previous backups stay. | 7.4 |
+| Backup fails | The script deletes its partial file and exits non-zero; the previous backups stay. | 7.4 |
 
 ## Testing strategy
 
@@ -296,7 +296,7 @@ Expected size, from one fetch of each:
 - Legacy import: copies seeded `log_entries` rows to `police_log_entry_text` and `pdf_urls` and `urls` texts to `police_log_text`; leaves `urls` and Postgres unchanged; exits non-zero when a row or text is missing; and a second run changes nothing.
 - Reprocess fallback: a URL with only a `police_log_text` version is reparsed from that text.
 - LLC and budget scripts: each archives its download, and an unreachable Mongo leaves their own output unchanged.
-- Backup: the DAG's structure test, and a QA run that backs up, prunes, and restores into a test database.
+- Backup: a test that a failed dump leaves no file, and a QA run that backs up and restores into a test database.
 - Overhead (3.6): a QA run of the process job on 100 PDFs with the archive on and off; not in the test suite.
 
 ## Decisions
@@ -341,7 +341,7 @@ Connor chose to drop the extracted text from Postgres, so the police log reproce
   It kept reprocessing Postgres-only and left the archive a pure side copy.
 - What the choice costs, and how the design pays for it:
   the archive's writing ships earlier, before Postgres stops storing the text;
-  it is backed up daily, and police PR 2 waits on a gate in tasks.md: a restored backup, the legacy import, and every `complete` URL record archived;
+  it is backed up by hand, and police PR 2 waits on a gate in tasks.md: a restored backup, the legacy import, and every `complete` URL record archived;
   reprocess depends on pypdf, so the extractor version is recorded and a pypdf bump counts as a parser change;
   police PDFs are written one at a time, so the process job knows whether each was archived, and a PDF the archive missed goes back to the download queue instead of getting stuck.
 

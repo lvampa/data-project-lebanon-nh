@@ -75,7 +75,7 @@ This is the pull request Connor should read most closely, with police PR 2b: tog
   - _Requirements: 8.2, 8.4 to 8.8, 8.10, 8.12_
 
 - [x] 9. Add the daily backup
-  - The `mongo_backup` DAG with `mongodump --gzip --archive` into `/opt/backups/mongo`, keeping the 7 newest.
+  - The `mongo_backup` script with `mongodump --gzip --archive` into a new dated file in `/opt/backups/mongo`, run by hand.
   - The bind mount in `compose.yml`, `${MONGO_BACKUP_DIR:-${HOME}/backups/data-project/mongo}:/opt/backups/mongo`, on the Airflow services, and a commented `MONGO_BACKUP_DIR` entry in `.env.example` showing the default.
   - The DAG's first step checks the folder is writable and fails with a message naming it when it is missing or not writable.
   - `scrapers/README.md` says to create `~/backups/data-project/mongo` on the host before the first run, owned by the user that runs Docker, because a folder Docker creates is owned by root and the Airflow user cannot write to it.
@@ -110,5 +110,5 @@ Police PR 2 does not drop anything and needs only archive PR 1a.
   - For PR 1a, a real run of the process job on the three known PDFs and of the VGSI spider on a few parcels, then a second run to show the seen counts move and no new versions appear.
   - Measure the overhead in 3.6 on 100 PDFs with the archive on and off.
   - For PR 1b, replay parcels and compare with the live-download results.
-  - For PR 1c, a backup, a prune, a restore check into a test database, and the legacy import run twice against a copy of the live data.
+  - For PR 1c, a backup, a restore check into a test database, and the legacy import run twice against a copy of the live data.
   - Report pass or fail for each criterion.

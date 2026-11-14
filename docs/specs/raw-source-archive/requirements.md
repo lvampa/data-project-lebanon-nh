@@ -135,9 +135,9 @@ CivicClerk agendas and minutes join the archive later, with their own scraper.
 1. WHEN the backup runs, THE backup job SHALL write a compressed `mongodump` of the archive's database to the backup folder, outside the Docker volume.
    The backup folder is `~/backups/data-project/mongo` on the host by default, and `MONGO_BACKUP_DIR` changes it.
    IF the backup folder does not exist or cannot be written, THEN THE backup job SHALL exit with an error that names the folder.
-2. THE scheduler SHALL run the backup once a day.
-3. THE backup job SHALL keep the 7 most recent daily backups and delete older ones.
-4. IF the backup fails, THEN THE backup job SHALL exit with a non-zero status, so that the scheduler shows it failed.
+2. THE operator SHALL run the backup by hand.
+3. THE backup job SHALL write a new dated file on each run, and SHALL NOT overwrite or delete an existing backup.
+4. IF the backup fails, THEN THE backup job SHALL exit with a non-zero status, so that the operator sees it failed.
 5. THE operator SHALL be able to restore a backup into a MongoDB database whose name ends in `_test` with one command, to check that it is usable.
 
 ### Requirement 8: Keep every raw field, and every structured field in Postgres
@@ -152,7 +152,7 @@ CivicClerk agendas and minutes join the archive later, with their own scraper.
 4. WHEN the legacy import runs, THE legacy import command SHALL copy every `log_entries` row's `raw_text` and `raw_reason_action` into the archive as a `police_log_entry_text` version, keyed by case number, and SHALL report how many rows it copied and how many rows `log_entries` holds.
    Those rows were parsed before the parser had a version, so their entry texts carry a null `parser_version`.
 5. WHEN the legacy import runs, THE legacy import command SHALL copy the stored PDF text of every Mongo `urls` document that has one into the archive as a `police_log_text` version, and SHALL NOT change or delete the `urls` collection.
-   The `urls` documents are copied, not moved: they stay in the archive's database as the record of the old queue, and the daily backup covers them.
+   The `urls` documents are copied, not moved: they stay in the archive's database as the record of the old queue, and the backup covers them.
 6. WHEN the legacy import runs, THE legacy import command SHALL copy every non-null `pdf_urls.raw_text` into the archive as a `police_log_text` version for that URL, and SHALL report how many it copied and how many `pdf_urls` rows have text.
 7. IF the legacy import copied fewer `log_entries` rows or `pdf_urls` texts than exist, THEN THE legacy import command SHALL exit with a non-zero status.
 8. WHEN the legacy import runs a second time on the same data, THE legacy import command SHALL change no archived version and store no new one.
@@ -173,7 +173,7 @@ CivicClerk agendas and minutes join the archive later, with their own scraper.
   The backup folder can sit on an external drive; anything further is a later decision.
 - Deleting or pruning versions.
   The check command warns at 5 GB; a pruning rule is a later decision.
-  Backups are pruned to 7 days (7.3).
+  Old backups are deleted by hand (7.3).
 - Showing archived originals in the admin app or the API.
 - File storage such as S3, and MongoDB GridFS.
 - Removing the old `urls` collection.

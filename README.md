@@ -1,6 +1,24 @@
 # Data-Project-Lebanon
 ETL, Infrastructure, Presentation Dashboards for data made public by the city of Lebanon, NH
 
+## Database migrations
+
+Schema changes go through Alembic, and you apply them by hand, along with the MongoDB indexes.
+Nothing runs them for you at startup.
+
+Start Postgres and MongoDB, then run these two commands from the repo root:
+```bash
+docker compose up -d postgres mongo
+uv run alembic -c shared/postgres/alembic.ini upgrade head
+uv run python -c "from mongo import init_indexes; init_indexes()"
+```
+The first applies the Postgres migrations.
+The second creates the MongoDB indexes, and is safe to run again.
+Run both again after you pull a branch that adds a migration or an index.
+
+They read `POSTGRES_*` and `MONGO_*` from your shell, and fall back to the local compose values.
+If your `.env` sets other values, load them first with `set -a; . ./.env; set +a`.
+
 ## Tests
 
 Run every suite from the repo root with `uv run pytest`.

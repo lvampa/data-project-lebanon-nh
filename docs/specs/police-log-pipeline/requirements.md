@@ -14,7 +14,8 @@ Postgres holds 343 entries from 3 PDFs, 650 PDFs are waiting, and 10 are stuck m
 No incident type or address has ever been normalized, so the public map is empty and search cannot group "MV Complaint" with other traffic calls.
 A parser fix cannot repair rows already stored, because nothing can reprocess them.
 
-Success is that a new PDF flows from the city page to admin search and to the public JSON without manual steps, with every value the PDF gave kept as it was and a normalized value stored beside it.
+Success is that a new PDF flows from the city page to admin search and to the public JSON on a daily schedule, with every value the PDF gave kept as it was and a normalized value stored beside it.
+The one manual step is the AI normalizing: Connor runs one command on his Mac, and the daily run picks up whatever is normalized so far.
 AI does the normalizing, either through `claude -p` on Connor's Max plan or through a free local model, and never through a paid API.
 Connor can correct any normalized value, and his correction always wins.
 When AI or the geocoder fails, the pipeline keeps going on raw values and tries again later.
@@ -244,7 +245,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 
 #### Acceptance criteria
 
-1. THE normalization job SHALL send AI calls to the AI backend named in configuration: `claude -p` with the subscription login and a small model by default, or a local model when Connor turns it on.
+1. THE normalization job SHALL send AI calls to the AI backend named in configuration: `claude -p` with the subscription login of the person running the job on Connor's Mac and a small model by default, or a local model when Connor turns it on.
 2. IF the AI backend is `claude -p` and `ANTHROPIC_API_KEY` is set, THEN THE normalization job SHALL exit with an error before making any AI call, because the CLI bills the key when it is present.
 3. THE test suite SHALL run one set of contract tests against every AI backend, covering a valid answer, an empty answer, a malformed answer, a timeout, and a login failure.
 4. THE normalization job SHALL take the model name from configuration and record it as in 7.2.
@@ -301,11 +302,12 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 #### Acceptance criteria
 
 1. THE scheduler SHALL run discovery once a day.
-2. WHEN discovery finishes, THE scheduler SHALL run processing, then normalization, then geocoding, then the consumer model build, in that order.
+2. WHEN discovery finishes, THE scheduler SHALL run processing, then geocoding, then the consumer model build, in that order.
+   The scheduler does not run normalization; geocoding and the build work on whatever has been normalized so far (requirement 16).
 3. THE process job SHALL handle up to 100 URL records per run.
 4. THE scheduler SHALL allow at most one run of each police log job at a time, counting reprocess.
 5. THE scheduler SHALL stop any police log task that runs longer than 60 minutes and mark it failed.
-6. IF the processing, normalization, or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
+6. IF the processing or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
 7. WHEN a stage fails after its retries, THE scheduler SHALL show the run as failed and log the stage name and reason.
 8. WHEN the scheduler containers start, THE init service SHALL apply the database migrations before any police log job runs.
 9. THE scheduler SHALL NOT run the public export or deploy the site.
@@ -352,6 +354,23 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 7. THE evaluation SHALL NOT run in the test suite or the pre-push hook, because it makes real AI calls.
 8. THE local model backend SHALL pass the same contract tests as `claude -p`, and its evaluation score SHALL be recorded in the repo before it is used for a scheduled run.
 
+### Requirement 16: Run AI normalization by hand on Connor's Mac
+
+**User story:** As Connor, I want to run the AI normalizing myself from my Mac with my normal Claude login, so that no long-lived token sits in `.env` and no container holds a Claude login.
+
+#### Acceptance criteria
+
+1. THE normalization job SHALL run as one documented command from the repo root on Connor's Mac, outside any container.
+2. THE normalization job SHALL read its database settings from the repo's `.env`, and SHALL connect to the compose Postgres and MongoDB on localhost.
+3. THE normalization job SHALL use the `claude` login of the person running it, and SHALL NOT read a Claude token from `.env` or the environment.
+4. THE normalization job SHALL make each AI call as in 9.8, with every tool off, an empty working directory, and no settings, hooks, or MCP servers, even though it runs in Connor's own account.
+5. WHILE the process, reprocess, or geocode job is running, THE normalization job SHALL NOT start, and SHALL exit with a non-zero status and a message saying another police log job is running.
+6. WHILE the normalization job is running, THE process, reprocess, and geocode jobs SHALL NOT start.
+7. IF Postgres is unreachable, THEN THE normalization job SHALL exit with a non-zero status and a message naming the host and port, before making any AI call.
+8. WHEN the normalization job finishes, THE job SHALL print a summary of at most 15 lines. For each field it gives how many values the rules settled, how many AI normalized, how many were discarded, and how many still wait, then the AI calls made and the call records lost.
+9. THE normalization job SHALL exit with a non-zero status when 8.11, 9.2, 9.7, 16.5, or 16.7 applies, and with zero otherwise.
+10. THE daily schedule SHALL NOT run the normalization job.
+
 ## Out of scope
 
 - Changes to the public site or admin pages.
@@ -385,5 +404,9 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
   Admin search for incidents runs in Postgres (requirement 10), and removing Elasticsearch from the stack is its own follow-up task.
 - Search across the other entity types, such as properties and planning documents.
   The search spec covers it and still describes Elasticsearch.
+- Running AI normalization in the scheduler, or installing the `claude` CLI in the Airflow image.
+  Deferred; the `airflow-claude-cli` branch exists, unbuilt, if this is revisited.
+- Scheduling the normalization job on the Mac.
+  A LaunchAgent is an optional later step, sketched in design.md.
 - Alerts by email or chat when a run fails.
   Failures show in Airflow and Logfire.

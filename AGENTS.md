@@ -70,7 +70,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 scrapers/spiders/         Scrapy spiders
 scrapers/items/           Scrapy Item definitions
 scrapers/models/          Pydantic validation models (spider → pipeline boundary)
-scrapers/pipelines.py     Items → MongoDB / PostgreSQL
+scrapers/pipelines.py     Items → PostgreSQL
 dags/                     Airflow DAGs (orchestration)
 shared/mongo/             MongoDB client (workspace package)
 shared/postgres/          SQLAlchemy models + Alembic migrations (workspace package)
@@ -83,16 +83,16 @@ scripts/                  generate_report.sh, deploy.sh
 
 ### Data Flow
 
-1. `build_daily_urls` spider → scrapes PDF links → saves to MongoDB `urls` collection as `pending`
-2. `process_urls` spider → atomically claims `pending` URLs via `find_one_and_update` (recording `claimed_at` and `attempts`) → downloads PDFs → parses → yields one `PoliceLogPdfItem` per PDF carrying its entries
-3. `PoliceLogPipeline` → validates via Pydantic → upserts to PostgreSQL `log_entries` (keyed on `case_number`) → marks the URL `complete` only after the commit, or `error` on failure
+1. `build_daily_urls` spider → scrapes PDF links → inserts them into PostgreSQL `pdf_urls` as `pending`
+2. `process_urls` spider → claims `pending` URLs with `FOR UPDATE SKIP LOCKED` (recording `claimed_at` and `attempts`) → downloads PDFs → parses → yields one `PoliceLogPdfItem` per PDF carrying its entries
+3. `PoliceLogPipeline` → validates via Pydantic → upserts to PostgreSQL `log_entries` (keyed on `case_number`) → marks the URL `complete` in the same commit as its entries, or `error` on failure
 4. `scripts/deploy.sh` → runs `generate_report.sh` to export JSON into `public/data/` (gitignored) → `bun run build` → `wrangler pages deploy`
 
 ### Key Patterns
 
 - **Item → Model boundary:** Scrapy Items are untyped dicts. Always validate at the pipeline with `Model.model_validate(dict(item))` before writing to a database.
 - **Idempotent writes:** Use `on_conflict_do_nothing` (log entries) or `on_conflict_do_update` (properties, city staff). Never assume a record doesn't exist.
-- **Atomic URL claiming:** `find_one_and_update` with `state: pending → in_progress` prevents double-processing across concurrent spider runs.
+- **Atomic URL claiming:** an `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)` moves `pending → in_progress`, so concurrent runs never claim the same URL.
 - **Observability:** Use `logfire.span()` for database writes and PDF processing. Use `logfire.info/warning/error` at key decision points (not every line).
 - **Migrations:** Schema changes go through Alembic in `shared/postgres/migrations/`. Never modify tables directly.
 
@@ -131,6 +131,7 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 - Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
 - CI (`.github/workflows/ci.yml`) runs the pre-push checks plus Rust and, when Docker inputs change, the image builds; `ci-ok` is the one required check.
+- Use Pyrefly for Python type checking (`uv run pyrefly check`). New code is strict; files on the not-yet-strict list in `pyproject.toml` are not, and only come off it.
 
 ## 7. Frontend
 

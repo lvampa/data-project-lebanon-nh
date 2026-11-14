@@ -45,8 +45,8 @@ def test_llc_owner_queues_lookup(mock_session_cls):
     mock_session.execute.return_value.scalar_one.return_value = 1
 
     pipeline = PropertyPipeline()
-    pipeline.open_spider(None)
-    pipeline.process_item(make_item(owner="ANAGNOST UPPER VALLEY LLC"), None)
+    pipeline.open_spider()
+    pipeline.process_item(make_item(owner="ANAGNOST UPPER VALLEY LLC"))
 
     # Verify an LLC insert was attempted (pg_insert called with Llc table)
     calls = _sql_strings(mock_session.execute.call_args_list)
@@ -61,8 +61,8 @@ def test_individual_owner_skips_lookup(mock_session_cls):
     mock_session.execute.return_value.scalar_one.return_value = 1
 
     pipeline = PropertyPipeline()
-    pipeline.open_spider(None)
-    pipeline.process_item(make_item(owner="SMITH, JOHN"), None)
+    pipeline.open_spider()
+    pipeline.process_item(make_item(owner="SMITH, JOHN"))
 
     calls = _sql_strings(mock_session.execute.call_args_list)
     assert not any("llcs" in c.lower() for c in calls)
@@ -75,8 +75,8 @@ def test_none_owner_skips_lookup(mock_session_cls):
     mock_session.execute.return_value.scalar_one.return_value = 1
 
     pipeline = PropertyPipeline()
-    pipeline.open_spider(None)
-    pipeline.process_item(make_item(owner=None), None)
+    pipeline.open_spider()
+    pipeline.process_item(make_item(owner=None))
 
     calls = _sql_strings(mock_session.execute.call_args_list)
     assert not any("llcs" in c.lower() for c in calls)

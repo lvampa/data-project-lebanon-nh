@@ -92,6 +92,13 @@ def test_parse_extracts_log_date_from_url():
     assert items[0]["log_date"] == datetime(2026, 5, 1)
 
 
+def test_parse_created_at_is_naive_utc():
+    # pdf_urls.created_at is a naive column that holds UTC, like the other writers.
+    spider = BuildDailyUrlsSpider.__new__(BuildDailyUrlsSpider)
+    items = list(spider.parse(make_response(["/a.pdf"])))
+    assert items[0]["created_at"].tzinfo is None
+
+
 def test_parse_log_date_none_when_not_in_url():
     spider = BuildDailyUrlsSpider.__new__(BuildDailyUrlsSpider)
     items = list(spider.parse(make_response(["/a.pdf"])))

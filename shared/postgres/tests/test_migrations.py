@@ -18,6 +18,8 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def migrated():
+    # The skipif above runs these tests only when it is set.
+    assert TEST_DATABASE_URL is not None
     engine = create_engine(TEST_DATABASE_URL)
     with engine.connect() as connection:
         # Alembic joins this outer transaction, so rolling it back leaves the
@@ -49,8 +51,16 @@ def test_migrations_match_models_and_downgrade_cleanly(migrated):
         " VALUES ('1 MAIN ST', 'bogus', now(), now())",
         "INSERT INTO planning_documents (civicclerk_file_id, civicclerk_event_id, scraped_at)"
         " VALUES (1, 999, now())",
+        "INSERT INTO pdf_urls (canonical_url, state, created_at)"
+        " VALUES ('https://example.com/a.pdf', 'bogus', now())",
     ],
-    ids=["lookup_status", "document_type", "geocoded_via", "planning_event_fk"],
+    ids=[
+        "lookup_status",
+        "document_type",
+        "geocoded_via",
+        "planning_event_fk",
+        "pdf_url_state",
+    ],
 )
 def test_constraints_reject_invalid_rows(migrated, statement):
     connection, _ = migrated

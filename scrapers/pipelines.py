@@ -1,5 +1,6 @@
 import re
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import logfire
 from items import PoliceLogPdfItem, UrlRecordItem
@@ -13,17 +14,18 @@ from models.officer import OfficerRecord
 from models.police_log import PoliceLogRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
-from mongo import db, init_indexes
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
 from postgres.models.llc import Llc, PropertyLlc
 from postgres.models.log_entry import LogEntry
 from postgres.models.officer import Officer
+from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
-from pymongo import UpdateOne
-from sqlalchemy import delete, select
+from scrapy import Item
+from sqlalchemy import CursorResult, Update, delete, select, update
+from sqlalchemy.dialects.postgresql import Insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 _LLC_PATTERN = re.compile(
@@ -33,106 +35,93 @@ _LLC_PATTERN = re.compile(
 
 
 class UrlRecordPipeline:
-    def open_spider(self, spider) -> None:
-        self._ops: list[UpdateOne] = []
-        self._count: int = 0
+    def open_spider(self) -> None:
+        self._records: list[UrlRecord] = []
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, UrlRecordItem):
             return item
 
-        record = UrlRecord.model_validate(dict(item))
-
-        self._count += 1
-        self._ops.append(
-            UpdateOne(
-                {"canonical_url": record.canonical_url},
-                {
-                    "$setOnInsert": {
-                        "canonical_url": record.canonical_url,
-                        "archive_url": record.archive_url,
-                        "log_date": record.log_date,
-                        "state": record.state,
-                        "created_at": record.created_at,
-                    }
-                },
-                upsert=True,
-            )
-        )
+        self._records.append(UrlRecord.model_validate(dict(item)))
         return item
 
-    def close_spider(self, spider) -> None:
-        if not self._ops:
+    def close_spider(self) -> None:
+        # Every spider runs this pipeline, so only open a session when there are URLs.
+        if not self._records:
             return
 
-        # The upsert relies on the unique canonical_url index. Every spider runs
-        # this pipeline, so only touch Mongo when there are URLs to write.
-        init_indexes(db)
-        with logfire.span(
-            "bulk upsert url records", found=self._count, count=len(self._ops)
+        statement = (
+            pg_insert(PdfUrl)
+            .values([record.model_dump() for record in self._records])
+            .on_conflict_do_nothing(index_elements=["canonical_url"])
+        )
+        with (
+            logfire.span("insert pdf urls", found=len(self._records)),
+            SessionLocal() as session,
         ):
-            result = db.get_collection("urls").bulk_write(self._ops, ordered=False)
+            # An INSERT returns a CursorResult; Session.execute is typed for SELECTs.
+            result = cast(CursorResult[Any], session.execute(statement))
+            session.commit()
             logfire.info(
-                "url records flushed",
-                found=self._count,
-                inserted=result.upserted_count,
-                matched=result.matched_count,
+                "pdf urls flushed", found=len(self._records), inserted=result.rowcount
             )
 
 
 class PoliceLogPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, PoliceLogPdfItem):
             return item
 
-        urls = db.get_collection("urls")
         try:
             records = [
                 PoliceLogRecord.model_validate(dict(entry)) for entry in item["entries"]
             ]
             with logfire.span(
-                "save police log entries",
-                url_id=str(item["url_id"]),
-                count=len(records),
+                "save police log entries", url_id=item["url_id"], count=len(records)
             ):
                 for record in records:
                     self._session.execute(_log_entry_insert(record))
-            self._session.commit()
+                self._session.execute(
+                    _pdf_url_update(
+                        item["url_id"],
+                        state="complete",
+                        raw_text=item["raw_text"],
+                        entry_count=len(records),
+                    )
+                )
+                self._session.commit()
         except Exception as exc:
             self._session.rollback()
-            urls.update_one(
-                {"_id": item["url_id"]},
-                {
-                    "$set": {
-                        "state": "error",
-                        "error_message": f"Saving entries failed: {exc}",
-                        "completed_at": datetime.now(UTC),
-                    }
-                },
+            self._session.execute(
+                _pdf_url_update(
+                    item["url_id"],
+                    state="error",
+                    error_message=f"Saving entries failed: {exc}",
+                )
             )
+            self._session.commit()
             raise
 
-        urls.update_one(
-            {"_id": item["url_id"]},
-            {
-                "$set": {
-                    "raw_text": item["raw_text"],
-                    "state": "complete",
-                    "entry_count": len(records),
-                    "completed_at": datetime.now(UTC),
-                }
-            },
-        )
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
-def _log_entry_insert(record: PoliceLogRecord):
+def _pdf_url_update(url_id: int, **values: Any) -> Update:
+    # pdf_urls timestamps are naive columns that hold UTC, like the other tables.
+    completed_at = datetime.now(UTC).replace(tzinfo=None)
+    return (
+        update(PdfUrl)
+        .where(PdfUrl.id == url_id)
+        .values(completed_at=completed_at, **values)
+    )
+
+
+def _log_entry_insert(record: PoliceLogRecord) -> Insert:
     return (
         pg_insert(LogEntry)
         .values(
@@ -161,10 +150,10 @@ def _log_entry_insert(record: PoliceLogRecord):
 
 
 class PropertyPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, PropertyItem):
             return item
 
@@ -264,15 +253,15 @@ class PropertyPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
 class CityStaffPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, CityStaffItem):
             return item
 
@@ -314,15 +303,15 @@ class CityStaffPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
 class OfficerPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, OfficerItem):
             return item
 
@@ -361,15 +350,15 @@ class OfficerPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()
 
 
 class BudgetDocumentPipeline:
-    def open_spider(self, spider) -> None:
+    def open_spider(self) -> None:
         self._session = SessionLocal()
 
-    def process_item(self, item, spider):
+    def process_item(self, item: Item) -> Item:
         if not isinstance(item, BudgetDocumentItem):
             return item
 
@@ -402,5 +391,5 @@ class BudgetDocumentPipeline:
 
         return item
 
-    def close_spider(self, spider) -> None:
+    def close_spider(self) -> None:
         self._session.close()

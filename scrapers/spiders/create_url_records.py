@@ -46,7 +46,8 @@ class BuildDailyUrlsSpider(Spider):
         return cleaned, None
 
     def parse(self, response: TextResponse, **kwargs: Any) -> Any:
-        now = datetime.now(UTC)
+        # pdf_urls.created_at is a naive column that holds UTC, like the other writers.
+        now = datetime.now(UTC).replace(tzinfo=None)
         for link in cast(list[Selector], response.css("a.fileType.pdf")):
             result = self.extract_url(link, response.url)
             if not result:

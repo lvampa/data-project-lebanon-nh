@@ -223,7 +223,7 @@ It never sees a database connection, a file, or a tool.
 
 ### Normalization job
 
-`scripts/normalize/`, run by Connor on his Mac from the repo root as `uv run python -m scripts.normalize.job [--field incident_type|location] [--redo]` (see "Running the normalization job on the Mac").
+`scripts/normalize/`, run by Connor on his Mac from the repo root as `uv run normalize [--field incident_type|location] [--redo]` (see "Running the normalization job on the Mac").
 Task 15 confirms the module path matches the `scripts` package layout.
 
 ```
@@ -378,12 +378,15 @@ def strip_unit(canonical: str) -> tuple[str, str | None]           # ("12 MAIN S
   That spec's design (on `spec/address-entity`) planned a dbt macro, and has to be updated to use these instead (open question 7).
 
 
-The geocode job, `python -m scripts.normalize.geocode`, runs in the daily DAG. It makes no AI call, so it needs no Claude login.
+The geocode job, `uv run geocode`, runs in the daily DAG. It makes no AI call, so it needs no Claude login.
 It geocodes whatever has been normalized so far, so a value Connor normalizes today gets coordinates on the next daily run, or right away if he runs the same command on his Mac.
 
 - It takes `ai` and `rule` locations that have a normalized address and no coordinates, fewer than 3 attempts, and are not bare highways (6.3).
 - It takes the police log lock for its run, so it never overlaps the normalization job (16.2, 16.3).
 - A place code that already has coordinates on another row supplies them, with `geocoded_via = 'place_code'` (6.2).
+- A row with the same normalized address and kind as a placed row copies its coordinates and its `geocoded_via` (6.25).
+  A hand-placed donor is used too, so two spellings of one address never land on different spots.
+  The copy keeps `source`, and `geocoded_via` says how the coordinates were found.
 - Otherwise it tries `geocode_query`, then the street alone, which gives an `approximate` result (6.9).
 - A limiter holds requests to 1 per second, and the job stops at 600 requests per run (6.7, 6.8).
 - A result outside the city bounds is discarded (6.4).
@@ -546,9 +549,9 @@ That work is deferred; the `airflow-claude-cli` branch exists, unbuilt, if it's 
 From the repo root, after `docker compose up -d postgres mongo` and `uv sync`:
 
 ```bash
-uv run python -m scripts.normalize.job              # both fields
-uv run python -m scripts.normalize.job --field location
-uv run python -m scripts.normalize.geocode          # optional: place today's values now
+uv run normalize              # both fields
+uv run normalize --field location
+uv run geocode          # optional: place today's values now
 ```
 
 - It reads `.env` from the repo root like the other scripts; `.env.example` already points Postgres and MongoDB at `localhost`.
@@ -565,7 +568,7 @@ Optional later: a LaunchAgent. This is a sketch for docs only, and nothing is in
   <key>Label</key><string>com.lebanondata.normalize</string>
   <key>ProgramArguments</key><array>
     <string>/bin/zsh</string><string>-lc</string>
-    <string>cd ~/projects/data-project &amp;&amp; uv run python -m scripts.normalize.job</string>
+    <string>cd ~/projects/data-project &amp;&amp; uv run normalize</string>
   </array>
   <!-- After the daily DAG has finished, so the lock is free. -->
   <key>StartCalendarInterval</key><dict>

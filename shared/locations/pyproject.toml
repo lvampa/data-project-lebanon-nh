@@ -1,9 +1,9 @@
 [project]
 name = "locations"
 version = "0.1.0"
-description = "Canonical address rules, shared by the normalization jobs and the admin API"
+description = "Canonical address rules and geocoding, shared by the normalization jobs and the admin API"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["httpx>=0.27.0"]
 
 [build-system]
 requires = ["uv_build>=0.10.4,<0.11.0"]

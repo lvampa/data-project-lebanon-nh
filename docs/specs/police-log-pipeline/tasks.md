@@ -145,7 +145,7 @@ No AI yet.
   - Delete the three old categorizer scripts and their tests, which stop working when `subcategory` goes.
   - _Requirements: 6.1, 6.9, 7.1, 7.2, 7.10_
 
-- [ ] 11. Add the `shared/locations` package
+- [x] 11. Add the `shared/locations` package
   - Move `geocode_nominatim` out of `api/`, with the city-bounds check, the 1 per second limiter, and exact or approximate results.
   - Add `canonical.py` with `RULES_VERSION`, `canonical_address`, `split_house_number`, and `strip_unit`, and `street_suffixes.csv`.
     These are pure functions, with tests over at least 20 spelling pairs that must match and 5 that must not.

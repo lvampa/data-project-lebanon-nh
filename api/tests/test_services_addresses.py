@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+from locations.geocode import GeocodeResult
+
 from api.deps import NormalizationFilter, Paging
 from api.schemas import AddressUpdate
 from api.services import addresses
@@ -44,17 +46,25 @@ def test_update_address_upserts_geocoded_coordinates_and_commits():
     update = AddressUpdate(normalized_address="Timberwood Drive")
 
     with patch(
-        "api.services.addresses.geocode_nominatim", return_value=(43.7, -72.3)
+        "api.services.addresses.geocode",
+        return_value=GeocodeResult(43.7, -72.3, "exact"),
     ) as geocode:
         result = addresses.update_address(
             db, "TIMBERWOOD DR", update, nominatim_contact="ops@example.com"
         )
 
-    geocode.assert_called_once_with("Timberwood Drive", contact="ops@example.com")
+    geocode.assert_called_once_with(
+        "Timberwood Drive, Lebanon, NH, USA", contact="ops@example.com"
+    )
     stmt = executed_stmt(db)
     assert "ON CONFLICT (raw_address) DO UPDATE" in str(compile_pg(stmt))
-    assert {"normalized_address", "lat", "lng", "geocoded_via"} <= (
-        upsert_set_columns(stmt)
-    )
+    assert {
+        "normalized_address",
+        "lat",
+        "lng",
+        "geocoded_via",
+        "coordinate_precision",
+    } <= upsert_set_columns(stmt)
+    assert compile_pg(stmt).params["coordinate_precision"] == "exact"
     db.commit.assert_called_once()
     assert (result.lat, result.lng, result.geocoded_via) == (43.7, -72.3, "nominatim")

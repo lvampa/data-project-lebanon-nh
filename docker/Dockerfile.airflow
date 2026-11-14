@@ -14,6 +14,7 @@ COPY --chown=airflow scrapers/pyproject.toml ./scrapers/
 COPY --chown=airflow api/pyproject.toml ./api/
 
 # shared/* and scripts/ need their source to build. The volume mounts overlay them at runtime.
+COPY --chown=airflow shared/locations ./shared/locations/
 COPY --chown=airflow shared/mongo ./shared/mongo/
 COPY --chown=airflow shared/postgres ./shared/postgres/
 COPY --chown=airflow scripts ./scripts/

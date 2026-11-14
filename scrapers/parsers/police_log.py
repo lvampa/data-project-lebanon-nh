@@ -62,6 +62,30 @@ _DISPATCH_RE = re.compile(
 )
 
 
+# A line that opens a unit's block: "ID:    XA -", "Fire Unit:", "EMS Unit:".
+_UNIT_LINE_RE = re.compile(r"^[ \t]*(?:ID|[A-Za-z ]*Unit):", re.MULTILINE)
+
+
+def _dispatch_times(block: str, primary_code: str | None) -> re.Match[str] | None:
+    """The times of the primary unit's block, else the first block that has times.
+
+    Response times are only meaningful for the unit the entry names as primary; a
+    backup unit often arrives first or never.
+    """
+    if primary_code:
+        own_id_line = re.compile(
+            rf"^[ \t]*ID:\s+{re.escape(primary_code)}\s+-", re.MULTILINE
+        )
+        for id_line in own_id_line.finditer(block):
+            after = block[id_line.end() :]
+            next_unit = _UNIT_LINE_RE.search(after)
+            unit_block = after[: next_unit.start()] if next_unit else after
+            found = _DISPATCH_RE.search(unit_block)
+            if found:
+                return found
+    return _DISPATCH_RE.search(block)
+
+
 def _parse_ts(time_str: str | None, log_date: date) -> datetime | None:
     """A time on the log's date, or a "MM/DD/YYYY @ HH:MM:SS" stamp on its own date."""
     if not time_str:
@@ -160,7 +184,7 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
         refer_to = _references(block)
         reference_number = refer_to[0]["number"] if refer_to else None
 
-        dm = _DISPATCH_RE.search(block)
+        dm = _dispatch_times(block, officer_code)
         dispatched_at = enroute_at = arrived_at = cleared_at = None
         response_seconds = scene_seconds = None
         if dm:

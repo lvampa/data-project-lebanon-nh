@@ -288,6 +288,37 @@ def test_all_four_times_and_both_durations(nov_1):
     assert entry["scene_seconds"] == 120
 
 
+def test_times_come_from_the_primary_units_block_not_the_first(nov_1):
+    # The first unit listed (XC) is a backup; the primary is XB.
+    entry = nov_1["26-31412"]
+
+    assert entry["officer_code"] == "XB"
+    assert entry["dispatched_at"] == datetime(2026, 11, 1, 7, 34, 48)
+    assert entry["enroute_at"] == datetime(2026, 11, 1, 7, 34, 51)
+    assert entry["arrived_at"] == datetime(2026, 11, 1, 7, 34, 52)
+    assert entry["cleared_at"] == datetime(2026, 11, 1, 7, 44, 18)
+    assert entry["response_seconds"] == 4
+
+
+def test_a_primary_unit_with_no_dispatch_does_not_borrow_a_backups(nov_1):
+    # The primary (XD) printed only Arvd and Clrd; the backup (XB) has a Disp.
+    entry = nov_1["26-31428"]
+
+    assert entry["dispatched_at"] is None
+    assert entry["arrived_at"] == datetime(2026, 11, 1, 11, 4, 0)
+
+
+def test_times_fall_back_to_the_first_block_when_the_primary_has_none():
+    entry = parse_one(
+        "26-20013        1015 Phone - Suspicious Person Advised\n"
+        "        Primary Id:    XZ - Officer Z. Example\n"
+        "                ID:    XA -   \n"
+        "                       Disp-10:16:00  Arvd-10:20:00  Clrd-10:30:00\n"
+    )
+
+    assert entry["dispatched_at"] == datetime(2026, 5, 11, 10, 16, 0)
+
+
 def test_an_entry_with_no_dispatch_time_still_gets_arrived_and_cleared(nov_1):
     entry = nov_1["26-31404"]
 

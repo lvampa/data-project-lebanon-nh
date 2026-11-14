@@ -36,3 +36,12 @@ def test_the_disposition_seed_is_written_before_the_dbt_build():
     build = next(i for i, line in enumerate(steps) if "dbt build" in line)
 
     assert seed < build
+
+
+def test_a_database_url_stops_the_deploy_before_dbt_runs():
+    steps = commands()
+    guard = next(i for i, line in enumerate(steps) if "DATABASE_URL" in line)
+    build = next(i for i, line in enumerate(steps) if "dbt build" in line)
+
+    assert guard < build
+    assert "exit 1" in steps[guard + 1 : build]

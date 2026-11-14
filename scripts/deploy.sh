@@ -13,6 +13,14 @@ if [ -f .env ]; then
   set +a
 fi
 
+# dbt reads POSTGRES_*, and the export reads DATABASE_URL when it is set. If both were
+# set they could name different databases, and the checks would pass on data the site
+# never exports. So the deploy takes its database from POSTGRES_* only.
+if [ -n "${DATABASE_URL:-}" ]; then
+  echo "DATABASE_URL is set. Unset it, or remove it from .env: deploy.sh checks and exports the POSTGRES_* database." >&2
+  exit 1
+fi
+
 # The public models are views, so the export reads live rows. Rows written since the
 # last DAG run, such as a hand-run normalize, have not met the data checks yet. A
 # failing check stops the deploy here, before anything is exported.

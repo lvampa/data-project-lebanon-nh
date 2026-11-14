@@ -7,7 +7,7 @@ dependencies = [
     "logfire[pymongo]>=5.4.0",
     "mongo",
     "postgres",
-    "pydantic>=2.12.5",
+    "pydantic>=2.14.3",
     "pypdf>=6.9.1",
     "scripts",
     "python-dotenv>=1.2.2",

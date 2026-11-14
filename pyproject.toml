@@ -6,11 +6,11 @@ members = ["scrapers", "scripts", "shared/postgres", "shared/mongo", "api"]
 dev = [
     "beautifulsoup4>=4.15.0",
     "elasticsearch>=8.13,<9",
-    "playwright>=1.60.0",
+    "playwright>=1.64.1",
     "playwright-stealth>=2.0.3",
-    "pre-commit>=4.0.0",
-    "pyrefly==1.4.0",
-    "ruff>=0.15.16",
+    "pre-commit>=4.7.0",
+    "pyrefly==1.4.1",
+    "ruff>=0.17.4",
 ]
 
 [tool.pytest.ini_options]
@@ -51,6 +51,9 @@ allow-star-arg-any = true
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+# Ruff 0.17 formats Python code blocks in Markdown. The spec docs show signatures with
+# aligned trailing comments, which it would reflow, so leave Markdown alone.
+exclude = ["*.md"]
 
 [tool.pyrefly]
 # Strict everywhere, except the files listed under "Not yet strict" below.

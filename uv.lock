@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "api",
+    "locations",
     "mongo",
     "postgres",
     "scrapers",
@@ -901,6 +902,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/d3/59/322338183ecda247f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/14/2f/967ba146e6d58cf6a652da73885f52fc68001525b4197effc174321d70b4/jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64", size = 20419, upload-time = "2026-01-22T16:35:24.919Z" },
 ]
+
+[[package]]
+name = "locations"
+version = "0.1.0"
+source = { editable = "shared/locations" }
 
 [[package]]
 name = "logfire"
@@ -2115,6 +2121,7 @@ dependencies = [
     { name = "beautifulsoup4" },
     { name = "elasticsearch" },
     { name = "httpx" },
+    { name = "locations" },
     { name = "logfire" },
     { name = "mongo" },
     { name = "playwright" },
@@ -2136,6 +2143,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "elasticsearch", specifier = ">=8.13,<9" },
     { name = "httpx", specifier = ">=0.27.0" },
+    { name = "locations", editable = "shared/locations" },
     { name = "logfire", specifier = ">=4.31.0" },
     { name = "mongo", editable = "shared/mongo" },
     { name = "playwright", specifier = ">=1.60.0" },

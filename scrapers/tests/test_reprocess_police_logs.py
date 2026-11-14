@@ -4,11 +4,11 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from ingest import police_log as ingest_module
-from ingest.lock import police_log_lock
 from maintenance import reprocess_police_logs
 from maintenance.reprocess_police_logs import ReprocessCounts, reprocess
 from mongo.archive import ArchivedResponse, RawArchive, content_hash
 from parsers.police_log import EXTRACTOR_VERSION, PARSER_VERSION
+from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry

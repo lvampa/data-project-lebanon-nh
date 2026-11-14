@@ -22,12 +22,12 @@ from typing import Self
 
 import logfire
 from ingest import ingest_pdf_url
-from ingest.lock import police_log_lock
 from ingest.pdf_text import extract_pdf_text
 from ingest.police_log import archive_entry_texts
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB
 from postgres import SessionLocal, engine
+from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
 from pymongo.errors import PyMongoError
 from sqlalchemy import select

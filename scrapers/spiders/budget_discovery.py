@@ -1,5 +1,7 @@
 import re
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
+from typing import Any, override
 
 import logfire
 import scrapy
@@ -30,10 +32,11 @@ class BudgetDiscoverySpider(scrapy.Spider):
     name = "budget_discovery"
     allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov"]
 
-    def start_requests(self):
-        yield Request(INDEX_URL, callback=self.parse)
+    @override
+    async def start(self) -> AsyncIterator[Request]:
+        yield Request(INDEX_URL, callback=self.parse_index)
 
-    def parse(self, response: Response, **kwargs):
+    def parse_index(self, response: Response, **kwargs: Any) -> Iterator[Request]:
         """Index page — follow links to individual year budget pages."""
         links = response.css(
             "#main-content a[href*='Budget'], .field-items a[href*='Budget']"
@@ -50,7 +53,9 @@ class BudgetDiscoverySpider(scrapy.Spider):
             seen.add(href)
             yield response.follow(href, callback=self.parse_year_page)
 
-    def parse_year_page(self, response: Response, **kwargs):
+    def parse_year_page(
+        self, response: Response, **kwargs: Any
+    ) -> Iterator[BudgetDocumentItem]:
         """Year sub-page — extract PDF download links."""
         now = datetime.now(UTC).replace(tzinfo=None)
         fiscal_year = _extract_fiscal_year(response.url)

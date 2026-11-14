@@ -322,3 +322,11 @@ def test_an_unknown_disposition_keeps_the_unsplit_text_and_is_marked():
     assert entry["incident_type"] == "Suspicious Person Frobnicated"
     assert entry["disposition"] is None
     assert entry["disposition_unmatched"] is True
+
+
+def test_the_disposition_list_has_a_public_name_and_the_old_alias_is_the_same_list():
+    from parsers import dispositions
+
+    assert dispositions.DISPOSITIONS
+    assert "Incident Report Taken" in dispositions.DISPOSITIONS
+    assert dispositions._DISPOSITIONS is dispositions.DISPOSITIONS

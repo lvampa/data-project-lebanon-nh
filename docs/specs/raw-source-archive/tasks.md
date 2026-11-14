@@ -28,7 +28,7 @@ The three spec files ride along in this pull request.
 
 - [x] 2. Add the archive class and indexes
   - `RawArchive` with hashing, page-state removal, gzip, the 15 MB limit, batched upserts, counts, and the 2 second selection and 5 second operation timeouts that mark it down.
-  - The three indexes in `init_indexes`, run after Alembic by hand (`uv run migrate`, since #26 removes the `migrate` service).
+  - The three indexes in `init_indexes`, and `uv run migrate`, which runs it after Alembic.
   - Tests for every row in design.md's error table that belongs to writing.
   - _Requirements: 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3_
 

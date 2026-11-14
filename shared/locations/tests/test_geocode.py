@@ -6,6 +6,9 @@ from locations.geocode import GeocodeResult, RateLimiter, geocode, in_city_bound
 LEBANON_CENTER = (43.6426, -72.2518)
 
 
+LEBANON_ADDRESS = {"city": "Lebanon", "state": "New Hampshire"}
+
+
 def nominatim_reply(**fields: object) -> MagicMock:
     reply = MagicMock()
     reply.json.return_value = [
@@ -14,6 +17,7 @@ def nominatim_reply(**fields: object) -> MagicMock:
             "lon": "-72.2518",
             "osm_type": "node",
             "class": "place",
+            "address": LEBANON_ADDRESS,
             **fields,
         }
     ]
@@ -83,6 +87,7 @@ def test_the_query_is_sent_as_given_with_one_result_and_the_us_only():
         "format": "json",
         "limit": 1,
         "countrycodes": "us",
+        "addressdetails": 1,
     }
 
 
@@ -133,6 +138,54 @@ def test_the_user_agent_falls_back_to_the_repo(contact):
     assert "github.com/" in get.call_args.kwargs["headers"]["User-Agent"]
 
 
+# --- only Lebanon, NH counts (6.4) ---
+
+
+def test_the_request_asks_for_address_details():
+    with patch("locations.geocode.httpx.get", return_value=nominatim_reply()) as get:
+        look_up()
+
+    assert get.call_args.kwargs["params"]["addressdetails"] == 1
+
+
+@pytest.mark.parametrize("area", ["city", "town"])
+def test_a_match_in_lebanon_nh_counts_whether_nominatim_calls_it_a_city_or_town(area):
+    reply = nominatim_reply(address={area: "Lebanon", "state": "New Hampshire"})
+    with patch("locations.geocode.httpx.get", return_value=reply):
+        assert look_up() is not None
+
+
+@pytest.mark.parametrize(
+    ("place", "address", "lat", "lng"),
+    [
+        # Hanover is a town over, and the box cannot tell the two apart near the line.
+        ("Hanover, NH", {"town": "Hanover", "state": "New Hampshire"}, 43.68, -72.29),
+        # The river separates West Lebanon from White River Junction by a few hundred meters.
+        (
+            "White River Junction, VT",
+            {"town": "Hartford", "state": "Vermont"},
+            43.65,
+            -72.32,
+        ),
+        # Lebanon, but the one in Maine.
+        ("Lebanon, ME", {"town": "Lebanon", "state": "Maine"}, 43.64, -72.25),
+        ("no address given", None, 43.64, -72.25),
+    ],
+)
+def test_a_match_in_another_town_is_a_miss_even_inside_the_box(
+    place, address, lat, lng
+):
+    reply = nominatim_reply(lat=str(lat), lon=str(lng), address=address)
+    with patch("locations.geocode.httpx.get", return_value=reply):
+        assert look_up() is None, place
+
+
+def test_a_match_outside_the_box_is_a_miss_even_when_it_says_lebanon_nh():
+    reply = nominatim_reply(lat="43.2081", lon="-71.5376")
+    with patch("locations.geocode.httpx.get", return_value=reply):
+        assert look_up() is None
+
+
 # --- the city bounds (6.4) ---
 
 
@@ -146,6 +199,7 @@ def test_the_city_center_is_inside_the_bounds():
         ("Concord, NH", 43.2081, -71.5376),
         ("Boston", 42.3601, -71.0589),
         ("White River Junction, VT", 43.6489, -72.42),
+        ("downtown Hanover, NH", 43.7022, -72.2896),
         ("north of the city", 43.80, -72.25),
         ("south of the city", 43.50, -72.25),
     ],

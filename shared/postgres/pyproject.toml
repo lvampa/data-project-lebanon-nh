@@ -9,7 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.4",
     "psycopg2-binary>=2.9.12",
-    "sqlalchemy>=2.0.50",
+    "sqlalchemy>=2.1.8",
 ]
 
 [build-system]

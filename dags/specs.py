@@ -98,6 +98,39 @@ SPECS = [
         tags=("officers",),
     ),
     DagSpec(
+        dag_id="police_log_reprocess",
+        schedule=None,
+        cwd="scrapers",
+        # Reparses archived PDFs after a parser fix. Leave both dates empty for all.
+        command=(
+            "python -m maintenance.reprocess_police_logs "
+            "{% if params.date_from %}--from '{{ params.date_from }}' "
+            "--to '{{ params.date_to }}'{% else %}--all{% endif %}"
+        ),
+        timeout=timedelta(hours=2),
+        tags=("police-log",),
+        params={
+            "date_from": {
+                "default": "",
+                "type": "string",
+                "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+                "description": (
+                    "First log date to reprocess (YYYY-MM-DD). "
+                    "Set both dates, or leave both empty for all."
+                ),
+            },
+            "date_to": {
+                "default": "",
+                "type": "string",
+                "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+                "description": (
+                    "Last log date to reprocess (YYYY-MM-DD). "
+                    "Set both dates, or leave both empty for all."
+                ),
+            },
+        },
+    ),
+    DagSpec(
         dag_id="budget_discovery",
         # Monthly because the budget publish date varies.
         schedule="0 4 1 * *",

@@ -274,7 +274,7 @@ def crawl_one_pdf(middleware: RawArchiveMiddleware, claim: PdfUrlClaim, text: st
     request = Request(CITY_URL, cb_kwargs={"pdf_url": claim})
     response = Response(url=CITY_URL, body=PDF, request=request)
     middleware.process_response(request, response)
-    with patch("spiders.process_url_records.PdfReader") as pdf_reader:
+    with patch("ingest.pdf_text.PdfReader") as pdf_reader:
         page = MagicMock()
         page.extract_text.return_value = text
         pdf_reader.return_value.pages = [page]

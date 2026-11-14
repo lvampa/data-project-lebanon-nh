@@ -76,6 +76,35 @@ def test_stores_each_entry_with_its_source_and_log_date(db_session):
     assert harassment.created_at == harassment.updated_at
 
 
+CODED = """\
+26-13341        0300 Phone - Motor Vehicle Crash Frobnicated
+       Call Source:    Telephone
+        Primary Id:    SMN - Officer Stephan Nix
+  Location/Address:    [L HANNAF] HANNAFORD - PLAINFIELD RD
+       Refer To Incident:      26L-426-OF
+       Refer To Citation:      26L-77-CT
+"""
+
+
+def test_stores_the_codes_references_and_unmatched_disposition_flag(db_session):
+    url = add_url(db_session)
+
+    ingest_log_text(db_session, url, log_text(CODED))
+
+    stored = entries(db_session)["26-13341"]
+    assert stored.place_code == "L HANNAF"
+    assert stored.location == "HANNAFORD - PLAINFIELD RD"
+    assert stored.officer_code == "SMN"
+    assert stored.refer_to == [
+        {"kind": "Incident", "number": "26L-426-OF"},
+        {"kind": "Citation", "number": "26L-77-CT"},
+    ]
+    assert stored.reference_number == "26L-426-OF"
+    assert stored.incident_type == "Motor Vehicle Crash Frobnicated"
+    assert stored.disposition is None
+    assert stored.disposition_unmatched is True
+
+
 def test_log_date_comes_from_the_text_when_the_url_has_none(db_session):
     url = add_url(db_session, log_date=None)
 

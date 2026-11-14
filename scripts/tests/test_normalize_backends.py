@@ -33,6 +33,40 @@ REAL_LOGIN_FAILURE = {
     "result": "Not logged in · Please run /login",
 }
 
+# A real successful `claude -p --output-format json --json-schema` envelope, captured
+# on 2026-11-13 from a call with 3 made-up addresses. Trimmed to the fields that matter.
+REAL_SUCCESS = {
+    "type": "result",
+    "subtype": "success",
+    "is_error": False,
+    "terminal_reason": "completed",
+    "api_error_status": None,
+    "stop_reason": "tool_use",
+    "num_turns": 2,
+    "permission_denials": [],
+    "structured_output": {
+        "items": [
+            {
+                "raw": "12 FAKE ST",
+                "unsure": False,
+                "kind": "address",
+                "normalized_address": "12 Fake St",
+                "geocode_query": "12 Fake St, Lebanon, NH",
+                "street": "FAKE ST",
+            },
+            {
+                "raw": "ZZ TEST PLAZA - NOWHERE RD",
+                "unsure": True,
+                "kind": "place",
+                "normalized_address": "ZZ Test Plaza, Nowhere Rd",
+                "geocode_query": "ZZ Test Plaza, Nowhere Rd, Lebanon, NH",
+                "street": "",
+            },
+        ]
+    },
+    "result": '{"items": []}',
+}
+
 FAKE_CLAUDE = '''\
 #!{python}
 """Stands in for the claude binary: records how it was called, then plays a mode."""
@@ -377,3 +411,21 @@ def test_an_unknown_backend_is_an_error_that_names_it(monkeypatch):
 
     with pytest.raises(AiBackendUnavailable, match="carrier-pigeon"):
         backend_from_env()
+
+
+def test_the_real_success_envelope_gives_its_structured_output(fake_claude):
+    fake_claude.play("ok", REAL_SUCCESS)
+
+    answer = ClaudeCliBackend(model="haiku").complete("prompt", SCHEMA)
+
+    assert answer == REAL_SUCCESS["structured_output"]
+
+
+@pytest.mark.parametrize("subtype", ["error_max_turns", "error_during_execution"])
+def test_a_subtype_other_than_success_is_an_ordinary_failure(fake_claude, subtype):
+    fake_claude.play("ok", {**REAL_SUCCESS, "subtype": subtype})
+
+    with pytest.raises(AiCallFailed, match=subtype) as raised:
+        ClaudeCliBackend(model="haiku").complete("prompt", SCHEMA)
+
+    assert not isinstance(raised.value, AiBackendUnavailable)

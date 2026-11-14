@@ -7,7 +7,7 @@
 ## Overview
 
 This design is written as changes on top of the `fix/integration` and `fix/url-queue` branches, which ship first.
-It covers all fifteen requirements.
+It covers all sixteen requirements.
 
 What those branches already give us:
 
@@ -53,7 +53,7 @@ city page ──► discover spider ──► pdf_urls (pending)
      reprocess script ────────┴── pypdf ◄──────────────┼────────────────────────────────────────────────┘
      (archived PDF, no download)                       │ distinct raw values
                                                        ▼
-                                    normalize job ──► rule pass (shared/locations): exact matches stored, no AI
+              normalize job, by hand on Connor's Mac ──► rule pass (shared/locations): exact matches stored, no AI
                                            │
                                            │ leftovers, street list, schema (no tools, no database)
                                            ▼
@@ -63,10 +63,13 @@ city page ──► discover spider ──► pdf_urls (pending)
                                            ▼
                  incident_type_categories, address_normalizations ◄── admin API (source = human)
                                            ▲
-                                    geocode job ──► Nominatim (bounds, 1 per second)
+                                    geocode job ──► Nominatim (bounds, 1 per second)     [daily DAG]
                                            │
                                            ▼
-                        dbt: staging ──► incidents ──► public 90 day models, with tests
+                        dbt: staging ──► incidents ──► public 90 day models, with tests   [daily DAG]
+
+      Daily DAG in Airflow: discover ─► process ─► geocode ─► dbt build.
+      The normalize job is not in it; Connor runs it on his Mac, and the DAG uses what is normalized so far.
                               ┌────────────┴────────────────┐
               incidents API and admin search          report-gen (public export)
               (Postgres full-text and pg_trgm)
@@ -215,7 +218,8 @@ It never sees a database connection, a file, or a tool.
 
 ### Normalization job
 
-`scripts/normalize/`, run as `python -m normalize.job [--field incident_type|location] [--redo]`.
+`scripts/normalize/`, run by Connor on his Mac from the repo root as `uv run python -m scripts.normalize.job [--field incident_type|location] [--redo]` (see "Running the normalization job on the Mac").
+Task 15 confirms the module path matches the `scripts` package layout.
 
 ```
 job.py         find waiting values, rule pass, batch, call, check, store, log the summary, set the exit code
@@ -369,9 +373,11 @@ def strip_unit(canonical: str) -> tuple[str, str | None]           # ("12 MAIN S
   That spec's design (on `spec/address-entity`) planned a dbt macro, and has to be updated to use these instead (open question 7).
 
 
-The geocode job, `python -m normalize.geocode`, is its own task so that AI calls and geocoding each fit the 60 minute limit.
+The geocode job, `python -m scripts.normalize.geocode`, runs in the daily DAG. It makes no AI call, so it needs no Claude login.
+It geocodes whatever has been normalized so far, so a value Connor normalizes today gets coordinates on the next daily run, or right away if he runs the same command on his Mac.
 
-- It takes `ai` locations that have a normalized address and no coordinates, fewer than 3 attempts, and are not bare highways (6.3).
+- It takes `ai` and `rule` locations that have a normalized address and no coordinates, fewer than 3 attempts, and are not bare highways (6.3).
+- It takes the police log lock for its run, so it never overlaps the normalization job (16.2, 16.3).
 - A place code that already has coordinates on another row supplies them, with `geocoded_via = 'place_code'` (6.2).
 - Otherwise it tries `geocode_query`, then the street alone, which gives an `approximate` result (6.9).
 - A limiter holds requests to 1 per second, and the job stops at 600 requests per run (6.7, 6.8).
@@ -511,21 +517,70 @@ The police log chain needs steps that keep going after a failure, so it is a pla
 One DAG, `police_log`, daily, replaces the `discover_urls` and `process_urls` specs:
 
 ```
-discover ─► process (limit 100) ─► normalize ─► geocode ─► dbt build ─► watcher
+discover ─► process (limit 100) ─► geocode ─► dbt build ─► watcher
 ```
 
-- Process, normalize, and geocode failures do not stop the stages after them; those tasks use `all_done`.
+- There is no normalize task (12.2, 16.5).
+  Geocode and the build work on whatever has been normalized so far.
+  An entry whose values aren't normalized yet is still built, with empty normalized fields (8.12), and stays out of the public map until it is (11.9).
+- Process and geocode failures don't stop the stages after them; those tasks use `all_done` (12.6).
+  With normalize gone, the rule still holds: a failed process still runs geocode and the build, and a failed geocode still runs the build.
 - A final watcher task fails the run when any task failed, so a bad day is red (12.7).
 - One run at a time, a 60 minute timeout on each task (12.4, 12.5), and an Airflow pool of size 1 shared with reprocess.
+- Process, reprocess, and geocode take the police log lock, and so does the normalization job on the Mac.
+  If Connor is normalizing when the DAG reaches process or geocode, that task finds the lock held, fails fast with the message, and the work waits for the next run.
+  So he runs the job outside the DAG's start time.
 - A manual DAG, `police_log_reprocess`, with date parameters, wraps the reprocess script.
 - A one-shot `migrate` service in compose drops `marts`, runs `alembic upgrade head`, then `dbt run`, and the Airflow services wait for it (12.8).
 
-Running AI in the schedule:
+The Airflow image has no `claude` CLI and no Claude token.
+That work is deferred; the `airflow-claude-cli` branch exists, unbuilt, if it's ever revisited.
 
-- The `claude` CLI is installed in the Airflow image and reads a token from `claude setup-token` passed through `.env`.
-  Connor creates the token once and renews it when it expires.
-- This cannot be verified from the build sandbox, so the task ends with a manual check: one real call from inside the container.
-- Fallback with no code change: run the same command from host cron.
+### Running the normalization job on the Mac
+
+From the repo root, after `docker compose up -d postgres mongo` and `uv sync`:
+
+```bash
+uv run python -m scripts.normalize.job              # both fields
+uv run python -m scripts.normalize.job --field location
+uv run python -m scripts.normalize.geocode          # optional: place today's values now
+```
+
+- It reads `.env` from the repo root like the other scripts; `.env.example` already points Postgres and MongoDB at `localhost`.
+- It uses Connor's `claude` login, with no token in `.env` (16.1). The AI calls still run as in "AI backend" (9.8).
+- It takes the police log lock first; if the lock is held, it exits with status 1 and says so (16.2, 16.3).
+  `police_log_lock` moves from `scrapers/ingest/lock.py` to `shared/postgres` so `scripts/` can import it, with the same key.
+- It logs the per-field counts in 8.10 and exits with status 1 when it can't run or every AI call fails (16.4).
+
+Optional later: a LaunchAgent. This is a sketch for docs only, and nothing is installed by the repo.
+
+```xml
+<!-- ~/Library/LaunchAgents/com.lebanondata.normalize.plist -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.lebanondata.normalize</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/zsh</string><string>-lc</string>
+    <string>cd ~/projects/data-project &amp;&amp; uv run python -m scripts.normalize.job</string>
+  </array>
+  <!-- After the daily DAG has finished, so the lock is free. -->
+  <key>StartCalendarInterval</key><dict>
+    <key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key><string>/Users/connor/Library/Logs/lebanondata-normalize.log</string>
+  <key>StandardErrorPath</key><string>/Users/connor/Library/Logs/lebanondata-normalize.log</string>
+</dict></plist>
+```
+
+- It runs only while Connor is logged in, because a LaunchAgent lives in his user session; that is also what gives it his `claude` login.
+- It runs only while the Mac is awake.
+  launchd runs a missed calendar slot once at the next wake, and misses it entirely while the Mac is off.
+- The login shell (`-lc`) puts `uv` and `claude` on the path.
+- Failures surface three ways:
+  - the log file;
+  - the last exit status in `launchctl print gui/$(id -u)/com.lebanondata.normalize`;
+  - the Logfire summary.
+
+  There's no push alert. If he wants one, a wrapper can post a macOS notification on a non-zero exit, which is a small follow-up.
 
 The public export is not scheduled (12.9).
 The export runs at deploy time: `deploy.sh` runs `report-gen` against the public models before each build.
@@ -622,7 +677,7 @@ Each lands with the pull request that uses it.
 | AI gives a street not on the street list | Stored with a review mark. | 6.22 |
 | Street list empty (VGSI not scraped yet) | No location AI calls this run; an error is logged; the rule pass's place-code reuse still runs. | 6.23 |
 | Backend logged out or at its usage limit | No more AI calls this run. | 8.9 |
-| Every AI call fails | Job exits non-zero; later stages still run. | 8.11, 12.6 |
+| Every AI call fails | Job exits non-zero on the Mac; the daily DAG is unaffected. | 8.11, 16.4 |
 | Geocoder miss or failure | Address kept, coordinates untouched, attempt counted. | 6.5, 6.6 |
 | Coordinates outside the city bounds | Discarded. | 6.4 |
 | A dbt test fails | Build fails and names the test and row count; the run shows failed. | 14.1, 14.6, 12.7 |
@@ -695,6 +750,25 @@ Rejected alternatives:
   This is the upgrade path if the street list in the prompt proves too big or too weak.
   The trigger is a measured list of more than about 1,500 streets, or evaluation misses that a lookup would fix.
   It needs a small MCP server, because `claude -p` runs with tools off here, and it would keep the job as the only writer.
+
+### The AI normalizing runs by hand on Connor's Mac
+
+The normalization job runs on the host, started by Connor, with his normal `claude` login.
+The daily DAG has no normalize task.
+
+- No long-lived token in `.env`.
+  `claude setup-token` gives a one-year token that anyone who can read `.env` or the container environment could use against his Max plan.
+- No Claude login inside a container.
+  The Airflow image stays free of the CLI, its config, and its credentials, and the containers that read scraped text hold nothing that can call a model.
+- He can run it by hand, watch the summary, and check the review list before anything reaches the public map.
+  That fits a hobby project at this size: a few thousand distinct values, then a handful a day.
+- Rejected: the `claude` CLI in the Airflow image with a `setup-token` token in `.env`.
+  It's fully scheduled, but it puts a long-lived subscription credential in a file and in every Airflow container.
+  The `airflow-claude-cli` branch holds that idea, unbuilt.
+- Rejected: an interactive `claude` login inside the container.
+  The login has to be redone by hand whenever the container or its volume is rebuilt, and it still leaves a credential in a container that reads scraped text.
+- Cost of the choice: normalizing waits for Connor, so new values reach the map a day or two late, and only while he runs it.
+  The DAG keeps working on raw values meanwhile (8.12, 11.9), and a LaunchAgent can take over later without a code change.
 
 ### Rules first, AI for the leftovers
 
@@ -813,7 +887,7 @@ Tidying the other four is a follow-up.
 2. **How the CLI reports a login or usage-limit failure.**
    Needed for 8.9; Connor may have to run one command and paste the output.
 3. **The token for the scheduled AI call.**
-   Connor runs `claude setup-token` once and puts the token in `.env`.
+   Settled on 2026-11-13: there's no token. The job runs by hand on Connor's Mac with his login (see Decisions).
 4. **The officer column on the public site.**
    The export writes an empty `officer`, so the officer column and filter in `incidents-table.tsx` will have nothing to show until the frontend changes.
 5. **Who labels the evaluation set.**

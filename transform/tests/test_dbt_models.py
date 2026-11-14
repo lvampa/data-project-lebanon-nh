@@ -428,6 +428,7 @@ UNEXPECTED_NUMBERS = [
     "12 Main St", "12B Main St", "12-14 Main St", "12 1/2 Main St", "No. 12 Main St",
     "#12 Main St", "Smith Residence 12 Main St", "Smith residence, 12 Main St",
     "Smith Residence at 12 Main St", "Mascoma Apartments Apt 12", "Lot 5", "Unit 4",
+    "Village Lot 5",
     "Route 12 Apt 5", "1050 block of Main St", "0200 block of Main St",
     "Smith residence 1200 block of Main St", "  45 Elm St", "Exit 18 and 19",
     "１２ Main St", "١٢ Main St",
@@ -435,6 +436,8 @@ UNEXPECTED_NUMBERS = [
 ALLOWED_NUMBERS = [
     "1200 block of Main St", "100 block of Mascoma St", "Main St",
     "Main St and Hanover St", "Route 120", "NH Route 12A", "US Route 4", "Rte 4",
+    # Numbered-road intersections, common in Lebanon's logs; the suffix rule failed them.
+    "Route 4 and Main St", "NH 120 and Mechanic St", "US 4 & Main St",
     "RT 4", "I-89 Exit 18", "Exit 18 on I-89", "I-89 mile marker 12", "I-89 Mile 12",
     "Interstate 89", "1st Ave", "2nd St", "3rd Ave", "11th St",
     "Smith residence, Main St", "Smith residence, 1200 block of Main St",

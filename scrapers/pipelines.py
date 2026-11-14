@@ -1,4 +1,5 @@
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 
@@ -149,7 +150,16 @@ class PoliceLogPipeline:
         self._session.close()
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class PropertyPipeline:
+    def __init__(self, clock: Callable[[], datetime] = _utc_now) -> None:
+        # Replay swaps it, so a row is stamped with its page's own time and not the
+        # time of the replay.
+        self.clock = clock
+
     def open_spider(self) -> None:
         self._session = SessionLocal()
 
@@ -160,7 +170,7 @@ class PropertyPipeline:
         record = PropertyRecord.model_validate(dict(item))
 
         try:
-            now = datetime.now(UTC).replace(tzinfo=None)
+            now = self.clock()
 
             with logfire.span("save property", parcel_id=record.parcel_id):
                 # Upsert property

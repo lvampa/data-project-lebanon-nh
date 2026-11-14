@@ -1,7 +1,12 @@
+import asyncio
+import gzip
+import socket
 from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
+from mongo.archive import RawArchive, archive_collection
+from mongo.client import MongoDB
 from pydantic import ValidationError
 from sqlalchemy.dialects import postgresql
 
@@ -10,6 +15,7 @@ from scripts.scrape.scrape_llcs import (
     parse_llc_detail,
     release_stale_claims,
     save_lookup,
+    scrape_llc,
 )
 
 NOW = datetime(2026, 10, 31, 12, 0, 0)
@@ -136,3 +142,104 @@ def test_save_lookup_rejects_invalid_data_before_writing():
     with pytest.raises(ValidationError):
         save_lookup(session, llc_id=7, data={"formation_date": "N/A"}, now=NOW)
     session.execute.assert_not_called()
+
+
+# --- scrape_llc: the raw archive ---
+
+
+class FakeLink:
+    def __init__(self, page: "FakePage", href: str | None) -> None:
+        self._page = page
+        self._href = href
+
+    @property
+    def first(self) -> "FakeLink":
+        return self
+
+    async def count(self) -> int:
+        return 1
+
+    async def get_attribute(self, name: str) -> str | None:
+        return self._href
+
+    async def click(self) -> None:
+        self._page.url = self._page.detail_url
+
+
+class FakePage:
+    """The Playwright calls scrape_llc makes, for one search with one result."""
+
+    def __init__(self, href: str | None, detail_url: str) -> None:
+        self.url = ""
+        self.detail_url = detail_url
+        self._href = href
+
+    async def goto(self, url: str) -> None:
+        self.url = url
+
+    async def fill(self, selector: str, value: str) -> None:
+        pass
+
+    async def click(self, selector: str) -> None:
+        pass
+
+    async def wait_for_load_state(self, state: str) -> None:
+        pass
+
+    def locator(self, selector: str) -> FakeLink:
+        return FakeLink(self, self._href)
+
+    async def content(self) -> str:
+        return DETAIL_HTML
+
+
+DETAIL_URL = (
+    "https://quickstart.sos.nh.gov/online/BusinessInquire/"
+    "BusinessInformation?businessID=757045"
+)
+
+
+def test_the_business_page_is_archived_under_its_business_id(raw_sources):
+    archive = RawArchive(raw_sources)
+    page = FakePage(href="BusinessInformation?businessID=757045", detail_url=DETAIL_URL)
+
+    business_id, data = asyncio.run(scrape_llc(page, "ANAGNOST LLC", archive))
+    archive.flush()
+
+    [version] = list(raw_sources.find({"source": "nh_sos_business"}))
+    assert version["source_key"] == "757045" == business_id
+    assert version["url"] == DETAIL_URL
+    assert gzip.decompress(version["body_gzip"]).decode() == DETAIL_HTML
+    assert version["spider"] == "scrape_llcs"
+    assert data is not None and data["business_status"] == "Good Standing"
+
+
+def test_a_page_with_no_business_id_is_keyed_by_the_searched_name(raw_sources):
+    archive = RawArchive(raw_sources)
+    page = FakePage(href=None, detail_url="https://quickstart.sos.nh.gov/x")
+
+    asyncio.run(scrape_llc(page, "ANAGNOST LLC", archive))
+    archive.flush()
+
+    [version] = list(raw_sources.find({"source": "nh_sos_business"}))
+    assert version["source_key"] == "ANAGNOST LLC"
+
+
+def closed_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def test_the_lookup_is_unchanged_when_mongodb_is_unreachable(monkeypatch):
+    monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
+    monkeypatch.setenv("MONGO_PORT", str(closed_port()))
+    archive = RawArchive(archive_collection(MongoDB()))
+    page = FakePage(href="BusinessInformation?businessID=757045", detail_url=DETAIL_URL)
+
+    business_id, data = asyncio.run(scrape_llc(page, "ANAGNOST LLC", archive))
+    counts = archive.flush()
+
+    assert business_id == "757045"
+    assert data == parse_llc_detail(DETAIL_HTML, "757045")
+    assert counts.failed == 1

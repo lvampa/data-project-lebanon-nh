@@ -1,5 +1,6 @@
 from pymongo import ASCENDING, DESCENDING
 
+from .ai_calls import COLLECTION as AI_CALLS_COLLECTION
 from .archive import COLLECTION as ARCHIVE_COLLECTION
 from .client import MongoDB
 
@@ -26,4 +27,16 @@ def init_indexes(mongo: MongoDB | None = None) -> None:
     )
     # Per-source counts for the check command.
     archive.create_index([("source", ASCENDING), ("last_seen_at", ASCENDING)])
+
+    ai_calls = db.get_collection(AI_CALLS_COLLECTION)
+    # Listing calls by prompt version, newest first, for the evaluation work.
+    ai_calls.create_index(
+        [
+            ("field", ASCENDING),
+            ("prompt_version", ASCENDING),
+            ("called_at", DESCENDING),
+        ]
+    )
+    # The AI's answer for one raw value, when Connor corrects it.
+    ai_calls.create_index("accepted.raw")
     print("Mongo indexes initialized.")

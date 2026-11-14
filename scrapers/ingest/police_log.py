@@ -9,9 +9,9 @@ from datetime import UTC, date, datetime
 from typing import Any, cast
 
 import logfire
-import pypdf
 from models.police_log import PoliceLogRecord
 from parsers.police_log import (
+    EXTRACTOR_VERSION,
     PARSER_VERSION,
     count_header_lines,
     parse_log_date,
@@ -260,7 +260,7 @@ def _record_outcome(
     original_archived: bool,
 ) -> None:
     pdf_url.content_hash = content_hash
-    pdf_url.extractor_version = pypdf.__version__
+    pdf_url.extractor_version = EXTRACTOR_VERSION
     pdf_url.parsed_count = counts.parsed
     pdf_url.stored_count = counts.stored
     pdf_url.skipped_count = counts.skipped

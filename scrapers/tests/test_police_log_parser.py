@@ -1,6 +1,12 @@
 from datetime import datetime
 
-from parsers.police_log import parse_log_entries
+import pypdf
+import pytest
+from parsers.police_log import (
+    EXTRACTOR_VERSION,
+    PARSER_VERSION,
+    parse_log_entries,
+)
 
 # Reflects the real Lebanon NH dispatch log PDF format
 SAMPLE_TEXT = """\
@@ -49,7 +55,7 @@ def test_first_entry_fields():
     entries = parse_log_entries(SAMPLE_TEXT)
     e = entries[0]
     assert e["case_number"] == "26-13339"
-    assert e["call_source"] == "Phone"
+    assert e["call_source"] == "Telephone"
     assert e["incident_type"] == "Telephone Harassment"
     assert e["disposition"] == "Incident Report Taken"
     assert e["officer"] == "Stephan Nix"
@@ -92,7 +98,7 @@ def test_page_break_entry_parsed_correctly():
     assert len(entries) == 1
     e = entries[0]
     assert e["case_number"] == "26-13351"
-    assert e["call_source"] == "Phone"
+    assert e["call_source"] == "Telephone"
     assert e["incident_type"] == "FD Alarm Work/Test"
     assert e["disposition"] == "Log Information"
     assert e["location"] == "BEST BUY - PLAINFIELD RD"
@@ -172,3 +178,147 @@ def test_timestamps_none_when_no_dispatch_line():
     entries = parse_log_entries(SAMPLE_PAGE_BREAK)  # no dispatch timing line
     assert entries[0]["dispatched_at"] is None
     assert entries[0]["response_seconds"] is None
+
+
+# One fixture and test per parser gap. The layouts follow the sample above.
+HEADER = (
+    "For Date: 05/11/2026  -  Monday\nCall   Number   Time   Call   Reason   Action\n"
+)
+
+
+def parse_one(entry_text: str) -> dict:
+    [entry] = parse_log_entries(HEADER + entry_text)
+    return entry
+
+
+def test_parser_version_is_2_and_the_extractor_version_is_pypdfs():
+    assert PARSER_VERSION == 2
+    assert pypdf.__version__ == EXTRACTOR_VERSION
+
+
+def test_location_comes_from_a_vicinity_of_line():
+    entry = parse_one(
+        "26-20001        1015 Phone - Disabled Motor Vehicle Assisted Party\n"
+        "       Call Source:    Telephone\n"
+        "      Vicinity of:    I-89 NB MM 18\n"
+    )
+
+    assert entry["location"] == "I-89 NB MM 18"
+
+
+def test_a_location_line_wins_over_a_vicinity_line():
+    entry = parse_one(
+        "26-20002        1015 Phone - Disabled Motor Vehicle Assisted Party\n"
+        "  Location/Address:    MAIN ST\n"
+        "      Vicinity of:    I-89 NB MM 18\n"
+    )
+
+    assert entry["location"] == "MAIN ST"
+
+
+def test_call_source_comes_from_the_call_source_line():
+    entry = parse_one(
+        "26-20003        1015 Phone - Suspicious Person Advised\n"
+        "       Call Source:    Walk-In\n"
+    )
+
+    assert entry["call_source"] == "Walk-In"
+
+
+def test_call_source_falls_back_to_the_header_when_there_is_no_line():
+    entry = parse_one("26-20004        1015 Phone - Suspicious Person Advised\n")
+
+    assert entry["call_source"] == "Phone"
+
+
+def test_place_code_is_kept_apart_from_the_location():
+    entry = parse_one(
+        "26-20005        1015 Phone - Suspicious Person Advised\n"
+        "  Location/Address:    [L HANNAF] HANNAFORD - PLAINFIELD RD\n"
+    )
+
+    assert entry["place_code"] == "L HANNAF"
+    assert entry["location"] == "HANNAFORD - PLAINFIELD RD"
+
+
+def test_place_code_is_none_without_brackets():
+    entry = parse_one(
+        "26-20006        1015 Phone - Suspicious Person Advised\n"
+        "  Location/Address:    EAGLE RIDGE RD\n"
+    )
+
+    assert entry["place_code"] is None
+
+
+def test_officer_code_is_kept_apart_from_the_name():
+    entry = parse_one(
+        "26-20007        1015 Phone - Suspicious Person Advised\n"
+        "        Primary Id:    SMN - Officer Stephan Nix\n"
+    )
+
+    assert entry["officer_code"] == "SMN"
+    assert entry["officer"] == "Stephan Nix"
+
+
+def test_officer_code_is_none_without_a_primary_id():
+    entry = parse_one("26-20008        1015 Phone - Suspicious Person Advised\n")
+
+    assert entry["officer_code"] is None
+
+
+def test_every_refer_to_kind_is_kept_in_order():
+    entry = parse_one(
+        "26-20009        1015 Phone - Motor Vehicle Crash Report Taken\n"
+        "       Refer To Incident:      26L-426-OF\n"
+        "       Refer To Citation:      26L-77-CT\n"
+        "       Refer To Accident:      26L-12-AC\n"
+        "       Refer To Arrest:        26L-346-AR\n"
+    )
+
+    assert entry["refer_to"] == [
+        {"kind": "Incident", "number": "26L-426-OF"},
+        {"kind": "Citation", "number": "26L-77-CT"},
+        {"kind": "Accident", "number": "26L-12-AC"},
+        {"kind": "Arrest", "number": "26L-346-AR"},
+    ]
+    assert entry["reference_number"] == "26L-426-OF"
+
+
+def test_refer_to_is_none_when_the_entry_has_no_reference():
+    entry = parse_one("26-20010        1015 Phone - Suspicious Person Advised\n")
+
+    assert entry["refer_to"] is None
+    assert entry["reference_number"] is None
+
+
+@pytest.mark.parametrize(
+    ("reason_action", "incident_type", "disposition"),
+    [
+        ("Welfare Check Investigated", "Welfare Check", "Investigated"),
+        ("Theft Summons Issued", "Theft", "Summons Issued"),
+        ("Road Debris Removed Hazard", "Road Debris", "Removed Hazard"),
+        ("Medical Aid Transported/Relayed", "Medical Aid", "Transported/Relayed"),
+        ("Civil Matter Paperwork Served", "Civil Matter", "Paperwork Served"),
+        (
+            "Civil Matter Paperwork NOT Served",
+            "Civil Matter",
+            "Paperwork NOT Served",
+        ),
+    ],
+)
+def test_dispositions_found_in_the_stored_pdfs_are_split_off(
+    reason_action, incident_type, disposition
+):
+    entry = parse_one(f"26-20011        1015 Phone - {reason_action}\n")
+
+    assert entry["incident_type"] == incident_type
+    assert entry["disposition"] == disposition
+    assert entry["disposition_unmatched"] is False
+
+
+def test_an_unknown_disposition_keeps_the_unsplit_text_and_is_marked():
+    entry = parse_one("26-20012        1015 Phone - Suspicious Person Frobnicated\n")
+
+    assert entry["incident_type"] == "Suspicious Person Frobnicated"
+    assert entry["disposition"] is None
+    assert entry["disposition_unmatched"] is True

@@ -3,17 +3,21 @@ ETL, Infrastructure, Presentation Dashboards for data made public by the city of
 
 ## Database migrations
 
-Schema changes go through Alembic, and you apply them by hand.
+Schema changes go through Alembic, and you apply them by hand, along with the MongoDB indexes.
 Nothing runs them for you at startup.
 
-Start Postgres, then run this from the repo root:
+Start Postgres and MongoDB, then run these two commands from the repo root:
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres mongo
 uv run alembic -c shared/postgres/alembic.ini upgrade head
+uv run python -c "from mongo import init_indexes; init_indexes()"
 ```
-It reads `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT` and `POSTGRES_DB` from your shell, and falls back to `app`, `app`, `localhost`, `5432` and `app`.
+The first applies the Postgres migrations.
+The second creates the MongoDB indexes, and is safe to run again.
+Run both again after you pull a branch that adds a migration or an index.
+
+They read `POSTGRES_*` and `MONGO_*` from your shell, and fall back to the local compose values.
 If your `.env` sets other values, load them first with `set -a; . ./.env; set +a`.
-Run it again after you pull a branch that adds a migration.
 
 ## Tests
 

@@ -153,20 +153,11 @@ def dbt_engine(test_engine: Engine) -> Iterator[Engine]:
 
 
 @pytest.fixture(scope="session")
-def dispositions_seed() -> Iterator[None]:
-    """A fixed disposition list, written only when the generated seed is missing.
-
-    TODO(PR 7 task 19): once write_disposition_seed.py works, generate the real list.
-    """
-    created = not DISPOSITIONS_SEED.exists()
-    if created:
-        DISPOSITIONS_SEED.parent.mkdir(exist_ok=True)
-        DISPOSITIONS_SEED.write_text("disposition\nInvestigated\nSummons Issued\n")
-    try:
-        yield
-    finally:
-        if created:
-            DISPOSITIONS_SEED.unlink()
+def dispositions_seed() -> None:
+    """The real seed, generated from the parser's list, as before every build."""
+    subprocess.run(
+        [sys.executable, str(PROJECT_DIR / "write_disposition_seed.py")], check=True
+    )
 
 
 @pytest.fixture
@@ -259,9 +250,23 @@ def good_rows() -> dict[type, list[dict[str, Any]]]:
             category("Welfare Check", "Police"),
         ],
         AddressNormalization: [
-            location("1234 MAIN ST", "1234 Main St", 43.6421567, -72.2512345),
             location(
-                "MAIN ST / HANOVER ST", "Main St and Hanover St", 43.6431, -72.2501
+                "1234 MAIN ST",
+                "1234 Main St",
+                43.6421567,
+                -72.2512345,
+                kind="address",
+                coordinate_precision="exact",
+                source="ai",
+            ),
+            location(
+                "MAIN ST / HANOVER ST",
+                "Main St and Hanover St",
+                43.6431,
+                -72.2501,
+                kind="intersection",
+                coordinate_precision="exact",
+                source="rule",
             ),
         ],
         Property: [
@@ -405,15 +410,51 @@ def test_the_public_set_holds_no_held_back_values(dbt):
     with dbt.engine.connect() as connection:
         incidents = connection.execute(
             text(
-                "select case_number, officer, reference_number from marts.public_incidents"
+                "select case_number, officer, reference_number, location, lat, lng"
+                " from marts.public_incidents order by case_number"
             )
         ).all()
         owners = connection.execute(
             text("select owner, owner_address from marts.public_properties")
         ).all()
 
-    assert sorted(row.case_number for row in incidents) == ["26-1001", "26-1002"]
+    assert [row.case_number for row in incidents] == ["26-1001", "26-1002"]
     assert all(
         row.officer is None and row.reference_number is None for row in incidents
     )
+    # Title case, as the normalization job writes it.
+    house, corner = incidents
+    assert (house.location, house.lat, house.lng) == (
+        "1200 block of Main St",
+        43.642,
+        -72.251,
+    )
+    assert corner.location == "Main St and Hanover St"
+    assert (corner.lat, corner.lng) == (43.6431, -72.2501)
     assert owners == [(None, None)]
+
+
+def test_the_disposition_seed_is_the_parsers_list(dispositions_seed):
+    sys.path.insert(0, str(PROJECT_DIR.parent / "scrapers"))
+    from parsers.dispositions import _DISPOSITIONS
+
+    lines = DISPOSITIONS_SEED.read_text().splitlines()
+
+    assert lines == ["disposition", *sorted(_DISPOSITIONS)]
+
+
+def test_the_city_bounds_match_the_geocoder():
+    """14.2's coarse box and in_city_bounds must agree, corner for corner."""
+    import yaml
+    from locations.geocode import in_city_bounds
+
+    project = yaml.safe_load((PROJECT_DIR / "dbt_project.yml").read_text())
+    b = project["vars"]["city_bounds"]
+    step = 0.001
+
+    assert in_city_bounds(b["min_lat"], b["min_lng"])
+    assert in_city_bounds(b["max_lat"], b["max_lng"])
+    assert not in_city_bounds(b["min_lat"] - step, b["min_lng"])
+    assert not in_city_bounds(b["max_lat"] + step, b["max_lng"])
+    assert not in_city_bounds(b["min_lat"], b["min_lng"] - step)
+    assert not in_city_bounds(b["max_lat"], b["max_lng"] + step)

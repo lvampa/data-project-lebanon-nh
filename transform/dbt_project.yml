@@ -14,13 +14,13 @@ vars:
   # The public window: the most recent 90 days, counted back from the newest log date
   # stored (requirements glossary, 11.2).
   public_window_days: 90
-  # TODO(PR 4 task 11): copy the box from shared/locations in_city_bounds so the
-  # check and the geocoder agree. These values are unverified placeholders.
+  # The same box as in_city_bounds in shared/locations/geocode.py; a test keeps them
+  # equal. geocode() also checks Nominatim's state and city, so this is the coarse check.
   city_bounds:
-    min_lat: 43.58
-    max_lat: 43.70
-    min_lng: -72.36
-    max_lng: -72.18
+    min_lat: 43.56
+    max_lat: 43.72
+    min_lng: -72.34
+    max_lng: -72.17
 
 models:
   lebanon:

@@ -12,10 +12,9 @@ from (
         raw_incident_type,
         {{ fold_key('raw_incident_type') }} as incident_type_key,
         category,
-        -- TODO(PR 4 task 10): these columns come with the provenance migration.
-        null::text as normalized_type,
-        null::text as source,
-        false as needs_review,
+        normalized_type,
+        source,
+        needs_review,
         updated_at
     from {{ source('app', 'incident_type_categories') }}
 ) as categories

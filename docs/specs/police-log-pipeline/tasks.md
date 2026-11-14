@@ -241,7 +241,7 @@ Nothing reads the models yet, so this ships alone.
   - Extend `uv run migrate` (`scripts.migrate:main`, from #27): drop `marts` before Alembic, and run `dbt build` after `init_indexes()`, stopping at the first failure. Update its README line.
     It replaces the compose `migrate` service, which is removed in #26. The `app_dbt_test` fixture stays as it is.
   - Tests: a passing build on good rows, one bad row per check that fails it, and a migration that drops a column a model uses still upgrades.
-  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 11.19, 12.8, 14.1 to 14.7_
+  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 11.19 to 11.21, 12.8, 14.1 to 14.9_
 
 ## PR 8: API, admin search, and export read the models
 

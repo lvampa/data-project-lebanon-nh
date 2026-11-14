@@ -256,6 +256,7 @@ def good_rows() -> dict[type, list[dict[str, Any]]]:
                 43.6421567,
                 -72.2512345,
                 kind="address",
+                street="MAIN ST",
                 coordinate_precision="exact",
                 source="ai",
             ),
@@ -376,6 +377,32 @@ def test_coordinates_set_by_hand_may_be_outside_the_city(dbt):
             "assert_public_locations_at_block_level",
             id="14.5-exact-coordinates-in-the-public-set",
         ),
+        *[
+            pytest.param(
+                "public_incidents",
+                f"select case_number, '{leak}'::text as location,"
+                " round(lat::numeric, 3)::float8 as lat,"
+                " round(lng::numeric, 3)::float8 as lng,"
+                " 'address'::text as location_kind"
+                " from marts.incidents where case_number = '26-1001'",
+                "assert_public_locations_at_block_level",
+                id=f"14.5-address-text-{leak}",
+            )
+            for leak in (
+                "Rear 12 Main St",
+                "Main St 12",
+                "Main St Lot 5",
+                "Main St Apt 3 B",
+            )
+        ],
+        pytest.param(
+            "public_incidents",
+            "select case_number, 'Smith residence, 12 Main St'::text as location,"
+            " 'place'::text as location_kind"
+            " from marts.incidents where case_number = '26-1001'",
+            "assert_public_non_address_has_no_house_number",
+            id="house-number-in-a-place",
+        ),
         pytest.param(
             "public_properties",
             "select parcel_id, owner, owner_address from public.properties",
@@ -432,6 +459,34 @@ def test_the_public_set_holds_no_held_back_values(dbt):
     assert corner.location == "Main St and Hanover St"
     assert (corner.lat, corner.lng) == (43.6431, -72.2501)
     assert owners == [(None, None)]
+
+
+@pytest.mark.parametrize(
+    ("ai_text", "public"),
+    [
+        ("Rear 12 Main St", "Main St"),
+        ("Main St 12", "Main St"),
+        ("12 Main St Lot 5", "Main St"),
+        ("1234 Main St Apt 3 B", "1200 block of Main St"),
+    ],
+)
+def test_the_ai_address_text_never_reaches_the_public_set(dbt, ai_text, public):
+    """Only the matched street, at block level, is published, whatever the AI wrote."""
+    rows = good_rows()
+    rows[AddressNormalization][0]["normalized_address"] = ai_text
+    dbt.seed_rows(rows)
+
+    result = dbt.run("build")
+
+    assert result.returncode == 0, result.output
+    with dbt.engine.connect() as connection:
+        location = connection.scalar(
+            text(
+                "select location from marts.public_incidents"
+                " where case_number = '26-1001'"
+            )
+        )
+    assert location == public
 
 
 def test_a_location_waiting_for_review_has_no_public_location(dbt):

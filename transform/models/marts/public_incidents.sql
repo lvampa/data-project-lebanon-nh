@@ -27,12 +27,13 @@ select
     raw_incident_type as incident_type,
     disposition,
     call_source,
-    {{ public_location('public_kind', 'normalized_address') }} as location,
+    {{ public_location('public_kind', 'normalized_address', 'street') }} as location,
     public_kind as location_kind,
-    {{ public_coordinate('public_kind', 'lat') }} as lat,
-    {{ public_coordinate('public_kind', 'lng') }} as lng,
-    -- Not placed, or no normalization yet: empty, like the coordinates (11.8, 11.9).
-    case when public_kind is not null and lat is not null
+    {{ public_coordinate('public_kind', 'lat', 'street') }} as lat,
+    {{ public_coordinate('public_kind', 'lng', 'street') }} as lng,
+    -- Empty whenever the coordinates are: not placed, not normalized, or an address
+    -- with no matched street (11.8, 11.9).
+    case when {{ public_coordinate('public_kind', 'lat', 'street') }} is not null
         then coordinate_precision end as coordinate_precision,
     source_url,
     null::text as officer,

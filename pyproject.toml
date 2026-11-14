@@ -54,7 +54,7 @@ indent-style = "space"
 [tool.pyrefly]
 # Strict everywhere, except the files listed under "Not yet strict" below.
 preset = "strict"
-project-includes = ["api", "dags", "scrapers", "scripts", "shared"]
+project-includes = ["api", "dags", "scrapers", "scripts", "shared", "transform"]
 # Scrapy runs from scrapers/ and Airflow from dags/, so modules in those folders
 # import each other by top-level name (`from items import ...`).
 search-path = [".", "scrapers", "dags"]

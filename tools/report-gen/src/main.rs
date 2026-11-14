@@ -69,12 +69,7 @@ async fn generate(output_dir: &Path) -> Result<()> {
     output::write_json(output_dir, "stats.json", &stats)?;
 
     let incidents = db::fetch_incidents(&pool).await?;
-    println!(
-        "✓ incidents.json  ({} rows of {} total, capped at {})",
-        incidents.len(),
-        stats.total,
-        db::INCIDENT_LIMIT
-    );
+    println!("✓ incidents.json  ({} rows)", incidents.len());
     output::write_json(output_dir, "incidents.json", &incidents)?;
 
     let addresses = db::fetch_addresses(&pool).await?;

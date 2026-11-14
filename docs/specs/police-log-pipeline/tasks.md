@@ -269,7 +269,7 @@ Task 20 follows as PR 8b.
   - Rust unit test: the stats shaping from `public_stats` rows, including not-yet-normalized incidents.
   - _Requirements: 11.1 to 11.5, 11.8, 11.11 to 11.15_
 
-- [ ] 21b. Add the pre-deploy check
+- [x] 21b. Add the pre-deploy check
   - A `report-gen check --dir <dir>` subcommand, and the call in `deploy.sh` between `generate_report.sh` and `bun run build`.
   - Rust unit tests on JSON in a temp dir: clean files pass; each of the four fields, when non-empty, fails with the file, field and count; a missing file fails.
   - _Requirements: 11.16, 11.17, 11.18, 12.9_

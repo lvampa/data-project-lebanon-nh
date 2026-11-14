@@ -6,6 +6,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 bash "$SCRIPT_DIR/generate_report.sh"
 
+echo "→ Checking the export..."
+cd "$REPO_ROOT"
+cargo run -p report-gen --release -- check --dir "$REPO_ROOT/frontend/web/public/data"
+
 echo "→ Building web..."
 cd "$REPO_ROOT/frontend/web"
 bun run build

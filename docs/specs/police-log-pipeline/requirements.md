@@ -297,6 +297,9 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 13. THE public export SHALL write `properties.json` from the public parcel model, and SHALL NOT run its own query on the parcels table.
 14. THE public export SHALL NOT write a parcel's owner name or owner mailing address.
 15. THE public export SHALL keep the `owner` and `owner_address` field names in `properties.json` with empty values, so that the current site keeps working.
+16. WHEN `deploy.sh` runs, THE pre-deploy check SHALL read the exported JSON files after the export and before the site build.
+17. IF `incidents.json` holds a non-empty officer or reference number, or `properties.json` holds a non-empty owner or owner address, THEN THE pre-deploy check SHALL stop the deploy and name the file, the field, and the number of rows.
+18. IF any of `incidents.json`, `addresses.json`, `properties.json`, or `stats.json` is missing, THEN THE pre-deploy check SHALL stop the deploy.
 
 ### Requirement 12: Run the stages in order on a schedule
 

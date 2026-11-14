@@ -432,11 +432,66 @@ models/
 - A dbt macro, `public_location`, is the one place that works out block level: for kind `address` it reads the leading house number from the normalized address, rounds it down to the hundred, drops it when under 100, and rounds coordinates to 3 places (6.11, 11.6, 11.7).
   Data check 14.5 tests its output.
 - The incidents and stats API and admin search read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
-- `report-gen` becomes plain selects from the four public models and drops its own joins and its 2,000 row cap.
+- `report-gen` becomes plain selects from the four public models and drops its own joins and its 2,000 row cap (see "Public export").
 - Postgres will not let a migration drop or retype a column a view reads.
   So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, run `dbt run`.
   The `migrate` service and the test fixture both follow it, and a test proves a migration that drops a column a model uses still upgrades.
 - A paid tier later is another model over `incidents` with a different filter.
+
+### Public export (report-gen)
+
+`tools/report-gen` keeps its CLI and its five files, but reads the `marts.public_*` views instead of the tables.
+Its own joins, `INCIDENT_LIMIT` (2,000), and the raw-table counts go away (11.1, 11.2).
+Every query is a plain `select ... order by` on one view, and the filtering lives in dbt.
+
+| File | Reads | Order |
+|---|---|---|
+| `incidents.json` | `marts.public_incidents` | `reported_at desc nulls last` |
+| `addresses.json` | `marts.public_addresses` | `count desc` |
+| `properties.json` | `marts.public_properties` | `assessed_total desc nulls last` |
+| `stats.json` | `marts.public_stats`, plus `count(*)` of `marts.public_incidents` | by count |
+| `staff.json` | `city_staff`, unchanged | as today |
+
+`incidents.json`, per incident (11.3 to 11.5):
+
+| Field | From | Note |
+|---|---|---|
+| `case_number`, `reported_at`, `call_source`, `disposition`, `source_url` | same columns | as today |
+| `incident_type` | `incident_type` (the raw type) | as today |
+| `location` | `location` (the public location) | was the raw location; now block level, or empty until normalized |
+| `officer`, `reference_number` | `null` | kept as fields, always empty (11.4, 11.5) |
+| `category`, `normalized_type` | same columns | new |
+| `lat`, `lng`, `coordinate_precision` | same columns | new; empty when not placed (11.8) |
+
+`addresses.json` keeps its shape exactly: `raw_address`, `normalized_address`, `count`, `lat`, `lng` (11.12).
+Both name fields now hold the public location, so the map's popup code keeps working and shows block-level names.
+
+`properties.json` keeps every field. `owner` and `owner_address` are always `null` (11.13 to 11.15).
+
+`stats.json` keeps `total`, `generated_at`, `by_type` and `by_weekday`, and adds `by_category` (11.11).
+- `total` is the public incident count, not every entry.
+- `by_type` is `{incident_type, count}` with the normalized type name as `incident_type`, top 20.
+  Not-yet-normalized incidents are left out of it.
+- `by_category` is `{category, count}`, with not-yet-normalized incidents under `null`.
+- `by_weekday` is `{day, count}` as today.
+- No page reads `stats.json` yet, so the change risks nothing on the site.
+
+`staff.json` is out of this feature: city staff are public employees, and the people pages rule allows them on the site.
+
+Running it:
+
+- `deploy.sh` runs `generate_report.sh` (report-gen against `DATABASE_URL`), then `report-gen check`, then `bun run build`, then `wrangler pages deploy` (12.9).
+- The files in `frontend/web/public/data` stay gitignored and are never committed.
+- `report-gen` needs the `marts` views. If they are missing, the select fails with "relation does not exist" and the deploy stops; run `dbt run` (or let the DAG run), then deploy again.
+
+Pre-deploy check (11.16 to 11.18):
+
+- `report-gen check --dir frontend/web/public/data` reads the written JSON files.
+  It doesn't rerun the queries, so it catches a leak however it got into the files.
+- It fails, naming the file, the field and the number of rows, when `incidents.json` has a non-empty `officer` or `reference_number`, or `properties.json` has a non-empty `owner` or `owner_address`.
+- It also fails when any of the four public files is missing.
+- `deploy.sh` runs it after the export and before the build, so a failure stops the deploy before anything is uploaded.
+- Block level is not rechecked here, because the file doesn't carry the location kind; the dbt check in 14.5 covers it.
 
 ### Admin search
 
@@ -891,6 +946,28 @@ Incident search runs as a Postgres query over the dbt models, with full-text sea
 The lost-rows bug it was meant to fix is already fixed in all five pipelines on `fix/integration`, and the police pipeline no longer fits a per-item base.
 Tidying the other four is a follow-up.
 
+## Frontend changes for Connor
+
+The export keeps every field name, so the site builds and runs unchanged after PR 8a.
+These are what Connor changes so it stops showing empty or misleading things.
+The agents don't touch the frontend.
+
+- **Officer, always empty now.**
+  - `frontend/web/components/incidents-table.tsx`: the `Officer` header (line 60) and cell (line 87), and the `officer` filter (lines 25, 27, 39).
+  - `frontend/web/components/incidents-filters.tsx`: the officer input (lines 39 to 44), and `officer` in `hasFilters` (line 25).
+- **Block-level locations and pins.**
+  `incidents.json` `location`, and `addresses.json` `raw_address` and `normalized_address`, now read like "1200 block of Main St", with coordinates rounded to about 100 meters.
+  - `frontend/web/lib/map-utils.ts` line 10 needs no change.
+    The popup label may want a word saying the pin is approximate.
+  - An incident with no normalization yet has an empty `location` and no pin.
+- **No owner search.**
+  - `frontend/web/components/property-search.tsx`: the owner match (line 31) and "Search by address or owner…" (line 49).
+  - `frontend/web/components/property-table.tsx`: the `Owner` header (line 23) and cell (line 35).
+  - `frontend/web/app/properties/page.tsx` line 13: "search by address or owner".
+- **New incident fields, optional to use:** `category`, `normalized_type`, `lat`, `lng` and `coordinate_precision`.
+  They go into `Incident` in `frontend/shared/lib/types.ts` if he wants category filters or per-incident pins.
+  `stats.json` gains `by_category`; no page reads `stats.json` today.
+
 ## Open questions
 
 1. **Do 2025 PDFs use the same layout?**
@@ -901,7 +978,7 @@ Tidying the other four is a follow-up.
 3. **The token for the scheduled AI call.**
    Settled on 2026-11-13: there's no token. The job runs by hand on Connor's Mac with his login (see Decisions).
 4. **The officer column on the public site.**
-   The export writes an empty `officer`, so the officer column and filter in `incidents-table.tsx` will have nothing to show until the frontend changes.
+   The export writes an empty `officer`; the frontend changes are listed in "Frontend changes for Connor".
 5. **Who labels the evaluation set.**
    The plan is an AI-drafted set that Connor checks line by line, about 150 lines.
 6. **Cross-entity admin search.**

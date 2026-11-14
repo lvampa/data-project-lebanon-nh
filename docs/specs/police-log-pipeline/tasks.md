@@ -23,7 +23,8 @@ File counts are estimates and include tests.
 | 5 | Rule pass, AI normalization job, and geocode job | about 28 |
 | 6 | Evaluation set and the Ollama backend | about 12 |
 | 7 | dbt consumer models and data checks | about 22 |
-| 8 | API, admin search, and export read the models | about 14 |
+| 8a | report-gen reads the public models, plus the pre-deploy check | about 8 |
+| 8b | Admin API and admin search read the models | about 10 |
 | 9 | Daily schedule (no normalize task) | about 8 |
 | Search | `/api/search` on Postgres, in the search spec | about 12 |
 | Follow-up | Remove Elasticsearch | about 25 |
@@ -260,11 +261,25 @@ About 14 files.
   - Tests: every word must match; "Hanovr", "Hanpver", "Mxple", and "Maxle" find "Hanover" and "Maple"; "hannafords" finds "HANNAFORD'S"; "13339" finds "26-13339"; "St", "Main", "26", and "Mapel" do not fuzzy-match; a normalized address finds every raw spelling; a saved correction shows on the next request; parse errors are left out.
   - _Requirements: 10.1 to 10.13_
 
-- [ ] 21. Read the public models in `report-gen`
-  - Plain selects from the four public models, including `public_properties` for `properties.json`; remove the joins and the 2,000 row cap.
-  - Keep today's field names and the `addresses.json` shape; write the new fields.
-  - The export keeps running from `deploy.sh` at deploy time; its files are not committed.
-  - _Requirements: 11.3 to 11.15, 12.9_
+Task 21 ships first, as PR 8a, stacked on PR 7, because it is the go-live gate.
+Task 20 follows as PR 8b.
+
+- [ ] 21a. Read the public models in `report-gen`
+  - Replace the incidents, addresses, properties and stats queries with selects from the `marts.public_*` views, using the field mapping in design.md, "Public export".
+  - Remove `INCIDENT_LIMIT` and the joins. Add `category`, `normalized_type`, `lat`, `lng` and `coordinate_precision` to `Incident`, and `by_category` to `Stats`. Leave staff as it is.
+  - Rust unit test: the stats shaping from `public_stats` rows, including not-yet-normalized incidents.
+  - _Requirements: 11.1 to 11.5, 11.8, 11.11 to 11.15_
+
+- [ ] 21b. Add the pre-deploy check
+  - A `report-gen check --dir <dir>` subcommand, and the call in `deploy.sh` between `generate_report.sh` and `bun run build`.
+  - Rust unit tests on JSON in a temp dir: clean files pass; each of the four fields, when non-empty, fails with the file, field and count; a missing file fails.
+  - _Requirements: 11.16, 11.17, 11.18, 12.9_
+
+- [ ] 21c. Test the export end to end
+  - In `transform/tests/`, after `dbt run` on the `app_dbt_test` fixture, run `report-gen` with `DATABASE_URL` pointing at it, into `tmp_path`.
+  - Assert: today's field names are all present, plus the new ones; `officer`, `reference_number`, `owner` and `owner_address` are empty; only in-window incidents are present; `addresses.json` names hold the public location; `report-gen check` passes on the output and fails on a copy with one officer filled in.
+  - It builds report-gen with `cargo build -p report-gen` on first use. Confirm the CI test job has `cargo` and check the time it adds; if it's too slow, move this test into the Rust CI job with Postgres.
+  - _Requirements: 11.1 to 11.5, 11.12 to 11.18_
 
 ## PR 9: Daily schedule
 

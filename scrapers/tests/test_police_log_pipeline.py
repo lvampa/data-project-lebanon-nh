@@ -267,3 +267,12 @@ def test_no_entry_texts_are_archived_while_the_archive_is_off(db_session, raw_so
     pipeline.process_item(make_pdf(add_claimed_url(db_session), "26-1001"))
 
     assert entry_texts(raw_sources) == []
+
+
+def test_an_item_for_a_missing_url_row_raises_and_stores_nothing(db_session):
+    pipeline = open_pipeline()
+
+    with pytest.raises(LookupError, match="does not exist"):
+        pipeline.process_item(make_pdf(999_999, "2024-1001"))
+
+    assert stored_case_numbers(db_session) == []

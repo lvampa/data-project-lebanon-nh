@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from models.police_log import PoliceLogRecord
@@ -26,6 +26,8 @@ def make_log(**kwargs):
         "scene_seconds": None,
         "raw_text": "raw text here",
         "parse_error": False,
+        "log_date": date(2025, 1, 2),
+        "parser_version": 1,
     }
     return {**defaults, **kwargs}
 
@@ -45,12 +47,29 @@ def test_police_log_record_parse_error_defaults_false():
 
 
 def test_police_log_record_null_optional_fields():
-    record = PoliceLogRecord.model_validate(
-        make_log(case_number=None, incident_type=None, location=None)
-    )
-    assert record.case_number is None
+    record = PoliceLogRecord.model_validate(make_log(incident_type=None, location=None))
     assert record.incident_type is None
     assert record.location is None
+
+
+@pytest.mark.parametrize("field", ["case_number", "raw_text", "log_date"])
+def test_police_log_record_requires_what_the_table_requires(field):
+    with pytest.raises(ValidationError):
+        PoliceLogRecord.model_validate(make_log(**{field: None}))
+
+
+def test_police_log_record_rejects_a_key_with_no_column():
+    with pytest.raises(ValidationError):
+        PoliceLogRecord.model_validate(make_log(pdf_filename="log.pdf"))
+
+
+def test_police_log_record_dumps_references_as_plain_dicts():
+    record = PoliceLogRecord.model_validate(
+        make_log(refer_to=[{"kind": "Incident", "number": "26L-426-OF"}])
+    )
+    assert record.model_dump()["refer_to"] == [
+        {"kind": "Incident", "number": "26L-426-OF"}
+    ]
 
 
 def test_police_log_record_strips_whitespace():

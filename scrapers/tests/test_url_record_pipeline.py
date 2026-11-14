@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from unittest.mock import patch
 
-from items import PoliceLogItem, UrlRecordItem
+from items import PoliceLogPdfItem, UrlRecordItem
 from pipelines import UrlRecordPipeline
 from postgres.models.pdf_url import PdfUrl
 from sqlalchemy import select
@@ -65,7 +65,7 @@ def test_inserts_archive_url_and_log_date(db_session):
 def test_passes_through_non_url_record_items(mock_session_local):
     pipeline = UrlRecordPipeline()
     pipeline.open_spider()
-    item = PoliceLogItem(source_url="x", raw_text="x", scraped_at=datetime(2026, 5, 1))
+    item = PoliceLogPdfItem(url_id=1, raw_text="x")
 
     result = pipeline.process_item(item)
     pipeline.close_spider()

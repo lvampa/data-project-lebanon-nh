@@ -1,13 +1,14 @@
 import io
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any, cast, override
 
 import logfire
 import scrapy
-from items import PoliceLogItem, PoliceLogPdfItem
+from ingest.pdf_urls import ErrorKind, mark_error, utc_now
+from items import PoliceLogPdfItem
 from models import PdfUrlClaim
-from parsers import parse_log_entries
+from mongo.archive import content_hash
 from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
 from pypdf import PdfReader
@@ -20,19 +21,30 @@ MAX_ATTEMPTS = 3
 
 
 def expire_stale_claims(now: datetime) -> Update:
-    # A crashed run leaves its claims in_progress. Expire them to error so the
-    # attempt limit in retry_failed_urls applies to them too.
+    # A crashed run leaves its claims in_progress. Expire them to a download error
+    # so the attempt limit in retry_failed_urls applies to them too.
     return (
         update(PdfUrl)
         .where(PdfUrl.state == "in_progress", PdfUrl.claimed_at < now - CLAIM_LEASE)
-        .values(state="error", error_message="Claim expired")
+        .values(
+            state="error",
+            error_kind="download",
+            error_message="Claim expired",
+            completed_at=now,
+        )
     )
 
 
 def retry_failed_urls() -> Update:
+    # Only a download can go differently next time. A parse or save error has its
+    # text stored and waits for a parser fix and a reprocess.
     return (
         update(PdfUrl)
-        .where(PdfUrl.state == "error", PdfUrl.attempts < MAX_ATTEMPTS)
+        .where(
+            PdfUrl.state == "error",
+            PdfUrl.error_kind == "download",
+            PdfUrl.attempts < MAX_ATTEMPTS,
+        )
         .values(state="pending")
     )
 
@@ -52,11 +64,6 @@ def claim_statement(limit: int, now: datetime) -> Update:
         .values(state="in_progress", claimed_at=now, attempts=PdfUrl.attempts + 1)
         .returning(PdfUrl.id, PdfUrl.canonical_url, PdfUrl.archive_url)
     )
-
-
-def _utc_now() -> datetime:
-    # pdf_urls timestamps are naive columns that hold UTC, like the other tables.
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class ProcessUrlsSpider(scrapy.Spider):
@@ -92,7 +99,7 @@ class ProcessUrlsSpider(scrapy.Spider):
             )
 
     def _claim_urls(self) -> list[PdfUrlClaim]:
-        now = _utc_now()
+        now = utc_now()
         with (
             logfire.span("claim pdf urls", limit=self.limit),
             SessionLocal() as session,
@@ -116,7 +123,7 @@ class ProcessUrlsSpider(scrapy.Spider):
         request: Request = failure.request
         pdf_url = request.cb_kwargs["pdf_url"]
         logfire.error("request failed", url=request.url, error=repr(failure.value))
-        self._mark_error(pdf_url, f"Request failed: {failure.value!r}")
+        self._mark_error(pdf_url, "download", f"Request failed: {failure.value!r}")
 
     # Scrapy types Spider.parse as a callback attribute, which any method override
     # trips; callbacks are meant to be overridden like this.
@@ -139,70 +146,51 @@ class ProcessUrlsSpider(scrapy.Spider):
             else:
                 logfire.error("response is not a pdf, no archive url", url=response.url)
                 self._mark_error(
-                    pdf_url, "Response is not a PDF and no archive URL available"
+                    pdf_url,
+                    "download",
+                    "Response is not a PDF and no archive URL available",
                 )
             return
 
-        yield from self._process_pdf(response.body, response.url, pdf_url)
+        yield from self._process_pdf(response, response.url, pdf_url)
 
     def parse_archive(
         self, response: Response, pdf_url: PdfUrlClaim, **kwargs: Any
     ) -> Iterator[PoliceLogPdfItem]:
         if not response.body.startswith(b"%PDF"):
             logfire.error("archive url also not a pdf", url=response.url)
-            self._mark_error(pdf_url, "Archive URL also not a PDF")
+            self._mark_error(pdf_url, "download", "Archive URL also not a PDF")
             return
-        yield from self._process_pdf(response.body, pdf_url.canonical_url, pdf_url)
+        yield from self._process_pdf(response, pdf_url.canonical_url, pdf_url)
 
     def _process_pdf(
-        self, pdf_bytes: bytes, source_url: str, pdf_url: PdfUrlClaim
+        self, response: Response, source_url: str, pdf_url: PdfUrlClaim
     ) -> Iterator[PoliceLogPdfItem]:
+        pdf_bytes = response.body
         try:
             with logfire.span("extract pdf text", url=source_url):
                 reader = PdfReader(io.BytesIO(pdf_bytes))
                 raw_text = "\n".join(page.extract_text() for page in reader.pages)
-            entries = parse_log_entries(raw_text)
         except Exception as exc:
-            logfire.error("pdf processing failed", url=source_url, error=repr(exc))
-            self._mark_error(pdf_url, f"PDF processing failed: {exc!r}")
-            return
-
-        now = _utc_now()
-
-        if not entries:
-            logfire.warning("no entries parsed from pdf", url=source_url)
-            self._update_url(
-                pdf_url,
-                raw_text=raw_text,
-                state="error",
-                error_message="No entries parsed from PDF",
-                entry_count=0,
-                completed_at=now,
+            logfire.error("pdf text extraction failed", url=source_url, error=repr(exc))
+            # No text came out, so there is nothing for a parser fix to work on.
+            # A truncated download lands here, and another download may succeed.
+            self._mark_error(
+                pdf_url, "download", f"PDF text extraction failed: {exc!r}"
             )
             return
 
-        # One item per PDF so the pipeline saves its entries and completes the URL in one commit.
+        # One item per PDF. The pipeline parses the text, saves the entries, and
+        # completes the URL in one commit.
         yield PoliceLogPdfItem(
             url_id=pdf_url.id,
             raw_text=raw_text,
-            entries=[
-                PoliceLogItem(
-                    source_url=source_url,
-                    scraped_at=now,
-                    **entry,  # includes per-entry raw_text from the parser
-                )
-                for entry in entries
-            ],
+            content_hash=content_hash("police_log_pdf", pdf_bytes),
+            # Set by the raw archive middleware. Missing means the archive is off.
+            original_archived=response.meta.get("archived", False),
         )
 
-    def _mark_error(self, pdf_url: PdfUrlClaim, error_message: str) -> None:
-        self._update_url(
-            pdf_url, state="error", error_message=error_message, completed_at=_utc_now()
-        )
-
-    def _update_url(self, pdf_url: PdfUrlClaim, **values: Any) -> None:
+    def _mark_error(self, pdf_url: PdfUrlClaim, kind: ErrorKind, message: str) -> None:
         with SessionLocal() as session:
-            session.execute(
-                update(PdfUrl).where(PdfUrl.id == pdf_url.id).values(**values)
-            )
+            session.execute(mark_error(pdf_url.id, kind, message))
             session.commit()

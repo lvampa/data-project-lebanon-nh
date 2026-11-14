@@ -878,3 +878,31 @@ def test_an_address_that_stays_the_same_keeps_its_coordinates(db_session, call_l
 
     row = the_address(db_session, "HANNAFORDS PLAZA")
     assert (row.lat, row.lng, row.geocoded_via) == (43.65, -72.26, "nominatim")
+
+
+def test_a_redo_miss_on_a_row_that_has_a_value_charges_no_attempt(db_session, call_log):
+    add_types(db_session, "OLD", "OTHER")
+    add_type_row(
+        db_session,
+        "OLD",
+        category="Police",
+        normalized_type="Old",
+        source="ai",
+        prompt_version="incident_type-0",
+    )
+    backend = FakeBackend(replies=[type_answer("OTHER")])
+
+    run(backend, call_log, fields=("incident_type",), redo=True)
+
+    row = the_type(db_session, "OLD")
+    assert (row.failed_attempts, row.needs_review, row.category) == (0, False, "Police")
+
+
+def test_a_stored_answer_resets_the_failed_attempts(db_session, call_log):
+    add_types(db_session, "A")
+    add_type_row(db_session, "A", failed_attempts=2)
+    backend = FakeBackend(replies=[type_answer("A")])
+
+    run(backend, call_log, fields=("incident_type",))
+
+    assert the_type(db_session, "A").failed_attempts == 0

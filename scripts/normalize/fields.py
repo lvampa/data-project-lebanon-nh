@@ -199,12 +199,15 @@ class IncidentTypes:
                 prompt_version=self.version(),
                 ai_call_id=ai_call_id,
                 needs_review=accepted.needs_review,
+                failed_attempts=0,
             )
         return len(group.raws)
 
     def fail(self, session: Session, group: Group) -> int:
         for raw in group.raws:
-            _charge_attempt(session, IncidentTypeCategory, "raw_incident_type", raw)
+            _charge_attempt(
+                session, IncidentTypeCategory, "raw_incident_type", "category", raw
+            )
         return len(group.raws)
 
     def waiting(self, session: Session) -> int:
@@ -378,12 +381,15 @@ class Locations:
                 prompt_version=self.version(),
                 ai_call_id=ai_call_id,
                 needs_review=accepted.needs_review,
+                failed_attempts=0,
             )
         return len(group.raws)
 
     def fail(self, session: Session, group: Group) -> int:
         for raw in group.raws:
-            _charge_attempt(session, AddressNormalization, "raw_address", raw)
+            _charge_attempt(
+                session, AddressNormalization, "raw_address", "normalized_address", raw
+            )
         return len(group.raws)
 
     def waiting(self, session: Session) -> int:
@@ -519,8 +525,13 @@ def _upsert(
     )
 
 
-def _charge_attempt(session: Session, model: Any, key_column: str, raw: str) -> None:
-    """Count a failed attempt, and mark the value for review at the limit."""
+def _charge_attempt(
+    session: Session, model: Any, key_column: str, value_column: str, raw: str
+) -> None:
+    """Count a failed attempt, and mark the value for review at the limit.
+
+    A row that already has a value is left alone: a missed redo must not mark a good
+    value for review (8.7)."""
     now = _now()
     statement = insert(model).values(
         **{key_column: raw},
@@ -539,6 +550,7 @@ def _charge_attempt(session: Session, model: Any, key_column: str, raw: str) -> 
                 ),
                 "updated_at": now,
             },
-            where=model.source.is_distinct_from("human"),
+            where=model.source.is_distinct_from("human")
+            & getattr(model, value_column).is_(None),
         )
     )

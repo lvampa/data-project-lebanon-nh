@@ -19,15 +19,12 @@ class PoliceLogRecord(BaseModel):
     source_url: str = Field(min_length=1)
     log_date: date
     case_number: str = Field(min_length=1)
-    raw_text: str = Field(min_length=1)
-    scraped_at: datetime
     parser_version: int
     reported_at: datetime | None = None
     call_source: str | None = None
     incident_type: str | None = None
     disposition: str | None = None
     disposition_unmatched: bool = False
-    raw_reason_action: str | None = None
     location: str | None = None
     place_code: str | None = None
     officer: str | None = None

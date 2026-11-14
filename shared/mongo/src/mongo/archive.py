@@ -103,7 +103,7 @@ class RawArchive:
         Returns whether that write worked, or None while the version is still
         buffered. With a batch size of 1 every call writes, so the caller knows.
         """
-        self._buffer.append(_upsert_version(source, source_key, response))
+        self._buffer.append(version_upsert(source, source_key, response))
         if len(self._buffer) < self._batch_size:
             return None
         return self._write_buffer()
@@ -177,10 +177,53 @@ def stored_body(version: dict[str, Any]) -> bytes | None:
     return gzip.decompress(version["body_gzip"])
 
 
-def _upsert_version(
+def version_upsert(
     source: str, source_key: str, response: ArchivedResponse
 ) -> UpdateOne:
     """One write that stores a new version, or records a repeat of a stored one."""
+    return UpdateOne(
+        _version_filter(source, source_key, response),
+        {
+            "$setOnInsert": _first_fetch(source_key, response),
+            "$set": {"last_seen_at": response.fetched_at},
+            "$inc": {"seen_count": 1},
+        },
+        upsert=True,
+    )
+
+
+def version_insert(
+    source: str, source_key: str, response: ArchivedResponse
+) -> UpdateOne:
+    """One write that stores a new version and leaves a stored one exactly as it is.
+
+    For copies that may run more than once, where a rerun is not a new sighting.
+    """
+    first_fetch = _first_fetch(source_key, response)
+    return UpdateOne(
+        _version_filter(source, source_key, response),
+        {
+            "$setOnInsert": {
+                **first_fetch,
+                "last_seen_at": response.fetched_at,
+                "seen_count": 1,
+            }
+        },
+        upsert=True,
+    )
+
+
+def _version_filter(
+    source: str, source_key: str, response: ArchivedResponse
+) -> dict[str, Any]:
+    return {
+        "source": source,
+        "source_key": source_key,
+        "content_hash": content_hash(source, response.body),
+    }
+
+
+def _first_fetch(source_key: str, response: ArchivedResponse) -> dict[str, Any]:
     first_fetch: dict[str, Any] = {
         "url": response.url,
         "status": response.status,
@@ -192,19 +235,7 @@ def _upsert_version(
     }
     if response.text is not None:
         first_fetch["text_gzip"] = Binary(gzip.compress(response.text.encode()))
-    return UpdateOne(
-        {
-            "source": source,
-            "source_key": source_key,
-            "content_hash": content_hash(source, response.body),
-        },
-        {
-            "$setOnInsert": first_fetch,
-            "$set": {"last_seen_at": response.fetched_at},
-            "$inc": {"seen_count": 1},
-        },
-        upsert=True,
-    )
+    return first_fetch
 
 
 def _compressed_body(source_key: str, body: bytes) -> dict[str, Any]:

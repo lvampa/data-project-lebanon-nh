@@ -69,12 +69,6 @@ def stored_case_numbers(session) -> list[str]:
     ).all()
 
 
-def stored_raw_text(session, case_number: str) -> str:
-    return session.scalars(
-        select(LogEntry.raw_text).where(LogEntry.case_number == case_number)
-    ).one()
-
-
 def stored_url(session, url_id: int) -> PdfUrl:
     session.expire_all()
     return session.get(PdfUrl, url_id)
@@ -215,7 +209,7 @@ def test_each_entry_text_is_archived_after_the_commit(db_session, raw_sources):
     assert [v["source_key"] for v in versions] == ["26-1001", "26-1002"]
     body = json.loads(gzip.decompress(versions[0]["body_gzip"]))
     assert body == {
-        "raw_text": stored_raw_text(db_session, "26-1001"),
+        "raw_text": entry_text("26-1001").strip(),
         "raw_reason_action": "Noise Complaint Log Information",
         "source_url": "https://example.com/a.pdf",
         "parser_version": PARSER_VERSION,

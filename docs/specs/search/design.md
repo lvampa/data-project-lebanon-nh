@@ -2,235 +2,192 @@
 
 **Status:** In progress
 **Created:** 2026-06-10
-**Updated:** 2026-10-16
+**Updated:** 2026-11-07
 
 ## Overview
 
-A sync script copies nine Postgres entity types into one Elasticsearch index each, attaching normalized addresses as it goes (requirements 1 and 2).
-A nightly Airflow DAG runs the sync (requirement 3).
-A FastAPI endpoint normalizes the query against `address_normalizations`, runs one `msearch` across all nine indices, and returns results grouped by entity type (requirements 4 and 5).
-An admin page calls the endpoint and renders the groups (requirement 6).
-Elasticsearch and Kibana run in the compose stack for local work (requirement 7).
+One FastAPI endpoint normalizes the query against `address_normalizations` (requirement 4), then runs one Postgres query per entity type and returns the results grouped by type (requirements 1 and 3).
+Every query uses the word matching the police log pipeline builds for incident search: whole words by full text, one-edit typos for longer words, and partial identifiers (requirement 2).
+The admin page calls the endpoint and renders the groups (requirement 5); its contract does not change.
 
-Everything except result links and collapsible sections (6.11, 6.12) is built.
+The first version synced the nine types into Elasticsearch each night.
+That version is built and is replaced here; the Decisions section records what it did and why it went.
+
+This ships as one pull request after police log pipeline PR 9, which builds the word matching and the incidents model, and before that spec's follow-up removes Elasticsearch.
 
 ## Architecture
 
 ```
-Postgres ──► scripts/sync/sync_es.py ──► Elasticsearch (9 indices)
-   ▲               ▲                            │
-   │     sync_elasticsearch (dags/specs.py)     │
-   │          (triggered by scrapers)           │
-   │                                            ▼
-   └── address_normalizations ◄── api/routers/search.py  GET /api/search
-                                                │
-                                   frontend/admin/app/search/page.tsx
+              address_normalizations
+                       ▲
+                       │ 1. normalize query
+                       │
+GET /api/search ──► api/services/search.py ──► SEARCH_TYPES (nine entries)
+                       │                              │
+                       │ 2. one query per type         │ fields and joins per type
+                       ▼                              ▼
+              api/services/text_search.py ──► Postgres tables, and marts.incidents
+              (word matching, shared with
+               incident search)
 ```
-
-The API reads Postgres only for query normalization.
-All matching happens in Elasticsearch.
 
 ## Components and interfaces
 
-### Sync script
+### Word matching
 
-Lives in `scripts/sync/sync_es.py`.
-Run with `uv run python scripts/sync/sync_es.py` from the repo root.
-Reads `ELASTICSEARCH_HOST` (default `http://localhost:9200`) and the usual Postgres settings through `postgres.SessionLocal`.
+`api/services/text_search.py`, written by police log pipeline task 20 for incident search and reused here unchanged in its rules.
 
-- `get_address_lookup(session) -> dict[str, dict]` loads every address normalization once, keyed by `raw_address`.
-- One `build_*_doc(row, ...) -> dict` function per entity type turns an ORM row into a document.
-  Address-bearing builders take the address lookup.
-  `build_planning_document_doc` takes a meeting lookup keyed by `civicclerk_event_id`, built from the planning meetings in the same run.
-- `sync_index(es, index, rows, build_fn) -> int` sends one `helpers.bulk` request of `index` actions with `_id = str(row.id)` and returns the count.
-  It returns 0 without calling Elasticsearch when `rows` is empty.
-- `main()` configures Logfire, opens a session, builds both lookups, and syncs each index inside a `sync index` span.
+```python
+@dataclass(frozen=True)
+class SearchFields:
+    short: tuple[ColumnElement, ...]                      # whole words, plus one-edit typos for words of 5+ letters
+    long: tuple[ColumnElement, ...] = ()                  # whole words only, against a stored tsvector
+    identifiers: tuple[ColumnElement, ...] = ()           # ILIKE for words of 4+ digits and hyphens
+    ranking: tuple[ColumnElement, ...] = ()               # the ranking fields in requirement 3.7
 
-Incidents come from the `LogEntry` model.
+def match_all_words(query: str, fields: SearchFields) -> WordMatch
+# WordMatch: where clause, hit_ranking_field (boolean expression), score expression
+```
 
-### Sync DAG
+- The query is split into words; each word becomes one condition, and the conditions are joined with AND (2.1).
+- A word matches when it is in the short fields' tsvector, or in a long field's stored tsvector, or, for 5 or more letters, within one edit of a short field word behind the `word_similarity >= 0.3` prefilter, or, for 4 or more digits and hyphens, inside an identifier (2.2 to 2.6).
+- Results sort by three keys: whether any word matched a ranking field, then the score, then the type's date (3.7, 3.8).
+  The score adds each word's full-text rank and trigram score.
+  A sort key, not a weight, so a strong match in another field can never outrank a ranking-field match.
+- These are the same rules and thresholds as incident search; the police log pipeline design explains the 0.3 prefilter and the 5-letter limit.
 
-Lives in `dags/specs.py` as the `sync_elasticsearch` spec, built by `dags/build_dags.py`.
-It has no schedule of its own; each scraper DAG triggers it when it finishes.
+### Search types
 
-| Setting | Value |
-|---|---|
-| `dag_id` | `sync_elasticsearch` |
-| `schedule` | `0 3 * * *` |
-| `start_date` | 2026-06-10 UTC |
-| `catchup` | `False` |
-| Task | `sync_es`, a `BashOperator` running `cd /opt/project && uv run --frozen python scripts/sync/sync_es.py` |
-| Retries | 1, after 5 minutes |
+`api/services/search.py` holds one entry per entity type, so the endpoint has no per-type branches.
+
+```python
+@dataclass(frozen=True)
+class SearchType:
+    entity_type: str                  # the results key
+    select: Select                    # the rows, with any joins
+    fields: SearchFields
+    order_by: list[ColumnElement]     # after score; a date column, newest first, where one exists
+    hidden: frozenset[str] = frozenset()
+
+SEARCH_TYPES: list[SearchType]        # in the order of the admin page's sections
+```
+
+| Entity type | Rows | Ranking fields (3.7) | Date for order | Hidden |
+|---|---|---|---|---|
+| `properties` | `properties` left-joined to `address_normalizations` on `location` | normalized address, owner, parcel ID | | `owner_address` |
+| `incidents` | `marts.incidents` | normalized location, case number | `reported_at` | |
+| `planning_meetings` | `planning_meetings` | title | `meeting_date` | |
+| `planning_documents` | `planning_documents` | file name | `scraped_at` | `raw_text` |
+| `city_staff` | `city_staff` | name | | |
+| `officers` | `officers` | name | | |
+| `llcs` | `llcs` | name | | |
+| `budget_line_items` | `budget_line_items` | GL number, description | `fiscal_year` | |
+| `budget_capital_projects` | `budget_capital_projects` | project name, GL number | `fiscal_year` | |
+
+The fields per type are the table in requirement 1.4.
+For incidents, the police log pipeline's `search_text` already includes the officer, so this endpoint and `GET /api/incidents?q=` find the same incidents.
+Both are admin-only; the public export reads the public models, which leave officers out.
 
 ### Search API
 
-Lives in `api/routers/search.py`, mounted in `api/main.py` at `/api/search`.
-The Elasticsearch client is a lazy module-level singleton built from `ELASTICSEARCH_HOST`.
+`api/routers/search.py` stays thin and keeps its contract.
 
 ```
 GET /api/search?q=<string, min length 1>&limit=<int 1..20, default 5>
 ```
 
-Request handling:
+1. Look up `q.upper()` in `address_normalizations.raw_address` and use the normalized address if found (4.1 to 4.4).
+2. For each entry in `SEARCH_TYPES`, in order, run its select with `match_all_words` inside a savepoint, sort by the three keys, and take `limit` rows (3.3, 3.4).
+   If a type's query fails, roll back its savepoint, log the type and the error, and return an empty list for it, so one broken type never fails the search (3.12).
+   This keeps the behavior the Elasticsearch version shipped for a missing index.
+   The nine queries run one after another; the timing test covers that, so they are not run in parallel unless it fails.
+3. Build `SearchResult`s with the row's columns minus the type's hidden fields as `data` (3.9, 3.10).
 
-1. Look up `q.upper()` in `address_normalizations.raw_address`.
-   Use the matching `normalized_address` as the search text if found, else `q`.
-2. Send one `msearch` with one search per index, in the order of `ES_INDICES`.
-   Each search is a `multi_match` with `fuzziness: AUTO`, `size: limit`, and these fields:
+`SearchResult` and `SearchResponse` in `api/schemas.py` keep their shape, so the admin page needs no change.
+`score` is the matching score from Postgres, so its scale differs from Elasticsearch's; the page shows it to 2 decimal places as before.
 
-   ```
-   normalized_address^3, location^2, owner^2, name^2, file_name^2, project_name^2, *
-   ```
+### Planning document text
 
-3. Zip the responses back to index names and build the grouped response.
-   A null `_score` becomes `0.0`.
-
-Response schemas in `api/schemas.py`:
-
-```python
-class SearchResult(BaseModel):
-    id: int
-    entity_type: str
-    score: float
-    data: dict[str, Any]   # the indexed _source document
-
-class SearchResponse(BaseModel):
-    query: str                         # as typed
-    normalized_query: str | None       # null when no normalization matched
-    results: dict[str, list[SearchResult]]  # one key per index, always all nine
-```
-
-Example:
-
-```json
-{
-  "query": "304 Hanover St",
-  "normalized_query": "304 hanover st lebanon nh",
-  "results": {
-    "properties": [
-      {"id": 1, "entity_type": "properties", "score": 4.2,
-       "data": {"id": 1, "entity_type": "properties", "location": "304 HANOVER ST", "owner": "SMITH JOHN"}}
-    ],
-    "incidents": [],
-    "planning_meetings": []
-  }
-}
-```
+Planning documents carry long extracted text, which is too slow to turn into a tsvector on each query.
+An Alembic migration adds a stored generated column, `raw_text_tsv tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(raw_text, ''))) STORED` (2.6).
+The stored column is the gain: nothing is recomputed per query.
+A GIN index is added only if the timing test's `EXPLAIN` shows Postgres using it; each word ORs the long field with unindexed short fields, which usually rules a bitmap scan out.
 
 ### Admin search page
 
-Lives in `frontend/admin/app/search/page.tsx`, a client component.
-`fetchSearch(q)` in `frontend/admin/lib/api.ts` calls the API.
-`SearchResult` and `SearchResponse` types live in `frontend/admin/lib/types.ts`.
-The sidebar (`frontend/admin/components/sidebar.tsx`) has a Search item in the Operations section.
-
-- Sections render in a fixed order from `ENTITY_LABELS`, and empty sections are hidden.
-- Each card shows a primary field (first non-empty of `location`, `owner`, `name`, `file_name`, `project_name`, `description`, else `ID <id>`), an optional secondary field (first of `incident_type`, `title`, `department`, `fund_name`), and the score.
-- The page tracks the submitted query separately from the input, so the "Showing results for" note compares against what was searched, not what is being typed.
-- Cards do not link anywhere yet, and sections are not collapsible.
-
-### Compose stack
-
-`compose.yml` adds:
-
-- `elasticsearch`: `docker.elastic.co/elasticsearch/elasticsearch:8.13.0`, `discovery.type: single-node`, `xpack.security.enabled: "false"`, `ES_JAVA_OPTS: -Xms512m -Xmx512m`, port 9200, volume `elasticsearch_data`.
-  Healthcheck curls `/_cluster/health` for green or yellow every 15 s, 5 retries, 60 s start period.
-- `kibana`: `docker.elastic.co/kibana/kibana:8.13.0`, port 5601, depends on a healthy `elasticsearch`.
-- Airflow common env gets `ELASTICSEARCH_HOST: http://elasticsearch:9200`, and the shared `depends_on` waits for a healthy `elasticsearch`.
-- The Airflow DAGs mount is `./dags:/opt/airflow/dags`.
-
-`elasticsearch>=8.0.0` is a dependency of `api/pyproject.toml` and of the root `dev` dependency group.
-
-### Repo layout changes
-
-The feature also reorganized two directories, so the sync job had a home:
-
-- `scripts/` is grouped by action: `scrape/`, `ingest/`, `export/`, `sync/`, each a package.
-  A `generate/` group was created too, then removed on 2026-09-07 with the superseded Python report generator.
-- DAGs moved from `scrapers/dags/` to top-level `dags/`, grouped as `scrape/`, `process/`, and `sync/`.
-  DAGs that call scripts use the new paths.
+Unchanged.
+It lives in `frontend/admin/app/search/page.tsx`, and `fetchSearch(q)` in `frontend/admin/lib/api.ts` calls the API.
+Result links and collapsible sections (5.11, 5.12) are still open, and are frontend work for Connor.
 
 ## Data models
 
-One index per entity type, with dynamic mappings.
-Every document has `id` and `entity_type`.
-Address-bearing documents also have `normalized_address`, `lat`, and `lng`.
-
-| Index | Source model | Fields |
-|---|---|---|
-| `properties` | `Property` | `parcel_id`, `location`, `owner`, `owner_address`, `land_use`, `assessed_total` (float), `year_built`, address fields |
-| `incidents` | `LogEntry` | `case_number`, `incident_type`, `location`, `officer`, `disposition`, `reported_at` (ISO 8601), `raw_text`, address fields |
-| `planning_meetings` | `PlanningMeeting` | `civicclerk_event_id`, `title`, `category`, `meeting_date` (ISO 8601), `status`, `location`, address fields |
-| `planning_documents` | `PlanningDocument` | `civicclerk_file_id`, `civicclerk_event_id`, `file_name`, `file_type`, `raw_text`, address fields from the parent meeting |
-| `city_staff` | `CityStaff` | `name`, `title`, `department`, `division` |
-| `officers` | `Officer` | `name`, `rank`, `division` |
-| `llcs` | `Llc` | `name`, `raw_owner_name` |
-| `budget_line_items` | `BudgetLineItem` | `fiscal_year`, `department`, `description`, `fund_name` |
-| `budget_capital_projects` | `BudgetCapitalProject` | `fiscal_year`, `project_name`, `fund_name` |
-
-Planning meeting `location` is usually a venue like "City Hall", so it usually falls back to the raw value.
+No new tables.
+One generated column on `planning_documents`, and an index only if the timing test shows it used.
+Incidents come from `marts.incidents`, which the police log pipeline's dbt project builds.
 
 ## Error handling
 
 | Failure | What happens |
 |---|---|
-| Location has no normalization | Raw location is indexed as `normalized_address`; `lat` and `lng` are null. |
-| Location is null | All three address fields are null. |
-| Planning document has no parent meeting | All three address fields are null. |
-| Empty source table | `sync_index` skips the bulk call and returns 0. |
-| Sync task fails | Airflow retries once after 5 minutes. |
-| `q` missing or empty, `limit` out of range | FastAPI returns 422. |
-| Elasticsearch unreachable | Unhandled; the API returns 500. |
-| An index does not exist yet | Unhandled; the `msearch` item has `error` instead of `hits`, which raises and returns 500. |
-| Admin request fails | The page shows "Search failed. Is the API running?" and logs to the console. |
+| `q` missing or empty, `limit` out of range | FastAPI returns 422 (3.5, 3.6). |
+| A type has no rows yet, such as an empty table | Its key holds an empty list (3.2). |
+| One type's query fails, such as `marts.incidents` missing because dbt has not run | That type returns an empty list, the error is logged with the type, and the other types are returned (3.12). |
+| Query has no address normalization | Searched as typed; `normalized_query` is null (4.3). |
+| Admin request fails | The page shows "Search failed. Is the API running?" (5.10). |
 
 ## Testing strategy
 
-- `scripts/tests/test_sync_es.py` unit-tests `get_address_lookup` (populated and empty), every `build_*_doc` function including the address fallback, and `sync_index` with `bulk` patched (action shape and the empty no-op).
-  No Elasticsearch or Postgres connection is needed.
-- `api/tests/test_search.py` tests the endpoint through `TestClient` with `get_db` overridden and `Elasticsearch` patched: grouped results, all-empty results, normalized query present, normalized query null, and 422 on missing `q`.
-  A fixture resets the client singleton between tests.
-- Not tested: the DAG, the compose services, the admin page, `limit` validation, and Elasticsearch failure paths.
-- No tests run against a live Elasticsearch in CI.
+- Real-database API tests on the Postgres test harness, with seeded rows of every type:
+  - every type's key is present, and an empty type is an empty list;
+  - a word in each type's short fields finds it;
+  - "Hanovr" finds a property on Hanover St; "Smyth" finds owner Smith;
+  - "13339" finds the incident; "4140" finds a budget line by GL number;
+  - a word inside a planning document's text finds it, and a typo of that word does not;
+  - "St" and "Main" do not fuzzy-match;
+  - two words must both match;
+  - a normalized address query returns `normalized_query` and finds every raw spelling;
+  - a planning document's `raw_text` and a property's `owner_address` never appear in `data`;
+  - a record updated in the test shows on the next request;
+  - a ranking-field match comes before a stronger match in another field;
+  - with one type's table dropped inside the test, that type is empty and the others still return;
+  - 422 on missing `q` and on `limit` of 0 and 21.
+- A seeded timing test with 100,000 incidents and 10,000 properties and a five-word query that needs the typo path, under 1 second (3.11).
+  The pre-push hook skips it; QA runs it.
+- The word matching itself is tested by the police log pipeline's task 20.
 
 ## Decisions
 
-- **One index per entity type, not one shared index.**
-  Each type keeps its own fields and mapping, and `msearch` gives a separate top-N per type, which is what the grouped response needs.
-- **Document ID is the Postgres primary key.**
-  Re-runs overwrite in place, so the sync needs no state.
-  The cost is that deleted rows are never removed (see Out of scope in the requirements).
-- **Normalize addresses at sync time, not query time.**
-  The lookup is loaded once per run and joined in Python, which keeps queries to a single Elasticsearch round trip.
-- **Query normalization is an exact match on the uppercased query.**
-  It is cheap and correct for addresses typed the way the sources write them.
-  Anything else falls through to fuzzy matching.
-- **`scripts/ingest/` instead of `scripts/import/`.**
-  The design named it `import/`, but `import` is a Python keyword and cannot be a package name.
-- **Field boosts and fuzziness were added in the plan.**
-  The design only boosted `normalized_address^3`.
-  The built query also boosts `location`, `owner`, `name`, `file_name`, and `project_name` by 2 and uses `fuzziness: AUTO`.
-- **Results carry the source document under `data`.**
-  The design showed entity fields flattened onto each result.
-  The built schema nests them, so `SearchResult` has a fixed shape for any entity type.
-- **`msearch(searches=...)`, not `body=`.**
-  The plan used `body=`; the code switched to `searches=`, the keyword the 8.x client documents for `msearch`.
-- **Healthchecks and dependency ordering were added beyond the design.**
-  Kibana and the Airflow services wait for Elasticsearch to be healthy, and the healthcheck has a 60 s start period so a slow boot is not marked unhealthy.
-- **The sync script has no `ES_INDICES` list.**
-  The design defined one there too, but only the API uses it; the sync's index names live in its `syncs` table in `main()`.
-- **Result links and collapsible sections were not built.**
-  The design asked for both (6.11, 6.12).
-  The plan dropped them, and the page shipped with flat, unlinked cards.
-- **Kibana is included for local inspection only.**
-  It is not used by any code path.
+### Postgres, not Elasticsearch
+
+The first version copied nine tables into nine Elasticsearch indices each night and queried them with one `msearch`.
+It worked, but a correction or a new scrape did not show until the next sync, it ran a JVM service for one admin user, and the incident index disagreed with the incidents API about parse errors.
+The police log pipeline moved incident search to Postgres, and this spec moves the other eight types onto the same matching.
+
+- Rejected: keep Elasticsearch for the eight other types.
+  Two search engines with different typo rules for one search box.
+- Rejected: one dbt view that unions all nine types.
+  Postgres could not use the planning document index through the union, and the per-type limit needs a query per type anyway.
+- Rejected: Postgres full-text search alone.
+  It misses typos and partial case numbers, which is why the shared matching exists.
+
+### One query per type from a registry
+
+- Rejected: a branch per type in the endpoint.
+  A tenth type is one more `SearchType` entry.
+
+### Keep the response contract
+
+- Rejected: a new response shape with cross-type ranking.
+  The admin page works unchanged, and grouped results are what the page shows.
+
+### History from the first version
+
+- Document IDs were Postgres primary keys, and result `data` was the indexed document; `data` is now the row's columns, which keeps the same keys for the page.
+- Query normalization stays an exact match on the uppercased query.
+- `scripts/ingest/` was named for `import` being a Python keyword, and the scripts and DAG folders were regrouped then; that layout stays.
 
 ## Open questions
 
-- The `api` compose service does not set `ELASTICSEARCH_HOST` or depend on `elasticsearch`, so inside compose it would try `localhost:9200`.
-  Should it get the same env and dependency as the Airflow services?
-- The Airflow image neither copies nor mounts `scripts/`, so `cd /opt/project && uv run --frozen python scripts/sync/sync_es.py` may not find the script in the container.
-  The same applies to the DAGs that call `scripts/scrape/`.
-  This needs a check against a running stack.
-- Should the API return empty results instead of 500 when an index is missing or Elasticsearch is down?
-- Which admin page should each entity type link to, given that some types (officers, budget items) have no admin page yet?
+- Which admin page should each entity type link to, given that some types, such as officers and budget items, have no admin page yet?
+- Should the address lookup become the center of the admin later, with one page per address that shows its property, incidents, and planning items?
+  That is the product direction, and it would reuse this matching.

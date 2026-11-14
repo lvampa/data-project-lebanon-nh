@@ -30,24 +30,45 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `Sequence[str | None]` is not assignable to declared return type `list[str]`",
+      "column": 15,
+      "path": "api/services/incidents.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `int | None` is not assignable to parameter `total` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.Page.__init__`",
       "severity": "error"
     },
     {
-      "column": 25,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
+      "column": 15,
+      "path": "api/services/llcs.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `list[IncidentCategoryRecord]` is not assignable to parameter `iterable` with type `Iterable[dict[Unknown, Unknown]]` in function `list.extend`",
+      "concise_description": "Argument `int | None` is not assignable to parameter `total` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.Page.__init__`",
       "severity": "error"
     },
     {
-      "column": 32,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
+      "column": 59,
+      "path": "api/services/stats.py",
       "name": "bad-argument-type",
-      "concise_description": "Argument `list[dict[Unknown, Unknown]]` is not assignable to parameter `rows` with type `list[IncidentCategoryRecord]` in function `scripts.ingest.import_incident_categories.upsert_categories`",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.TypeStat.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 46,
+      "path": "api/services/stats.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.HourStat.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 54,
+      "path": "api/services/stats.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `(value: Any, /) -> int` is not assignable to parameter `count` with type `Decimal | bool | bytes | float | int | str` in function `api.schemas.WeekdayStat.__init__`",
+      "severity": "error"
+    },
+    {
+      "column": 19,
+      "path": "scrapers/extensions.py",
+      "name": "bad-argument-type",
+      "concise_description": "Argument `StatsCollector | None` is not assignable to parameter `stats` with type `StatsCollector` in function `LogfireExtension.__init__`",
       "severity": "error"
     },
     {

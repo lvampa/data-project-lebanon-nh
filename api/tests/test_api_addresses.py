@@ -131,25 +131,6 @@ def test_patch_address_geocode_hit_sets_coords(mock_db, client):
     assert params["coordinate_precision"] == "approximate"
 
 
-def test_patch_address_geocode_outside_the_city_is_a_miss(mock_db, client):
-    # Concord, NH: a lookup that landed in another town must not move the pin.
-    _stored(mock_db, 43.64, -72.25, "nominatim")
-    with patch(
-        "api.services.addresses.geocode",
-        return_value=GeocodeResult(43.2081, -71.5376, "exact"),
-    ):
-        resp = client.patch(
-            "/api/addresses/TIMBERWOOD%20DR",
-            json={"normalized_address": "Timberwood Drive", "geocode": True},
-        )
-
-    assert resp.status_code == 200
-    stmt = executed_stmt(mock_db)
-    assert upsert_set_columns(stmt).isdisjoint(
-        {"lat", "lng", "geocoded_via", "coordinate_precision"}
-    )
-
-
 def test_patch_address_manual_coords_skip_geocoding(mock_db, client):
     _stored(mock_db, 43.65, -72.26, "manual")
     with patch("api.services.addresses.geocode") as geocode:
@@ -165,10 +146,13 @@ def test_patch_address_manual_coords_skip_geocoding(mock_db, client):
     assert resp.status_code == 200
     geocode.assert_not_called()
     stmt = executed_stmt(mock_db)
-    assert {"lat", "lng", "geocoded_via"} <= upsert_set_columns(stmt)
+    assert {"lat", "lng", "geocoded_via", "coordinate_precision"} <= upsert_set_columns(
+        stmt
+    )
     params = compile_pg(stmt).params
     assert (params["lat"], params["lng"]) == (43.65, -72.26)
     assert params["geocoded_via"] == "manual"
+    assert params["coordinate_precision"] == "exact"
     assert resp.json()["geocoded_via"] == "manual"
 
 

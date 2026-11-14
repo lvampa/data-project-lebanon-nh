@@ -139,13 +139,13 @@ About 34 files.
 If it passes 40, the `shared/locations` package (task 11) ships first as its own pull request.
 No AI yet.
 
-- [ ] 10. Add provenance to the lookup tables
+- [x] 10. Add provenance to the lookup tables
   - One mixin with `source` (checked against `rule`, `ai`, `human`), `prompt_version`, `ai_call_id`, `needs_review`, and `failed_attempts`; `normalized_type` in place of `subcategory`; the location columns in design.md, with no stored public location; the widened `geocoded_via` check.
   - One Alembic migration, covered by the up and down test.
   - Delete the three old categorizer scripts and their tests, which stop working when `subcategory` goes.
   - _Requirements: 6.1, 6.9, 7.1, 7.2, 7.10_
 
-- [ ] 11. Add the `shared/locations` package
+- [x] 11. Add the `shared/locations` package
   - Move `geocode_nominatim` out of `api/`, with the city-bounds check, the 1 per second limiter, and exact or approximate results.
   - Add `canonical.py` with `RULES_VERSION`, `canonical_address`, `split_house_number`, and `strip_unit`, and `street_suffixes.csv`.
     These are pure functions, with tests over at least 20 spelling pairs that must match and 5 that must not.
@@ -153,7 +153,7 @@ No AI yet.
   - Add the package to both Dockerfiles.
   - _Requirements: 6.4, 6.7, 6.9, 6.14, 6.19_
 
-- [ ] 12. Extend the categories and addresses services and routes
+- [x] 12. Extend the categories and addresses services and routes
   - Paged lists with source, review mark, and has-normalization filters, and entry counts.
   - PATCH sets `source = 'human'`, clears the review mark, rejects a category outside the five with 422, accepts coordinates outside the city bounds.
   - DELETE hands a value back to AI.

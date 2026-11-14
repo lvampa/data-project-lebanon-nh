@@ -1,7 +1,14 @@
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, Field, model_validator
+
+# The five incident categories. scripts/models/incident_category.py holds the same list
+# for the AI side; a test keeps the two equal.
+Category = Literal["Fire", "EMS", "Police", "Traffic", "Administrative"]
+CATEGORIES: tuple[str, ...] = get_args(Category)
+LocationKind = Literal["address", "intersection", "place", "highway"]
+Source = Literal["rule", "ai", "human"]
 
 
 class Page[T](BaseModel):
@@ -44,6 +51,9 @@ class AddressRecord(BaseModel):
     raw_address: str
     count: int
     normalized_address: str | None
+    kind: str | None
+    source: str | None
+    needs_review: bool
     lat: float | None
     lng: float | None
     is_normalized: bool
@@ -51,6 +61,7 @@ class AddressRecord(BaseModel):
 
 class AddressUpdate(BaseModel):
     normalized_address: str
+    kind: LocationKind | None = None
     notes: str | None = None
     geocode: bool = True
     lat: float | None = Field(default=None, ge=-90, le=90)
@@ -76,11 +87,16 @@ class CategoryRecord(BaseModel):
     count: int
     category: str | None
     normalized_type: str | None
+    # Mirrors normalized_type, so the current admin screen keeps showing a value.
+    # Remove it when the admin screen is rebuilt.
+    subcategory: str | None
+    source: str | None
+    needs_review: bool
     is_categorized: bool
 
 
 class CategoryUpdate(BaseModel):
-    category: str
+    category: Category
     normalized_type: str | None = None
 
 

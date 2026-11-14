@@ -13,6 +13,9 @@ def _make_row(location, count, normalized_address=None, lat=None, lng=None):
     row.normalized_address = normalized_address
     row.lat = lat
     row.lng = lng
+    row.kind = None
+    row.source = None
+    row.needs_review = None
     return row
 
 

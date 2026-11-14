@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from api.deps import Paging
+from api.deps import NormalizationFilter, Paging
 from api.schemas import AddressUpdate
 from api.services import addresses
 from api.tests.sql import compile_pg, executed_stmt, upsert_set_columns
@@ -14,12 +14,17 @@ def test_list_addresses_joins_normalizations_and_pages():
             location="TIMBERWOOD DR",
             count=5,
             normalized_address=None,
+            kind=None,
+            source=None,
+            needs_review=None,
             lat=None,
             lng=None,
         )
     ]
 
-    page = addresses.list_addresses(db, Paging(page=3, per_page=25))
+    page = addresses.list_addresses(
+        db, Paging(page=3, per_page=25), NormalizationFilter(None, None, None)
+    )
 
     assert page.total == 1
     assert page.items[0].raw_address == "TIMBERWOOD DR"

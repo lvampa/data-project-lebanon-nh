@@ -1,37 +1,45 @@
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import logfire
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from api.deps import Paging
+from api.deps import NormalizationFilter, Paging
 from api.geocoding import geocode_nominatim
 from api.schemas import AddressRecord, AddressResult, AddressUpdate, Page
+from api.services.normalizations import apply_filter
 
 
-def list_addresses(db: Session, paging: Paging) -> Page[AddressRecord]:
+def list_addresses(
+    db: Session, paging: Paging, filters: NormalizationFilter
+) -> Page[AddressRecord]:
+    columns = (
+        AddressNormalization.normalized_address,
+        AddressNormalization.kind,
+        AddressNormalization.source,
+        AddressNormalization.needs_review,
+        AddressNormalization.lat,
+        AddressNormalization.lng,
+    )
     stmt = (
-        select(
-            LogEntry.location,
-            func.count().label("count"),
-            AddressNormalization.normalized_address,
-            AddressNormalization.lat,
-            AddressNormalization.lng,
-        )
+        select(LogEntry.location, func.count().label("count"), *columns)
         .outerjoin(
             AddressNormalization,
             LogEntry.location == AddressNormalization.raw_address,
         )
         .where(LogEntry.location.isnot(None))
-        .group_by(
-            LogEntry.location,
-            AddressNormalization.normalized_address,
-            AddressNormalization.lat,
-            AddressNormalization.lng,
-        )
+        .group_by(LogEntry.location, *columns)
+    )
+    stmt = apply_filter(
+        stmt,
+        AddressNormalization.source,
+        AddressNormalization.needs_review,
+        AddressNormalization.normalized_address,
+        filters,
     )
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.execute(
@@ -46,6 +54,9 @@ def list_addresses(db: Session, paging: Paging) -> Page[AddressRecord]:
                 raw_address=r.location,
                 count=r.count,
                 normalized_address=r.normalized_address,
+                kind=r.kind,
+                source=r.source,
+                needs_review=bool(r.needs_review),
                 lat=r.lat,
                 lng=r.lng,
                 is_normalized=r.normalized_address is not None,
@@ -63,11 +74,17 @@ def update_address(
     nominatim_contact: str | None,
 ) -> AddressResult:
     now = datetime.now(UTC).replace(tzinfo=None)
+    # A human value has no prompt version. The AI call that came before it stays in
+    # ai_call_id, so the AI's answer can be compared with this correction.
     changes = {
         "normalized_address": update.normalized_address,
         "notes": update.notes,
+        "source": "human",
+        "needs_review": False,
+        "prompt_version": None,
         "updated_at": now,
         **_new_coordinates(update, nominatim_contact),
+        **({"kind": update.kind} if update.kind else {}),
     }
     with logfire.span(
         "upsert address normalization {raw_address}", raw_address=raw_address
@@ -107,3 +124,17 @@ def _new_coordinates(update: AddressUpdate, nominatim_contact: str | None) -> di
             address=update.normalized_address,
         )
     return {}
+
+
+def delete_address(db: Session, raw_address: str) -> bool:
+    """Hand a value back to AI: its row and its failed attempts go. False if no row."""
+    with logfire.span(
+        "delete address normalization {raw_address}", raw_address=raw_address
+    ):
+        result = db.execute(
+            delete(AddressNormalization).where(
+                AddressNormalization.raw_address == raw_address
+            )
+        )
+        db.commit()
+    return cast(CursorResult[Any], result).rowcount > 0

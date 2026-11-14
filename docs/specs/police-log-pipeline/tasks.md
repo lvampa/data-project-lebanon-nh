@@ -152,7 +152,7 @@ No AI yet.
   - Add the package to both Dockerfiles.
   - _Requirements: 6.4, 6.7, 6.9, 6.14, 6.19_
 
-- [ ] 12. Extend the categories and addresses services and routes
+- [x] 12. Extend the categories and addresses services and routes
   - Paged lists with source, review mark, and has-normalization filters, and entry counts.
   - PATCH sets `source = 'human'`, clears the review mark, rejects a category outside the five with 422, accepts coordinates outside the city bounds.
   - DELETE hands a value back to AI.

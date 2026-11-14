@@ -134,3 +134,16 @@ def test_the_views_are_dropped_first_and_built_last():
     assert names[0] == "Dropping the consumer models"
     assert names[-1] == "Consumer models (dbt build)"
     assert names[1:3] == ["Postgres migrations", "MongoDB indexes"]
+
+
+def test_a_failed_dbt_build_says_the_migrations_applied(monkeypatch):
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        failed = command[1] == "build"
+        return subprocess.CompletedProcess(command, 1 if failed else 0)
+
+    monkeypatch.setattr(migrate.subprocess, "run", fake_run)
+
+    with pytest.raises(
+        RuntimeError, match="migrations applied; consumer models failed"
+    ):
+        migrate.build_consumer_models()

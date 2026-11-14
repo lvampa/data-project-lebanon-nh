@@ -48,11 +48,18 @@ def build_consumer_models() -> None:
         [sys.executable, str(TRANSFORM_DIR / "write_disposition_seed.py")], check=True
     )
     dbt = Path(sys.executable).parent / "dbt"
-    subprocess.run(
+    build = subprocess.run(
         [str(dbt), "build", "--project-dir", str(TRANSFORM_DIR),
          "--profiles-dir", str(TRANSFORM_DIR)],
-        check=True,
+        check=False,
     )  # fmt: skip
+    if build.returncode != 0:
+        # By now the migrations have applied: the schema is current, and only the dbt
+        # views are missing until the failing check passes.
+        raise RuntimeError(
+            "migrations applied; consumer models failed their checks "
+            "(see the dbt output above)"
+        )
 
 
 STEPS: list[tuple[str, Callable[[], None]]] = [

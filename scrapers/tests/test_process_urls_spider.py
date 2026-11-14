@@ -1,11 +1,12 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from items import PoliceLogItem, PoliceLogPdfItem
 from models import PdfUrlClaim
+from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
 from scrapy.http import Request, Response
 from spiders.process_url_records import (
@@ -14,10 +15,9 @@ from spiders.process_url_records import (
     ProcessUrlsSpider,
     claim_statement,
 )
-from sqlalchemy import Table, create_engine, select
+from sqlalchemy import delete, insert, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 from twisted.internet.error import DNSLookupError
 from twisted.python.failure import Failure
 
@@ -47,21 +47,29 @@ def make_claim(**kwargs: Any) -> PdfUrlClaim:
     return PdfUrlClaim(**defaults)
 
 
+@pytest.fixture
+def claimed_url(db_session) -> PdfUrlClaim:
+    """A URL the spider has claimed, stored so its error updates have a row to hit."""
+    row = PdfUrl(
+        canonical_url="https://example.com/a.pdf",
+        state="in_progress",
+        attempts=1,
+        created_at=datetime(2026, 5, 1),
+    )
+    db_session.add(row)
+    db_session.commit()
+    return make_claim(id=row.id)
+
+
+def stored_url(session: Session, claim: PdfUrlClaim) -> PdfUrl:
+    session.expire_all()
+    url = session.get(PdfUrl, claim.id)
+    assert url is not None
+    return url
+
+
 def make_spider() -> ProcessUrlsSpider:
     return ProcessUrlsSpider.__new__(ProcessUrlsSpider)
-
-
-def url_update_values(statement) -> dict:
-    compiled = statement.compile(dialect=postgresql.dialect())
-    assert str(compiled).startswith("UPDATE pdf_urls SET")
-    return compiled.params
-
-
-@pytest.fixture
-def session_local(fake_session):
-    with patch("spiders.process_url_records.SessionLocal") as mock_session_local:
-        mock_session_local.return_value = fake_session
-        yield mock_session_local
 
 
 @pytest.fixture
@@ -79,7 +87,7 @@ def pdf_with_text(pdf_reader, text: str) -> None:
 # --- parse ---
 
 
-def test_parse_yields_police_log_items(session_local, pdf_reader):
+def test_parse_yields_police_log_items(pdf_reader):
     pdf_with_text(pdf_reader, SAMPLE_TEXT)
     pdf_url = make_claim()
 
@@ -101,16 +109,16 @@ def test_parse_yields_police_log_items(session_local, pdf_reader):
     assert entries[0]["scraped_at"].tzinfo is None
 
 
-def test_parse_leaves_url_completion_to_pipeline(session_local, pdf_reader):
+def test_parse_leaves_url_completion_to_pipeline(db_session, claimed_url, pdf_reader):
     pdf_with_text(pdf_reader, SAMPLE_TEXT)
 
     response = make_response("https://example.com/a.pdf", FAKE_PDF)
-    list(make_spider().parse(response, pdf_url=make_claim()))
+    list(make_spider().parse(response, pdf_url=claimed_url))
 
-    session_local.assert_not_called()
+    assert stored_url(db_session, claimed_url).state == "in_progress"
 
 
-def test_parse_non_pdf_with_archive_url_yields_fallback_request(session_local):
+def test_parse_non_pdf_with_archive_url_yields_fallback_request():
     response = make_response("https://example.com/a.pdf", b"<html>not a pdf</html>")
     results = list(
         make_spider().parse(response, pdf_url=make_claim(archive_url=ARCHIVE_URL))
@@ -121,40 +129,36 @@ def test_parse_non_pdf_with_archive_url_yields_fallback_request(session_local):
     assert results[0].url == ARCHIVE_URL
 
 
-def test_parse_non_pdf_without_archive_url_marks_url_error(session_local, fake_session):
+def test_parse_non_pdf_without_archive_url_marks_url_error(db_session, claimed_url):
     response = make_response("https://example.com/a.pdf", b"<html>not a pdf</html>")
-    results = list(make_spider().parse(response, pdf_url=make_claim()))
+    results = list(make_spider().parse(response, pdf_url=claimed_url))
 
     assert results == []
-    [statement] = fake_session.committed
-    values = url_update_values(statement)
-    assert values["id_1"] == 7
-    assert values["state"] == "error"
-    assert "no archive URL" in values["error_message"]
+    url = stored_url(db_session, claimed_url)
+    assert url.state == "error"
+    assert url.error_message is not None and "no archive URL" in url.error_message
 
 
 def test_parse_no_entries_marks_url_error_and_yields_nothing(
-    session_local, fake_session, pdf_reader
+    db_session, claimed_url, pdf_reader
 ):
     pdf_with_text(pdf_reader, "No date header here, will not parse")
 
     response = make_response("https://example.com/a.pdf", FAKE_PDF)
-    items = list(make_spider().parse(response, pdf_url=make_claim()))
+    items = list(make_spider().parse(response, pdf_url=claimed_url))
 
     assert items == []
-    [statement] = fake_session.committed
-    values = url_update_values(statement)
-    assert values["state"] == "error"
-    assert values["entry_count"] == 0
-    assert values["error_message"] == "No entries parsed from PDF"
-    assert values["raw_text"] == "No date header here, will not parse"
+    url = stored_url(db_session, claimed_url)
+    assert url.state == "error"
+    assert url.entry_count == 0
+    assert url.error_message == "No entries parsed from PDF"
+    assert url.raw_text == "No date header here, will not parse"
 
 
-def test_archive_request_failure_marks_url_error(session_local, fake_session):
+def test_archive_request_failure_marks_url_error(db_session, claimed_url):
     response = make_response("https://example.com/a.pdf", b"<html>not a pdf</html>")
-    [request] = list(
-        make_spider().parse(response, pdf_url=make_claim(archive_url=ARCHIVE_URL))
-    )
+    claim = claimed_url.model_copy(update={"archive_url": ARCHIVE_URL})
+    [request] = list(make_spider().parse(response, pdf_url=claim))
     assert isinstance(request, Request)
     assert request.errback is not None
     failure = Failure(DNSLookupError("no such host"))
@@ -164,21 +168,19 @@ def test_archive_request_failure_marks_url_error(session_local, fake_session):
     failure.request = request
     request.errback(failure)
 
-    [statement] = fake_session.committed
-    assert url_update_values(statement)["state"] == "error"
+    assert stored_url(db_session, claimed_url).state == "error"
 
 
-def test_unreadable_pdf_marks_url_error(session_local, fake_session, pdf_reader):
+def test_unreadable_pdf_marks_url_error(db_session, claimed_url, pdf_reader):
     pdf_reader.side_effect = ValueError("EOF marker not found")
 
     response = make_response("https://example.com/a.pdf", FAKE_PDF)
-    items = list(make_spider().parse(response, pdf_url=make_claim()))
+    items = list(make_spider().parse(response, pdf_url=claimed_url))
 
     assert items == []
-    [statement] = fake_session.committed
-    values = url_update_values(statement)
-    assert values["state"] == "error"
-    assert "EOF marker not found" in values["error_message"]
+    url = stored_url(db_session, claimed_url)
+    assert url.state == "error"
+    assert url.error_message is not None and "EOF marker not found" in url.error_message
 
 
 # --- claim statement ---
@@ -200,7 +202,7 @@ def test_claim_skips_rows_locked_by_other_runs():
     assert "RETURNING pdf_urls.id, pdf_urls.canonical_url, pdf_urls.archive_url" in sql
 
 
-# --- start: requeue and claim against a real pdf_urls table ---
+# --- start: requeue and claim against the pdf_urls table ---
 
 
 def test_limit_from_the_command_line_is_read_as_a_number():
@@ -209,15 +211,8 @@ def test_limit_from_the_command_line_is_read_as_a_number():
 
 
 @pytest.fixture
-def queue_db():
-    # SQLite runs the same UPDATE ... RETURNING statements and ignores FOR UPDATE,
-    # which is covered by the compiled-statement test above.
-    engine = create_engine("sqlite://", poolclass=StaticPool)
-    cast(Table, PdfUrl.__table__).create(engine)
-    session_factory = sessionmaker(bind=engine)
-    with patch("spiders.process_url_records.SessionLocal", session_factory):
-        yield session_factory
-    engine.dispose()
+def queue_db(db_connection) -> sessionmaker[Session]:
+    return SessionLocal
 
 
 def add_url(session_factory: sessionmaker[Session], **kwargs: Any) -> int:
@@ -360,3 +355,40 @@ def test_request_failure_marks_url_error(queue_db):
     assert row.state == "error"
     assert row.error_message is not None and "no such host" in row.error_message
     assert row.completed_at is not None
+
+
+# --- concurrent claims ---
+
+
+@pytest.fixture
+def committed_url(test_engine):
+    """A pending URL other connections can see. Deleted afterwards, since it is committed."""
+    with test_engine.begin() as connection:
+        url_id = connection.scalar(
+            insert(PdfUrl)
+            .values(
+                canonical_url="https://example.com/contended.pdf",
+                state="pending",
+                created_at=datetime(2026, 5, 1),
+            )
+            .returning(PdfUrl.id)
+        )
+    yield url_id
+    with test_engine.begin() as connection:
+        connection.execute(delete(PdfUrl).where(PdfUrl.id == url_id))
+
+
+def test_two_claims_of_one_url_give_one_winner(test_engine, committed_url):
+    now = utc_now()
+
+    with test_engine.connect() as first_run, test_engine.connect() as second_run:
+        first_claim = first_run.execute(claim_statement(10, now)).all()
+        # The first run has not committed, so its row lock is still held.
+        # Without SKIP LOCKED the second claim would wait on it; fail fast instead.
+        second_run.execute(text("SET LOCAL lock_timeout = '2s'"))
+        second_claim = second_run.execute(claim_statement(10, now)).all()
+        first_run.rollback()
+        second_run.rollback()
+
+    assert [row.id for row in first_claim] == [committed_url]
+    assert second_claim == []

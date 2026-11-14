@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import logfire
 from bs4 import BeautifulSoup
+from mongo.archive import ArchivedResponse, RawArchive
 from postgres.models.llc import Llc
 from sqlalchemy import Update, or_, update
 
@@ -15,6 +16,7 @@ SEARCH_URL = "https://quickstart.sos.nh.gov/online/BusinessInquire/"
 # Matches the police-log URL queue. A run that dies mid-batch leaves its rows
 # in_progress; after this long they go back to pending.
 CLAIM_LEASE = timedelta(hours=2)
+ARCHIVE_SOURCE = "nh_sos_business"
 
 
 def parse_llc_detail(html: str, business_id: str | None) -> dict:
@@ -71,8 +73,13 @@ def parse_llc_detail(html: str, business_id: str | None) -> dict:
     }
 
 
-async def scrape_llc(page, name: str) -> tuple[str | None, dict | None]:
-    """Search NH SOS for an LLC by name. Returns (business_id, parsed_data) or (None, None)."""
+async def scrape_llc(
+    page, name: str, archive: RawArchive
+) -> tuple[str | None, dict | None]:
+    """Search NH SOS for an LLC by name. Returns (business_id, parsed_data) or (None, None).
+
+    The business page is kept in the raw archive as it loaded.
+    """
     await page.goto(SEARCH_URL)
     await page.fill("input[name*='BusinessName'], input[id*='BusinessName']", name)
     await page.click("input[type='submit'], button[type='submit']")
@@ -95,8 +102,22 @@ async def scrape_llc(page, name: str) -> tuple[str | None, dict | None]:
         business_id = (
             page.url.split("businessID=")[-1] if "businessID=" in page.url else None
         )
+    archive.add(ARCHIVE_SOURCE, business_id or name, _business_page(page.url, html))
 
     return business_id, parse_llc_detail(html, business_id)
+
+
+def _business_page(url: str, html: str) -> ArchivedResponse:
+    return ArchivedResponse(
+        url=url,
+        # The page loads through a click, and Playwright does not return that
+        # navigation's response. A page that loaded is taken as a 200.
+        status=200,
+        content_type="text/html; charset=utf-8",
+        body=html.encode(),
+        fetched_at=datetime.now(UTC),
+        spider="scrape_llcs",
+    )
 
 
 def release_stale_claims(now: datetime) -> Update:
@@ -135,12 +156,15 @@ async def run(limit: int) -> None:
     load_dotenv()
     logfire.configure()
 
+    from mongo.archive import archive_collection
+    from mongo.client import MongoDB
     from playwright.async_api import async_playwright
     from playwright_stealth import Stealth
     from postgres import SessionLocal
     from sqlalchemy import select
 
     session = SessionLocal()
+    archive = RawArchive(archive_collection(MongoDB()))
     try:
         released = session.execute(
             release_stale_claims(datetime.now(UTC).replace(tzinfo=None))
@@ -180,7 +204,7 @@ async def run(limit: int) -> None:
             for llc in rows:
                 logfire.info("looking up llc", llc_id=llc.id, name=llc.name)
                 try:
-                    _business_id, data = await scrape_llc(page, llc.name)
+                    _business_id, data = await scrape_llc(page, llc.name, archive)
                     now = datetime.now(UTC).replace(tzinfo=None)
                     save_lookup(session, llc.id, data, now)
                 except Exception as e:
@@ -201,6 +225,13 @@ async def run(limit: int) -> None:
 
             await browser.close()
     finally:
+        counts = archive.flush()
+        logfire.info(
+            "raw archive flushed",
+            stored=counts.stored,
+            seen_again=counts.seen_again,
+            failed=counts.failed,
+        )
         session.close()
 
 

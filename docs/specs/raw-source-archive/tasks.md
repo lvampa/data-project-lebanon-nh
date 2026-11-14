@@ -43,22 +43,22 @@ The three spec files ride along in this pull request.
 
 About 16 files.
 
-- [ ] 4. Add the archive reads and the AI call log
+- [x] 4. Add the archive reads and the AI call log
   - `RawArchive.newest` and `RawArchive.by_hash`, for the police log reprocess.
   - `AiCallLog` with its indexes, returning `None` when a write fails.
   - _Requirements: 4.1, 6.1 to 6.5_
 
-- [ ] 5. Archive the LLC pages and budget PDFs
+- [x] 5. Archive the LLC pages and budget PDFs
   - `scrape_llcs.py` archives each business page as `nh_sos_business`; `download_budget_pdfs.py` archives each PDF and its text as `budget_pdf`.
   - Tests: each script archives its download, and an unreachable Mongo leaves the LLC rows and budget text files unchanged.
   - _Requirements: 1.9, 1.10, 8.1_
 
-- [ ] 6. Add the parcel replay command
+- [x] 6. Add the parcel replay command
   - Parcel replay through `parse_parcel` and `PropertyPipeline`; police PDFs are replayed by the police log reprocess job.
   - Tests: replay of one saved parcel page matches a normal ingest; no download; no archive write; truncated and missing versions are counted.
   - _Requirements: 4.2, 4.3, 4.4_
 
-- [ ] 7. Add the versions command
+- [x] 7. Add the versions command
   - One key's versions, newest first.
   - Document `replay` and `versions` in `scrapers/README.md`.
   - _Requirements: 4.6_

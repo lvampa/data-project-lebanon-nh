@@ -47,8 +47,16 @@ class RawArchive:
     def __init__(self, collection: Collection, batch_size: int = 50) -> None   # 1 for police log PDFs
     def add(self, source: str, source_key: str, response: ArchivedResponse) -> bool | None
     def flush(self) -> ArchiveCounts          # stored, seen_again, failed
-    def versions(self, source: str, source_key: str) -> list[dict]
+    def keys(self, source: str) -> list[str]
+    def versions(self, source: str, source_key: str) -> list[dict]          # newest first
+    def newest(self, source: str, source_key: str) -> dict | None
+    def by_hash(self, source: str, source_key: str, content_hash: str) -> dict | None
+
+def stored_body(version: dict) -> bytes | None                              # None when truncated
 ```
+
+- The reads are for operator commands and reprocess, not the crawl, so a MongoDB error is raised to the caller instead of counted.
+- `ArchivedResponse.text`, when set, is stored compressed as `text_gzip` beside the body; the budget downloader uses it.
 
 - `add` hashes and compresses the body, appends one `UpdateOne` to the buffer, and flushes when the buffer reaches the batch size (3.3).
   The batch size is per spider: 1 for the process spider, so each PDF is written before its callback runs, and 50 for the VGSI spider.

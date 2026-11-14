@@ -8,13 +8,13 @@ from sqlalchemy.orm import InstrumentedAttribute
 from api.deps import NormalizationFilter
 
 
-def apply_filter(
-    stmt: Select[Any],
+def apply_filter[SelectT: Select[*tuple[Any, ...]]](
+    stmt: SelectT,
     source: InstrumentedAttribute[Any],
     needs_review: InstrumentedAttribute[Any],
     value: InstrumentedAttribute[Any],
     filters: NormalizationFilter,
-) -> Select[Any]:
+) -> SelectT:
     """Narrow an outer-joined list by who set the value, the review mark, and whether
     a normalized value exists yet. `value` is the column that is empty while it waits."""
     if filters.source is not None:

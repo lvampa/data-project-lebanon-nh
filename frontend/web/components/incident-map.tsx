@@ -28,10 +28,10 @@ export function IncidentMap({ addresses }: Props) {
 
     map.on('load', () => {
       addresses.forEach((addr) => {
-        const { lngLat, label } = addressToMarker(addr)
+        const { lngLat, popup } = addressToMarker(addr)
         new maplibregl.Marker({ color: '#3b82f6' })
           .setLngLat(lngLat)
-          .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(label))
+          .setPopup(new maplibregl.Popup({ offset: 25 }).setDOMContent(popup))
           .addTo(map)
       })
     })

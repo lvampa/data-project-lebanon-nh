@@ -309,7 +309,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 5. THE scheduler SHALL stop any police log task that runs longer than 60 minutes and mark it failed.
 6. IF the processing or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
 7. WHEN a stage fails after its retries, THE scheduler SHALL show the run as failed and log the stage name and reason.
-8. THE README SHALL document the one command that applies the database migrations, and THE operator SHALL run it by hand before any police log job runs. Nothing applies them at startup.
+8. THE README SHALL document the one command that applies the database migrations, `uv run migrate`, and THE operator SHALL run it by hand before any police log job runs. Nothing applies them at startup.
 9. THE scheduler SHALL NOT run the public export or deploy the site.
    The public export is written from the consumer models when `deploy.sh` runs, and the files are not committed.
 

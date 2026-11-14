@@ -1,7 +1,9 @@
 import logfire
-from scrapy import signals
+from scrapy import Item, Spider, signals
 from scrapy.crawler import Crawler
+from scrapy.http import Response
 from scrapy.statscollectors import StatsCollector
+from twisted.python.failure import Failure
 
 
 class LogfireExtension:
@@ -21,10 +23,10 @@ class LogfireExtension:
         crawler.signals.connect(ext.spider_error, signal=signals.spider_error)
         return ext
 
-    def spider_opened(self, spider) -> None:
+    def spider_opened(self, spider: Spider) -> None:
         logfire.info("spider started", spider=spider.name)
 
-    def spider_closed(self, spider, reason: str) -> None:
+    def spider_closed(self, spider: Spider, reason: str) -> None:
         stats = self.stats.get_stats(spider)
         logfire.info(
             "spider closed",
@@ -36,7 +38,9 @@ class LogfireExtension:
             error_count=stats.get("log_count/ERROR", 0),
         )
 
-    def item_error(self, item, response, spider, failure) -> None:
+    def item_error(
+        self, item: Item, response: Response | None, spider: Spider, failure: Failure
+    ) -> None:
         logfire.error(
             "item pipeline error",
             spider=spider.name,
@@ -44,7 +48,9 @@ class LogfireExtension:
             error=str(failure),
         )
 
-    def spider_error(self, failure, response, spider) -> None:
+    def spider_error(
+        self, failure: Failure, response: Response | None, spider: Spider
+    ) -> None:
         logfire.error(
             "spider error",
             spider=spider.name,

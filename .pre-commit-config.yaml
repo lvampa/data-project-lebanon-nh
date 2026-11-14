@@ -38,14 +38,14 @@ repos:
       - id: frontend-lint
         name: frontend lint (pushed files)
         language: system
-        entry: bash -c 'cd frontend && bun x eslint --no-warn-ignored "${@#frontend/}"' --
+        entry: bash -c 'bash scripts/ensure-frontend-deps.sh && cd frontend && bun x eslint --no-warn-ignored "${@#frontend/}"' --
         files: ^frontend/.*\.(ts|tsx|js|jsx|mjs|cjs)$
         stages: [pre-push]
 
       - id: frontend-format
         name: frontend format (pushed files)
         language: system
-        entry: bash -c 'cd frontend && bun x prettier --check --ignore-unknown "${@#frontend/}"' --
+        entry: bash -c 'bash scripts/ensure-frontend-deps.sh && cd frontend && bun x prettier --check --ignore-unknown "${@#frontend/}"' --
         files: ^frontend/
         stages: [pre-push]
 
@@ -53,7 +53,7 @@ repos:
       - id: frontend-typecheck-test
         name: frontend typecheck, test
         language: system
-        entry: bash -c "cd frontend && bun run --filter '*' typecheck && bun run test"
+        entry: bash scripts/frontend-check.sh
         files: ^frontend/
         pass_filenames: false
         stages: [pre-push]

@@ -13,7 +13,7 @@ The normalization job writes one `ai_calls` document per AI call through the sam
 A daily `mongodump` backs the archive up, because it holds the only copy of the PDFs the police log parser reads (requirement 7).
 Tests run against a `_test` MongoDB database through a pytest plugin, like the Postgres one (requirement 5).
 
-The writing half ships between police log pipeline PR 1 and PR 2: it needs only `pdf_urls`, the process spider's `pdf_url` in `cb_kwargs`, and the `migrate` service.
+The writing half ships between police log pipeline PR 1 and PR 2: it needs only `pdf_urls`, the process spider's `pdf_url` in `cb_kwargs`, and the by-hand migration step.
 The reads, extra sources, backup, and check command ship before police PR 2b, which drops the raw text columns: the gate before that pull request runs the check command and needs a restored backup.
 
 ## Architecture
@@ -169,8 +169,8 @@ Unless it points at another disk, the bind mount is on the same disk as the `mon
 ### Startup
 
 `init_indexes` creates the archive indexes.
-The `migrate` service runs it after `alembic upgrade head`, so a fresh stack has them before any spider runs.
-The `mongo` service gets a healthcheck, `mongosh --eval "db.adminCommand('ping')"`, so the `migrate` service and CI's `docker compose up --wait` wait until it accepts connections.
+The README's by-hand step runs it after `alembic upgrade head`, so a fresh stack has them before any spider runs.
+The `mongo` service gets a healthcheck, `mongosh --eval "db.adminCommand('ping')"`, so CI's `docker compose up --wait` waits until it accepts connections.
 
 ## Data models
 

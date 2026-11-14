@@ -432,7 +432,7 @@ models/
 - `report-gen` becomes plain selects from the four public models and drops its own joins and its 2,000 row cap (see "Public export").
 - Postgres will not let a migration drop or retype a column a view reads.
   So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, then build the models.
-  `scripts/migrate.sh` runs that order (see "Schedule"), and a test proves a migration that drops a column a model uses still upgrades after the drop.
+  `uv run migrate` runs that order (see "Schedule"), and a test proves a migration that drops a column a model uses still upgrades after the drop.
 - A paid tier later is another model over `incidents` with a different filter.
 
 ### Public export (report-gen)
@@ -587,12 +587,13 @@ discover ─► process (limit 100) ─► geocode ─► dbt build ─► watch
   If Connor is normalizing when the DAG reaches process or geocode, that task finds the lock held, fails fast with the message, and the work waits for the next run.
   So he runs the job outside the DAG's start time.
 - A manual DAG, `police_log_reprocess`, with date parameters, wraps the reprocess script.
-- There is no migrate container. Connor runs `bash scripts/migrate.sh` from the repo root after pulling a schema change and before the next DAG run (12.8).
-  It loads `.env` like `generate_report.sh`, stops at the first failing step, and runs four steps:
-  1. `dbt run-operation drop_marts`, a one-line macro: `drop schema if exists marts cascade`.
-  2. `alembic upgrade head`, from `shared/postgres`.
+- There is no migrate container. Connor runs `uv run migrate` after pulling a schema change and before the next DAG run (12.8).
+  It's the `scripts.migrate:main` console script, added with steps 2 and 3 in #27. PR 7 adds steps 1 and 4 to the same command.
+  It stops at the first failing step with a non-zero exit:
+  1. `DROP SCHEMA IF EXISTS marts CASCADE`, on the app's engine.
+  2. `alembic upgrade head`.
   3. `init_indexes()` for the MongoDB indexes.
-  4. `dbt build`, the models plus their data checks.
+  4. `dbt build --project-dir transform --profiles-dir transform`, run as a subprocess, so the models are built and their data checks run. The `scripts` package doesn't depend on dbt itself.
 
 The Airflow image has no `claude` CLI and no Claude token.
 That work is deferred; the `airflow-claude-cli` branch exists, unbuilt, if it's ever revisited.

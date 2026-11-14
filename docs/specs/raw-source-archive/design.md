@@ -167,7 +167,7 @@ Unless it points at another disk, the bind mount is on the same disk as the `mon
 ### Startup
 
 `init_indexes` creates the archive indexes.
-`scripts/migrate.sh`, which Connor runs by hand, runs it after `alembic upgrade head`, so the indexes exist before any spider runs (police log pipeline 12.8).
+`uv run migrate`, which Connor runs by hand, runs it after `alembic upgrade head`, so the indexes exist before any spider runs (police log pipeline 12.8).
 The `mongo` service gets a healthcheck, `mongosh --eval "db.adminCommand('ping')"`, so CI's `docker compose up --wait` waits until it accepts connections.
 
 ## Data models

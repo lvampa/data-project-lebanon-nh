@@ -790,3 +790,91 @@ def test_rule_rows_use_the_display_helper_for_their_address(
     run(FakeBackend(replies=[]), call_log, fields=("location",))
 
     assert the_address(db_session, "12 MAIN ST").normalized_address == "12 Main St"
+
+
+def test_redo_asks_the_ai_again_for_a_place_row_and_does_not_copy_its_own_old_value(
+    db_session, call_log
+):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "HANNAFORDS PLAZA", place_code="L HANNAF")
+    add_address_row(
+        db_session,
+        "HANNAFORDS PLAZA",
+        normalized_address="Hannaford, Market St",
+        kind="place",
+        place_code="L HANNAF",
+        source="ai",
+        prompt_version="location-0+streets-old",
+    )
+    backend = FakeBackend(
+        replies=[
+            location_answer("HANNAFORDS PLAZA", normalized_address="Hannaford Plaza")
+        ]
+    )
+
+    run(backend, call_log, fields=("location",), redo=True)
+
+    row = the_address(db_session, "HANNAFORDS PLAZA")
+    assert len(backend.calls) == 1
+    assert (row.normalized_address, row.source) == ("Hannaford Plaza", "ai")
+    assert row.ai_call_id is not None
+
+
+def test_an_address_that_changes_clears_its_coordinates_so_it_is_placed_again(
+    db_session, call_log
+):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "HANNAFORDS PLAZA")
+    add_address_row(
+        db_session,
+        "HANNAFORDS PLAZA",
+        normalized_address="Market St",
+        kind="highway",
+        source="ai",
+        prompt_version="location-0+streets-old",
+        lat=43.65,
+        lng=-72.26,
+        geocoded_via="nominatim",
+        coordinate_precision="approximate",
+        geocode_attempts=2,
+    )
+    backend = FakeBackend(
+        replies=[
+            location_answer("HANNAFORDS PLAZA", normalized_address="Hannaford Plaza")
+        ]
+    )
+
+    run(backend, call_log, fields=("location",), redo=True)
+
+    row = the_address(db_session, "HANNAFORDS PLAZA")
+    assert row.normalized_address == "Hannaford Plaza"
+    assert (row.lat, row.lng, row.geocoded_via, row.coordinate_precision) == (
+        None,
+        None,
+        None,
+        None,
+    )
+    assert row.geocode_attempts == 0
+
+
+def test_an_address_that_stays_the_same_keeps_its_coordinates(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "HANNAFORDS PLAZA")
+    add_address_row(
+        db_session,
+        "HANNAFORDS PLAZA",
+        normalized_address="Hannaford, Market St",
+        kind="place",
+        source="ai",
+        prompt_version="location-0+streets-old",
+        lat=43.65,
+        lng=-72.26,
+        geocoded_via="nominatim",
+        coordinate_precision="exact",
+    )
+    backend = FakeBackend(replies=[location_answer("HANNAFORDS PLAZA")])
+
+    run(backend, call_log, fields=("location",), redo=True)
+
+    row = the_address(db_session, "HANNAFORDS PLAZA")
+    assert (row.lat, row.lng, row.geocoded_via) == (43.65, -72.26, "nominatim")

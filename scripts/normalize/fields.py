@@ -19,7 +19,7 @@ from locations.canonical import canonical_address
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -275,7 +275,9 @@ class Locations:
                 for g in groups
             ],
             self._streets,
-            _known_places(rows),
+            _known_places(
+                {raw: row for raw, row in rows.items() if raw not in redoing}
+            ),
         )
         by_canonical = {canonical_address(g.sent): g for g in groups}
         for rule in result.settled:
@@ -405,6 +407,8 @@ class Locations:
             "raw_address",
             raw,
             {**values, "place_code": place_code},
+            cleared_if_changed=_COORDINATES_CLEARED_ON_NEW_ADDRESS,
+            changes_on="normalized_address",
         )
 
 
@@ -472,18 +476,44 @@ def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+# Coordinates belong to an address. When the address changes they no longer apply.
+_COORDINATES_CLEARED_ON_NEW_ADDRESS = {
+    "lat": None,
+    "lng": None,
+    "coordinate_precision": None,
+    "geocoded_via": None,
+    "geocode_attempts": 0,
+}
+
+
 def _upsert(
-    session: Session, model: Any, key_column: str, raw: str, values: dict[str, Any]
+    session: Session,
+    model: Any,
+    key_column: str,
+    raw: str,
+    values: dict[str, Any],
+    cleared_if_changed: Mapping[str, Any] | None = None,
+    changes_on: str | None = None,
 ) -> None:
-    """Insert, or update unless a human owns the row."""
+    """Insert, or update unless a human owns the row.
+
+    `cleared_if_changed` columns are reset when `changes_on` gets a new value.
+    """
     now = _now()
     statement = insert(model).values(
         **{key_column: raw}, created_at=now, updated_at=now, **values
     )
+    set_ = {**values, "updated_at": now}
+    if cleared_if_changed and changes_on:
+        changed = getattr(model, changes_on).is_distinct_from(
+            getattr(statement.excluded, changes_on)
+        )
+        for column, reset in cleared_if_changed.items():
+            set_[column] = case((changed, reset), else_=getattr(model, column))
     session.execute(
         statement.on_conflict_do_update(
             index_elements=[key_column],
-            set_={**values, "updated_at": now},
+            set_=set_,
             where=model.source.is_distinct_from("human"),
         )
     )

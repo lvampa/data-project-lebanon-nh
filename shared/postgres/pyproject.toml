@@ -9,11 +9,11 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.4",
     "psycopg2-binary>=2.9.12",
-    "sqlalchemy>=2.0.50",
+    "sqlalchemy>=2.1.8",
 ]
 
 [build-system]
-requires = ["uv_build>=0.10.4,<0.11.0"]
+requires = ["uv_build>=0.13.6,<0.14.0"]
 build-backend = "uv_build"
 
 # postgres_testing is its own top-level module so pytest can load it, and it can

@@ -35,7 +35,7 @@ def test_parse_index_follows_year_links(spider):
         url="https://www.lebanonnh.gov/852/Approved-City-Budgets",
         body=INDEX_HTML,
     )
-    results = list(spider.parse(response))
+    results = list(spider.parse_index(response))
     urls = [r.url for r in results]
     assert any("2026" in u for u in urls)
     assert any("2025" in u for u in urls)

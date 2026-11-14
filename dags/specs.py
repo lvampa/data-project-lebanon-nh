@@ -119,12 +119,20 @@ SPECS = [
             "date_from": {
                 "default": "",
                 "type": "string",
-                "description": "First log date to reprocess (YYYY-MM-DD); empty for all",
+                "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+                "description": (
+                    "First log date to reprocess (YYYY-MM-DD). "
+                    "Set both dates, or leave both empty for all."
+                ),
             },
             "date_to": {
                 "default": "",
                 "type": "string",
-                "description": "Last log date to reprocess (YYYY-MM-DD); empty for all",
+                "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+                "description": (
+                    "Last log date to reprocess (YYYY-MM-DD). "
+                    "Set both dates, or leave both empty for all."
+                ),
             },
         },
     ),

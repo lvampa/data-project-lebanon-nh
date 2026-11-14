@@ -104,6 +104,23 @@ def test_the_police_log_reprocess_is_run_by_hand_and_nothing_triggers_it():
     assert all("police_log_reprocess" not in other.triggers for other in SPECS)
 
 
+def test_the_reprocess_dates_must_look_like_dates_or_be_empty():
+    # The values go into a shell command, so Airflow checks their shape first.
+    params = SPECS_BY_ID["police_log_reprocess"].params
+    pattern = re.compile(params["date_from"]["pattern"])
+    assert params["date_to"]["pattern"] == params["date_from"]["pattern"]
+    assert all(pattern.fullmatch(ok) for ok in ["", "2026-05-11"])
+    assert not any(
+        pattern.fullmatch(bad) for bad in ["'; rm -rf ~; '", "05/11/2026", "2026-5-1"]
+    )
+
+
+def test_the_reprocess_dates_are_described_as_a_pair():
+    params = SPECS_BY_ID["police_log_reprocess"].params
+    for name in ("date_from", "date_to"):
+        assert "both" in params[name]["description"].lower()
+
+
 def test_the_police_log_reprocess_takes_a_date_range_or_everything():
     spec = SPECS_BY_ID["police_log_reprocess"]
     assert set(spec.params) == {"date_from", "date_to"}

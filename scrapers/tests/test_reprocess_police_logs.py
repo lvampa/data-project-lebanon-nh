@@ -13,6 +13,7 @@ from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
+from pymongo.errors import ServerSelectionTimeoutError
 from sqlalchemy import select
 
 PDF_SOURCE = "police_log_pdf"
@@ -361,6 +362,51 @@ def test_one_records_failure_does_not_stop_the_others(db_session, archive, monke
     assert bad.state == "complete"
 
 
+def test_the_archive_going_down_mid_run_stops_the_run_and_keeps_what_was_done(
+    db_session, archive, monkeypatch
+):
+    add_url(db_session, URL_A, day=date(2026, 5, 11))
+    second = add_url(db_session, URL_B, day=date(2026, 5, 12))
+    archive_pdf(archive, URL_A, log_text(HARASSMENT))
+    archive_pdf(archive, URL_B, log_text(PATROL, day="05/12/2026"))
+    real_newest = RawArchive.newest
+    calls = 0
+
+    def newest(self, source, source_key):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise ServerSelectionTimeoutError("archive went away")
+        return real_newest(self, source, source_key)
+
+    monkeypatch.setattr(RawArchive, "newest", newest)
+
+    result = reprocess(archive, None, None)
+
+    assert result == counts(urls=2, inserted=1, failed=1, stopped_early=1)
+    assert set(stored(db_session)) == {"26-13339"}
+    db_session.refresh(second)
+    # An archive that cannot answer is not an archive with no original.
+    assert second.state == "complete"
+
+
+def test_a_complete_record_that_now_reparses_to_no_entries_becomes_an_error(
+    db_session, archive
+):
+    # Current behaviour, pinned so a change is a decision: the ingest marks a PDF with
+    # no stored entries as error. Its entries are kept, flagged as missing from the parse.
+    url = add_url(db_session, URL_A, day=date(2026, 5, 11))
+    archive_pdf(archive, URL_A, log_text(HARASSMENT))
+    reprocess(archive, None, None)
+
+    archive_pdf(archive, URL_A, "not a police log at all")
+    reprocess(archive, None, None)
+
+    db_session.refresh(url)
+    assert (url.state, url.error_kind) == ("error", "parse")
+    assert stored(db_session)["26-13339"].missing_from_parse is True
+
+
 # --- the command ---
 
 
@@ -401,6 +447,21 @@ def test_main_takes_a_date_range(db_session, raw_sources):
 def test_main_needs_all_or_a_full_range(argv):
     with pytest.raises(SystemExit):
         reprocess_police_logs.main(argv)
+
+
+def test_main_says_so_when_the_archive_stopped_answering(
+    db_session, raw_sources, monkeypatch, capsys
+):
+    add_url(db_session, URL_A, day=date(2026, 5, 11))
+
+    def newest(self, source, source_key):
+        raise ServerSelectionTimeoutError("archive went away")
+
+    monkeypatch.setattr(RawArchive, "newest", newest)
+
+    assert reprocess_police_logs.main(["--all"]) == 1
+
+    assert "stopped early" in capsys.readouterr().out
 
 
 def test_main_exits_non_zero_when_a_record_failed(db_session, raw_sources, monkeypatch):

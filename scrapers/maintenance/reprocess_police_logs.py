@@ -47,6 +47,8 @@ class ReprocessCounts:
     missing: int = 0
     requeued: int = 0
     failed: int = 0
+    # 1 when the archive stopped answering and the run ended before the last record.
+    stopped_early: int = 0
 
     def __add__(self, other: Self) -> Self:
         return type(self)(
@@ -75,7 +77,14 @@ def reprocess(
     """Reprocess every matching URL record. With no dates, every record."""
     totals = ReprocessCounts()
     for url_id in _url_ids(date_from, date_to):
-        totals += _reprocess_url(archive, url_id)
+        try:
+            totals += _reprocess_url(archive, url_id)
+        except PyMongoError as exc:
+            # An archive that cannot answer is not one with no original, so nothing is
+            # requeued. Stop, and report what was done.
+            logfire.error("archive stopped answering", error=repr(exc))
+            totals += ReprocessCounts(urls=1, failed=1, stopped_early=1)
+            break
     return totals
 
 
@@ -195,6 +204,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"{result.missing} entries not found in the new parse. "
         f"{result.requeued} had no archived original and went back to pending, "
         f"{result.failed} failed."
+        + (
+            " The archive stopped answering, so the run stopped early."
+            if result.stopped_early
+            else ""
+        )
     )
     return 1 if result.failed else 0
 

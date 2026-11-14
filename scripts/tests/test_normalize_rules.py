@@ -279,6 +279,11 @@ def test_the_display_helper_decides_how_an_address_reads(monkeypatch):
         ("MAIN ST and ELM ST", "Main St and Elm St"),
         ("O'BRIEN RD", "O'Brien Rd"),
         ("MARY HITCHCOCK MEMORIAL DR", "Mary Hitchcock Memorial Dr"),
+        ("US ROUTE 4", "US Route 4"),
+        ("NH-120", "NH-120"),
+        ("I-89 EXIT 18", "I-89 Exit 18"),
+        ("MCDONALD DR", "McDonald Dr"),
+        ("PO BOX 5", "PO Box 5"),
     ],
 )
 def test_display_form_title_cases_and_keeps_directions_and_ordinals_right(
@@ -293,3 +298,9 @@ def test_a_place_copied_from_an_earlier_answer_is_not_recased():
     result = apply_rules([location("CVS", "L CVS")], STREETS, places={"L CVS": place})
 
     assert settled(result)["CVS"].normalized_address == "CVS Pharmacy, Main St"
+
+
+def test_the_rules_version_changed_with_the_title_case_output():
+    # Rule rows store this. Existing rows were written upper case, so a redo must see
+    # them as old. Moving it back to 1 would hide them.
+    assert rules_prompt_version() != "rules-1"

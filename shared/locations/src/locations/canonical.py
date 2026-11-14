@@ -12,7 +12,8 @@ import csv
 import re
 from importlib import resources
 
-RULES_VERSION = "1"
+# 2: rule rows now read in title case and carry their street.
+RULES_VERSION = "2"
 
 _SEGMENT_JOINERS = re.compile(r"( & | - )")
 # A slash joins two streets only between words, not in "N/B" or "S/B".

@@ -53,6 +53,8 @@ class RuleResult:
 
 
 _DIRECTIONS = frozenset({"N", "S", "E", "W", "NE", "NW", "SE", "SW"})
+# Abbreviations that stay upper case: states, "US 4", "PO Box", and the "I" of I-89.
+_UPPER_CASE_WORDS = frozenset({"US", "NH", "VT", "ME", "MA", "I", "PO"})
 _ORDINAL = re.compile(r"\d+(ST|ND|RD|TH)", re.IGNORECASE)
 
 
@@ -67,19 +69,26 @@ def display_form(text: str) -> str:
 
 def _display_word(word: str) -> str:
     upper = word.upper()
-    if upper in _DIRECTIONS:
+    if upper in _DIRECTIONS or upper in _UPPER_CASE_WORDS:
         return upper
     if word == "and" or not word:
         return word
     if _ORDINAL.fullmatch(word):
         return word.lower()
-    return "-".join(_capitalized(part) for part in word.split("-"))
+    return "-".join(_hyphen_part(part) for part in word.split("-"))
+
+
+def _hyphen_part(part: str) -> str:
+    return part.upper() if part.upper() in _UPPER_CASE_WORDS else _capitalized(part)
 
 
 def _capitalized(part: str) -> str:
     text = part[:1].upper() + part[1:].lower()
     # "O'BRIEN" reads "O'Brien", but "HANNAFORD'S" must not read "Hannaford'S".
     if re.match(r"[A-Z]'[a-z]", text):
+        text = text[:2] + text[2:].capitalize()
+    # "MCDONALD" reads "McDonald".
+    if re.match(r"Mc[a-z]{3,}", text):
         text = text[:2] + text[2:].capitalize()
     return text
 

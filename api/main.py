@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import logfire
@@ -20,7 +21,7 @@ settings = get_settings()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.es = Elasticsearch(settings.elasticsearch_host, request_timeout=10)
     yield
     app.state.es.close()

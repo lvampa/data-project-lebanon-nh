@@ -79,6 +79,8 @@ uv run python -m maintenance.raw_sources replay --source vgsi_parcel
 uv run python -m maintenance.raw_sources replay --source vgsi_parcel --parcel 1000 --parcel 1001
 ```
 It prints how many parcels it inserted, updated, and left unchanged, and how many had no usable body.
+A parcel whose stored row is more than an hour newer than its newest archived page is skipped and counted, because a scrape the archive missed has already updated it.
+Replay stamps each row with its page's own time, so you can run it again after the next parser fix.
 It never writes to the archive.
 
 List every version of one source key, newest first, with its fetch time, content hash, size, and seen count:
@@ -86,9 +88,9 @@ List every version of one source key, newest first, with its fetch time, content
 uv run python -m maintenance.raw_sources versions --source vgsi_parcel --key 1000
 ```
 
-Report what the archive holds: versions and size per source, and which finished log PDFs have an archived body, only their text, or neither.
+Report what the archive holds: versions and size per source, and which finished log PDFs have an archived body.
 It also lists parcels with no archived page.
-It exits non-zero while any finished log PDF has neither, which is the gate before the raw text columns are dropped.
+It lists the ones with no body, and exits non-zero while there are any.
 ```bash
 uv run python -m maintenance.raw_sources check
 ```

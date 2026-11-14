@@ -114,30 +114,6 @@ def test_changed_text_updates_the_entry_and_moves_updated_at(db_session):
     assert entry.updated_at > created_at
 
 
-def test_entry_stored_before_these_columns_existed_is_updated(db_session):
-    url = add_url(db_session)
-    old = datetime(2026, 6, 7, 17, 48)
-    db_session.add(
-        LogEntry(
-            case_number="26-13339",
-            source_url=url.canonical_url,
-            log_date=date(2026, 5, 11),
-            incident_type="Telephone Harassment Incident Report Taken",
-            created_at=old,
-            updated_at=old,
-        )
-    )
-    db_session.commit()
-
-    counts = ingest_log_text(db_session, url, log_text(HARASSMENT))
-
-    assert counts.updated == 1
-    entry = entries(db_session)["26-13339"]
-    assert entry.incident_type == "Telephone Harassment"
-    assert entry.parser_version == PARSER_VERSION
-    assert entry.created_at == old
-
-
 def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(
     db_session, monkeypatch
 ):

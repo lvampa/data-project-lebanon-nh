@@ -5,7 +5,7 @@ send), build a call, check the answer, and store the result. Everything else, th
 batching, the call budget, the call records and the exit code, is the same for both,
 so it lives in job.py.
 
-This is the only code that reads raw values or writes normalizations (9.9). A row
+This is the only code that reads raw values or writes normalizations. A row
 whose source is `human` is never selected and never written.
 """
 
@@ -531,7 +531,7 @@ def _charge_attempt(
     """Count a failed attempt, and mark the value for review at the limit.
 
     A row that already has a value is left alone: a missed redo must not mark a good
-    value for review (8.7)."""
+    value for review."""
     now = _now()
     statement = insert(model).values(
         **{key_column: raw},

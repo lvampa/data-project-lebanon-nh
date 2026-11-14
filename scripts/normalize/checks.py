@@ -3,7 +3,7 @@
 The answer is never trusted. Each item is validated alone, so one bad item costs only
 its own value, and then the set rules run: a value that was not sent, a value that
 came back twice, and a value left out. Only discarded and missing values get a failed
-attempt; the caller counts those (8.6).
+attempt; the caller counts those.
 """
 
 from collections import Counter

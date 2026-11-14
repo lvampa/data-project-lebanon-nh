@@ -90,7 +90,7 @@ def test_the_api_and_the_scripts_agree_on_the_five_categories():
     assert tuple(CATEGORIES) == INCIDENT_CATEGORIES
 
 
-# --- the categories list (7.3, 7.4) ---
+# --- the categories list ---
 
 
 def test_the_list_shows_source_review_mark_normalized_type_and_entry_count(
@@ -190,7 +190,7 @@ def test_an_unknown_source_filter_is_a_422(real_client):
     assert real_client.get("/api/categories?source=robot").status_code == 422
 
 
-# --- saving a category (7.5, 7.6, 7.7) ---
+# --- saving a category ---
 
 
 def test_a_patch_sets_the_source_to_human_and_clears_the_review_mark(
@@ -255,7 +255,7 @@ def test_a_raw_value_with_a_slash_and_an_apostrophe_can_be_saved_and_deleted(
     assert category_row(db_session, raw) is None
 
 
-# --- handing a value back to AI (7.12) ---
+# --- handing a value back to AI ---
 
 
 def test_a_delete_removes_the_row_and_its_failed_attempts(db_session, real_client):

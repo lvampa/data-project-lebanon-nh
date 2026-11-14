@@ -195,7 +195,7 @@ Task 15 needs PR 4's columns, and task 16 needs PR 4's `shared/locations` packag
   - Tests with `FakeBackend`: a rule-settled location never reaches the backend, a value with a stored normalization is never sent again, and a second `--redo` sends nothing.
   - Writes never touch `human` rows; `--redo` keeps the old value until a valid new one arrives; every call, failed or not, goes to `ai_calls` in MongoDB, best-effort.
   - The per-field summary log and the exit code.
-  - It runs on Connor's Mac as `uv run python -m scripts.normalize.job` from the repo root; confirm the module path.
+  - It runs on Connor's Mac as `uv run normalize` from the repo root; confirm the module path.
   - Move `police_log_lock` from `scrapers/ingest/lock.py` to `shared/postgres` with the same key, and take it for the run. A held lock exits with status 1.
   - Tests with `FakeBackend` for every AI row in design.md's error table, plus a held lock.
   - Each accepted item stores its call's `ai_call_id`; a test with MongoDB unreachable stores the normalizations and counts the lost call records.

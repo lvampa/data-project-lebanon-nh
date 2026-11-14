@@ -27,8 +27,8 @@ No container runs it, and no Claude token goes in `.env`.
 ```bash
 docker compose up -d postgres mongo
 uv sync
-uv run python -m scripts.normalize.job
-uv run python -m scripts.normalize.geocode
+uv run normalize
+uv run geocode
 ```
 
 The first command gives incident types a category and a plain name, and gives locations a clean address and a kind.

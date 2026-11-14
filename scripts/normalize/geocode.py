@@ -1,6 +1,6 @@
 """Put normalized locations on the map, by hand from Connor's Mac.
 
-    uv run python -m scripts.normalize.geocode
+    uv run geocode
 
 It takes `ai` and `rule` rows that have a normalized address and no coordinates, and
 never a `human` row. It reuses the coordinates of a place code another row already
@@ -157,7 +157,7 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
     # It takes no options, but parsing still makes --help print usage instead of
     # running the job.
     argparse.ArgumentParser(
-        prog="python -m scripts.normalize.geocode",
+        prog="geocode",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)

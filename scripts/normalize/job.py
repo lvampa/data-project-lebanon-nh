@@ -3,7 +3,7 @@
 Run from the repo root, with Postgres and MongoDB up (`docker compose up -d postgres
 mongo`) and `claude` logged in:
 
-    uv run python -m scripts.normalize.job [--field incident_type|location] [--redo]
+    uv run normalize [--field incident_type|location] [--redo]
 
 The job is a workflow, not an agent. Code finds the waiting values, settles what rules
 can, sends the rest in batches to a backend that has no tools, checks every answer,
@@ -264,7 +264,7 @@ def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) ->
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="python -m scripts.normalize.job",
+        prog="normalize",
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

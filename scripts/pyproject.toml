@@ -18,6 +18,10 @@ dependencies = [
     "sqlalchemy>=2.0.50",
 ]
 
+[project.scripts]
+normalize = "scripts.normalize.job:main"
+geocode = "scripts.normalize.geocode:main"
+
 [tool.uv.sources]
 locations = { workspace = true }
 mongo = { workspace = true }

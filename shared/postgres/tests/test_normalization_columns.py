@@ -141,7 +141,7 @@ def test_a_row_keeps_its_place_code_street_and_geocode_query(db_session):
     )
 
 
-# --- the migration over rows that already exist ---
+# --- the migration ---
 
 
 @pytest.fixture
@@ -149,41 +149,6 @@ def alembic_config(db_connection):
     config = Config(ALEMBIC_INI)
     config.attributes["connection"] = db_connection
     return config
-
-
-def test_rows_from_before_the_columns_existed_become_human_rows(
-    db_connection, alembic_config
-):
-    command.downgrade(alembic_config, BEFORE_PROVENANCE)
-    db_connection.execute(
-        text(
-            "INSERT INTO incident_type_categories"
-            " (raw_incident_type, category, subcategory, created_at, updated_at)"
-            " VALUES ('NOISE', 'Police', 'Noise', now(), now())"
-        )
-    )
-    db_connection.execute(
-        text(
-            "INSERT INTO address_normalizations"
-            " (raw_address, normalized_address, lat, lng, geocoded_via, created_at, updated_at)"
-            " VALUES ('12 MAIN ST', '12 Main St', 43.64, -72.25, 'manual', now(), now()),"
-            "        ('34 ELM ST', NULL, NULL, NULL, NULL, now(), now())"
-        )
-    )
-
-    command.upgrade(alembic_config, "head")
-
-    # Nothing before this work was an AI or rule answer, so a later AI run must not
-    # overwrite what is there.
-    assert db_connection.execute(
-        text("SELECT source, category FROM incident_type_categories")
-    ).all() == [("human", "Police")]
-    sources = dict(
-        db_connection.execute(
-            text("SELECT raw_address, source FROM address_normalizations")
-        ).all()
-    )
-    assert sources == {"12 MAIN ST": "human", "34 ELM ST": None}
 
 
 def test_the_subcategory_column_is_gone_and_comes_back_empty_on_downgrade(

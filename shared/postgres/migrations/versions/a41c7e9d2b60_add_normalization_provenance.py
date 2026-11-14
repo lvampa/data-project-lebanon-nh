@@ -5,8 +5,8 @@ Both lookup tables gain `source`, `prompt_version`, `ai_call_id`, `needs_review`
 and lets `category` be empty while a value waits. address_normalizations gains the
 location columns and a `place_code` value for `geocoded_via`.
 
-Rows that exist now were not produced by a rule or by AI, so they become `human` rows,
-and a later AI run will not overwrite them.
+Plain schema change. Nothing is live, so no rows are carried over: a database that
+holds rows in these tables is reset and normalized again.
 
 Revision ID: a41c7e9d2b60
 Revises: 7c4d2b19a8e3
@@ -64,7 +64,6 @@ def _upgrade_incident_type_categories() -> None:
     op.add_column(table, sa.Column("normalized_type", sa.Text(), nullable=True))
     op.alter_column(table, "category", existing_type=sa.Text(), nullable=True)
     op.drop_column(table, "subcategory")
-    op.execute(f"UPDATE {table} SET source = 'human' WHERE category IS NOT NULL")
     op.create_check_constraint(f"ck_{table}_source", table, _SOURCES)
 
 
@@ -94,9 +93,6 @@ def _upgrade_address_normalizations() -> None:
         sa.Column("geocode_attempts", sa.Integer(), server_default="0", nullable=False),
     )
     op.create_index(f"idx_{table}_place_code", table, ["place_code"])
-    op.execute(
-        f"UPDATE {table} SET source = 'human' WHERE normalized_address IS NOT NULL"
-    )
 
     op.create_check_constraint(f"ck_{table}_source", table, _SOURCES)
     op.create_check_constraint(

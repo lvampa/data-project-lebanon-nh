@@ -1,0 +1,419 @@
+"""The dbt models and data checks, built against a real Postgres database.
+
+Each data check gets one bad case that must fail the build, so a check that stops
+catching anything shows up here (design.md, Testing strategy; requirement 14).
+
+dbt runs in its own process and reads committed rows, so these tests can't use the
+rolled-back `db_connection`. They get their own database, `app_dbt_test`, migrated to
+head at the start of the session and dropped at the end. It is never `app_test`: views
+over `log_entries` there would block the migration tests from dropping columns.
+
+Checks on rows that come from the source tables are tested with a bad source row.
+The public models write the held-back fields as empty literals, so no source row can
+break those checks; they are tested by swapping in a public view that leaks the field,
+the regression each check exists to catch.
+"""
+
+import json
+import os
+import subprocess
+import sys
+from collections.abc import Iterator
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
+
+import pytest
+from postgres.models import (
+    AddressNormalization,
+    IncidentTypeCategory,
+    LogEntry,
+    Property,
+)
+from postgres_testing.plugin import (
+    _create_database_if_missing,
+    _upgrade_to_head,
+    is_test_database,
+)
+from sqlalchemy import URL, Engine, create_engine, insert, text
+
+DBT_TEST_DATABASE = os.environ.get("TEST_DBT_POSTGRES_DB", "app_dbt_test")
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+DISPOSITIONS_SEED = PROJECT_DIR / "seeds" / "dispositions.csv"
+SOURCE_TABLES = (LogEntry, IncidentTypeCategory, AddressNormalization, Property)
+NOW = datetime(2026, 11, 2, 12, 0)
+
+# The newest log date is 2026-11-01, so the public window is 2026-08-04 to 2026-11-01.
+NEWEST_LOG_DATE = date(2026, 11, 1)
+JUST_OUTSIDE_WINDOW = date(2026, 8, 3)
+
+
+# --- Fixtures ---------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DbtResult:
+    returncode: int
+    statuses: dict[str, tuple[str, int | None]]
+    output: str
+
+    def status(self, test_name: str) -> tuple[str, int | None]:
+        """The status and failure count of the one test whose name starts so."""
+        matches = [
+            value
+            for unique_id, value in self.statuses.items()
+            if unique_id.split(".")[2] == test_name
+            or unique_id.split(".")[2].startswith(test_name + "_")
+        ]
+        assert len(matches) == 1, f"{test_name}: {len(matches)} matches\n{self.output}"
+        return matches[0]
+
+
+@dataclass(frozen=True)
+class DbtProject:
+    engine: Engine
+    target_dir: Path
+
+    def run(self, *args: str) -> DbtResult:
+        completed = subprocess.run(
+            [str(Path(sys.executable).parent / "dbt"), *args, *self._flags()],
+            cwd=PROJECT_DIR,
+            env=self._env(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return DbtResult(
+            completed.returncode, self._statuses(), completed.stdout + completed.stderr
+        )
+
+    def seed_rows(self, rows: dict[type, list[dict[str, Any]]]) -> None:
+        with self.engine.begin() as connection:
+            names = ", ".join(model.__tablename__ for model in SOURCE_TABLES)
+            connection.execute(text(f"TRUNCATE {names} RESTART IDENTITY CASCADE"))
+            # One insert per row: the rows set different columns, and a bulk insert
+            # needs every row to have the same keys.
+            for model, model_rows in rows.items():
+                for row in model_rows:
+                    connection.execute(insert(model.__table__).values(**row))
+
+    def replace_view(self, name: str, select_sql: str) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(text(f"DROP VIEW IF EXISTS marts.{name} CASCADE"))
+            connection.execute(text(f"CREATE VIEW marts.{name} AS {select_sql}"))
+
+    def _flags(self) -> list[str]:
+        return [
+            "--project-dir",
+            str(PROJECT_DIR),
+            "--profiles-dir",
+            str(PROJECT_DIR),
+            "--target-path",
+            str(self.target_dir),
+            "--log-path",
+            str(self.target_dir / "logs"),
+        ]
+
+    def _env(self) -> dict[str, str]:
+        url = self.engine.url
+        return {
+            **os.environ,
+            "POSTGRES_HOST": url.host or "localhost",
+            "POSTGRES_PORT": str(url.port or 5432),
+            "POSTGRES_USER": url.username or "",
+            "POSTGRES_PASSWORD": url.password or "",
+            "POSTGRES_DB": DBT_TEST_DATABASE,
+            "DBT_SEND_ANONYMOUS_USAGE_STATS": "false",
+        }
+
+    def _statuses(self) -> dict[str, tuple[str, int | None]]:
+        results_file = self.target_dir / "run_results.json"
+        if not results_file.exists():
+            return {}
+        results = json.loads(results_file.read_text())["results"]
+        return {r["unique_id"]: (r["status"], r.get("failures")) for r in results}
+
+
+@pytest.fixture(scope="session")
+def dbt_engine(test_engine: Engine) -> Iterator[Engine]:
+    """A migrated `app_dbt_test`, dropped when the session ends."""
+    if not is_test_database(DBT_TEST_DATABASE):
+        pytest.exit(f"Refusing to run dbt tests against {DBT_TEST_DATABASE!r}.")
+    url: URL = test_engine.url.set(database=DBT_TEST_DATABASE)
+    _drop_database(url)
+    _create_database_if_missing(url)
+    engine = create_engine(url)
+    try:
+        _upgrade_to_head(engine)
+        yield engine
+    finally:
+        engine.dispose()
+        _drop_database(url)
+
+
+@pytest.fixture(scope="session")
+def dispositions_seed() -> Iterator[None]:
+    """A fixed disposition list, written only when the generated seed is missing.
+
+    TODO(PR 7 task 19): once write_disposition_seed.py works, generate the real list.
+    """
+    created = not DISPOSITIONS_SEED.exists()
+    if created:
+        DISPOSITIONS_SEED.parent.mkdir(exist_ok=True)
+        DISPOSITIONS_SEED.write_text("disposition\nInvestigated\nSummons Issued\n")
+    try:
+        yield
+    finally:
+        if created:
+            DISPOSITIONS_SEED.unlink()
+
+
+@pytest.fixture
+def dbt(
+    dbt_engine: Engine, dispositions_seed: None, tmp_path: Path
+) -> Iterator[DbtProject]:
+    project = DbtProject(dbt_engine, tmp_path)
+    yield project
+    with dbt_engine.begin() as connection:
+        connection.execute(text("DROP SCHEMA IF EXISTS marts CASCADE"))
+
+
+def _drop_database(url: URL) -> None:
+    maintenance = create_engine(
+        url.set(database="postgres"), isolation_level="AUTOCOMMIT"
+    )
+    try:
+        with maintenance.connect() as connection:
+            connection.execute(
+                text(f'DROP DATABASE IF EXISTS "{url.database}" WITH (FORCE)')
+            )
+    finally:
+        maintenance.dispose()
+
+
+# --- Rows ---------------------------------------------------------------------------
+
+
+def entry(case_number: str, log_date: date = NEWEST_LOG_DATE, **values: Any) -> dict:
+    return {
+        "source_url": "https://example.test/log.pdf",
+        "case_number": case_number,
+        "log_date": log_date,
+        "created_at": NOW,
+        "updated_at": NOW,
+        **values,
+    }
+
+
+def category(raw: str, value: str) -> dict:
+    return {
+        "raw_incident_type": raw,
+        "category": value,
+        "created_at": NOW,
+        "updated_at": NOW,
+    }
+
+
+def location(raw: str, normalized: str, lat: float, lng: float, **values: Any) -> dict:
+    return {
+        "raw_address": raw,
+        "normalized_address": normalized,
+        "lat": lat,
+        "lng": lng,
+        "geocoded_via": "nominatim",
+        "created_at": NOW,
+        "updated_at": NOW,
+        **values,
+    }
+
+
+def good_rows() -> dict[type, list[dict[str, Any]]]:
+    """Rows every check passes on, including the edges the checks look at."""
+    return {
+        LogEntry: [
+            entry(
+                "26-1001",
+                incident_type="MV Complaint",
+                location="1234 MAIN ST",
+                officer="Smith",
+                reference_number="R-1",
+            ),
+            entry(
+                "26-1002",
+                incident_type="Welfare Check",
+                location="MAIN ST / HANOVER ST",
+                officer="Jones",
+            ),
+            entry(
+                "26-0900",
+                JUST_OUTSIDE_WINDOW,
+                incident_type="Alarm",
+                location="45 HANOVER ST",
+                officer="Smith",
+            ),
+            entry("26-0902", parse_error=True, incident_type="garbled"),
+        ],
+        IncidentTypeCategory: [
+            category("MV Complaint", "Traffic"),
+            category("Welfare Check", "Police"),
+        ],
+        AddressNormalization: [
+            location("1234 MAIN ST", "1234 Main St", 43.6421567, -72.2512345),
+            location(
+                "MAIN ST / HANOVER ST", "Main St and Hanover St", 43.6431, -72.2501
+            ),
+        ],
+        Property: [
+            {
+                "parcel_id": "1-2-3",
+                "location": "1234 MAIN ST",
+                "owner": "JANE RESIDENT",
+                "owner_address": "1234 MAIN ST, LEBANON NH",
+                "created_at": NOW,
+                "updated_at": NOW,
+            },
+        ],
+    }
+
+
+def with_rows(model: type, *extra: dict) -> dict[type, list[dict[str, Any]]]:
+    rows = good_rows()
+    rows[model] = [*rows[model], *extra]
+    return rows
+
+
+# --- Tests --------------------------------------------------------------------------
+
+
+def test_good_rows_pass_every_check(dbt):
+    dbt.seed_rows(good_rows())
+
+    result = dbt.run("build")
+
+    assert result.returncode == 0, result.output
+    assert all(status in ("pass", "success") for status, _ in result.statuses.values())
+
+
+@pytest.mark.parametrize(
+    ("rows", "check"),
+    [
+        pytest.param(
+            with_rows(
+                AddressNormalization, location("1 FAR RD", "1 Far Rd", 40.0, -72.25)
+            ),
+            "assert_locations_inside_city_bounds",
+            id="14.2-coordinates-outside-the-city",
+        ),
+        pytest.param(
+            with_rows(LogEntry, entry("26-1003", incident_type="Alarm Investigated")),
+            "assert_no_raw_type_ends_with_disposition",
+            id="14.3-type-ends-with-a-disposition",
+        ),
+        pytest.param(
+            with_rows(IncidentTypeCategory, category("Alarm", "Weird")),
+            "accepted_values_stg_incident_types_category",
+            id="14.4-category-outside-the-five",
+        ),
+    ],
+)
+def test_a_bad_source_row_fails_its_check(dbt, rows, check):
+    dbt.seed_rows(rows)
+
+    result = dbt.run("build")
+
+    assert result.returncode != 0
+    # 14.6: the build names the check and counts the rows that failed it.
+    assert result.status(check) == ("fail", 1), result.output
+
+
+def test_coordinates_set_by_hand_may_be_outside_the_city(dbt):
+    dbt.seed_rows(
+        with_rows(
+            AddressNormalization,
+            location("1 FAR RD", "1 Far Rd", 40.0, -72.25, geocoded_via="manual"),
+        )
+    )
+
+    result = dbt.run("build", "--select", "+assert_locations_inside_city_bounds")
+
+    assert result.status("assert_locations_inside_city_bounds") == ("pass", 0)
+
+
+@pytest.mark.parametrize(
+    ("view", "leaky_select", "check"),
+    [
+        pytest.param(
+            "public_incidents",
+            "select case_number, officer, reference_number from marts.incidents",
+            "assert_public_incidents_officer_empty",
+            id="14.5-officer-in-the-public-set",
+        ),
+        pytest.param(
+            "public_incidents",
+            "select case_number, log_date from marts.incidents",
+            "assert_public_incidents_inside_window",
+            id="14.5-incident-outside-the-window",
+        ),
+        pytest.param(
+            "public_incidents",
+            "select case_number, normalized_address as location, lat, lng,"
+            " 'address'::text as location_kind"
+            " from marts.incidents where case_number = '26-1001'",
+            "assert_public_locations_at_block_level",
+            id="14.5-house-number-in-the-public-set",
+        ),
+        pytest.param(
+            "public_incidents",
+            "select case_number, '1200 block of Main St'::text as location, lat, lng,"
+            " 'address'::text as location_kind"
+            " from marts.incidents where case_number = '26-1001'",
+            "assert_public_locations_at_block_level",
+            id="14.5-exact-coordinates-in-the-public-set",
+        ),
+        pytest.param(
+            "public_properties",
+            "select parcel_id, owner, owner_address from public.properties",
+            "assert_public_properties_have_no_owner",
+            id="14.7-owner-in-the-public-parcels",
+        ),
+        pytest.param(
+            "incidents",
+            "select * from marts.stg_log_entries"
+            " union all select * from marts.stg_log_entries where case_number = '26-1001'",
+            "unique_incidents_case_number",
+            id="14.4-case-number-twice",
+        ),
+    ],
+)
+def test_a_leaky_model_fails_its_check(dbt, view, leaky_select, check):
+    dbt.seed_rows(good_rows())
+    assert dbt.run("run").returncode == 0
+    dbt.replace_view(view, leaky_select)
+
+    result = dbt.run("test", "--select", check)
+
+    assert result.returncode != 0
+    assert result.status(check)[0] == "fail", result.output
+    assert result.status(check)[1] >= 1
+
+
+def test_the_public_set_holds_no_held_back_values(dbt):
+    dbt.seed_rows(good_rows())
+    assert dbt.run("run").returncode == 0
+
+    with dbt.engine.connect() as connection:
+        incidents = connection.execute(
+            text(
+                "select case_number, officer, reference_number from marts.public_incidents"
+            )
+        ).all()
+        owners = connection.execute(
+            text("select owner, owner_address from marts.public_properties")
+        ).all()
+
+    assert sorted(row.case_number for row in incidents) == ["26-1001", "26-1002"]
+    assert all(
+        row.officer is None and row.reference_number is None for row in incidents
+    )
+    assert owners == [(None, None)]

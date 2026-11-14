@@ -6,7 +6,7 @@ profile: lebanon
 model-paths: ["models"]
 macro-paths: ["macros"]
 seed-paths: ["seeds"]
-test-paths: ["tests"]
+test-paths: ["data_tests"]
 target-path: "target"
 clean-targets: ["target", "dbt_packages"]
 

@@ -639,7 +639,7 @@ One mechanism for database tests, replacing the three that exist (`TEST_DATABASE
   The check runs before any connection.
 - MongoDB tests use the archive spec's plugin and the `scraped_data_test` database; ingest and reprocess tests need it, so CI starts `mongo` next to `postgres`.
 - A session fixture creates `app_test` if missing and runs `alembic upgrade head`.
-  A separate fixture, asked for only by API and dbt tests, runs `dbt run` so the `marts` views exist.
+  The dbt tests use their own `app_dbt_test` database (below); the API tests in PR 8 get a fixture that builds the `marts` views.
 - Each test rebinds the existing sessionmaker to one connection inside an outer transaction, `SessionLocal.configure(bind=connection, join_transaction_mode="create_savepoint")`, and restores it after, so code under test can commit and the test still rolls back (13.3).
   No production code changes for this.
 - The fixtures are a pytest plugin in `shared/postgres` that the scrapers, scripts, and API suites load.
@@ -655,7 +655,15 @@ Other tests:
 - Normalization and geocode jobs: `FakeBackend` and a fake geocoder; no real AI call and no request to Nominatim (13.5).
 - Canonical rules and the rule pass: pure-function tests over known spelling pairs, plus a job test showing that a house number on a listed street is stored as `rule` and that `FakeBackend` never sees it.
 - No tools: the `ClaudeCliBackend` contract test checks, with a fake executable, that each call runs in a new empty directory and passes the flags task 13 settles (9.8).
-- dbt: `dbt build` against `app_test` with seeded rows that should pass, and one seeded bad row per data check that should fail it.
+- dbt: `transform/tests/test_dbt_models.py` runs `dbt build` on seeded rows that should pass, then one bad case per data check that must fail it, by name and with a failure count (14.6).
+  - It uses its own database, `app_dbt_test`, migrated at the start of the session and dropped at the end, not `app_test`.
+    dbt reads committed rows from its own process, so the rolled-back connection can't serve it.
+    Views over `log_entries` in `app_test` would also stop the migration tests from dropping columns.
+  - Checks on source data get a bad source row.
+    The public models write held-back fields as empty literals, so no source row can break those checks.
+    Instead the test swaps in a public view that leaks the field, which is the regression the check exists to catch.
+  - dbt's own singular checks live in `transform/data_tests/`, so `transform/tests/` holds the pytest suite, like the other packages.
+  - The API tests in PR 8 need the `marts` views too; that fixture moves into the shared test plugin then.
 - DAG: structure tests on the spec, in the style of `dags/tests/test_specs.py`.
 - Evaluation: the scoring functions are unit tested with a fake backend; the real run is manual (15.7).
 

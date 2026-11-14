@@ -108,7 +108,7 @@ It does not ship until the gate in the raw source archive's tasks.md holds.
 
 About 22 files.
 
-- [ ] 7. Fix the parser
+- [x] 7. Fix the parser
   - Bump `PARSER_VERSION`, record `EXTRACTOR_VERSION`, and add the pypdf comment in `scrapers/pyproject.toml`.
   - Parse "Vicinity of:" locations, the "Call Source:" line, every "Refer To" kind, the place code, and the officer code.
   - When no disposition matches, keep the unsplit text as the raw incident type.
@@ -117,7 +117,7 @@ About 22 files.
   - Document that changing the disposition list means a parser version bump and a reprocess.
   - _Requirements: 1.3, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8_
 
-- [ ] 8. Add the reprocess script
+- [x] 8. Add the reprocess script
   - `reprocess_police_logs.py --from --to | --all`, in log date order, over `complete` and `error` records, reading the newest archived version and extracting with pypdf.
   - Mark repaired `error` records `complete`, record the content hash and versions, log the counts, take the advisory lock.
   - A record with no archived version goes back to `pending`; an unreachable archive stops the run before any change.
@@ -125,7 +125,7 @@ About 22 files.
   - A manual `police_log_reprocess` DAG spec.
   - _Requirements: 3.3, 4.1 to 4.13_
 
-- [ ] 9. Add the operator CLI
+- [x] 9. Add the operator CLI
   - `errors`, `reset <url>...`, and `unmatched-dispositions`.
   - _Requirements: 2.11, 3.7_
 

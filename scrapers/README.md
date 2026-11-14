@@ -114,6 +114,36 @@ docker compose exec -w /opt/project/scrapers airflow-scheduler \
   /opt/backups/mongo/scraped_data-20261107T020000Z.archive.gz
 ```
 
+## Police logs
+
+These commands run from `scrapers/`.
+
+Reparse archived log PDFs after a parser fix, without downloading anything:
+```bash
+uv run python -m maintenance.reprocess_police_logs --all
+uv run python -m maintenance.reprocess_police_logs --from 2026-05-01 --to 2026-05-31
+```
+It reads the newest archived PDF of each `complete` or `error` URL record, in log date order.
+A record with no archived original goes back to `pending`, so the process job downloads it again.
+It exits non-zero when the archive is unreachable, when a record failed, or when the process job holds the lock.
+The `police_log_reprocess` DAG runs the same command by hand, with `date_from` and `date_to` params.
+
+Changing the parser means bumping `PARSER_VERSION` in `parsers/police_log.py` and reprocessing.
+So does changing the disposition list in `parsers/dispositions.py`, and so does a pypdf upgrade.
+
+List the URL records the process job gave up on, and send chosen ones back to `pending`:
+```bash
+uv run python -m maintenance.police_logs errors
+uv run python -m maintenance.police_logs reset https://www.lebanonnh.gov/DocumentCenter/View/23007/2026-05-11
+```
+`reset` also restarts the attempt count.
+
+List entries whose text ended in no known disposition:
+```bash
+uv run python -m maintenance.police_logs unmatched-dispositions
+```
+Add each new ending to `parsers/dispositions.py`, then bump the parser version and reprocess.
+
 ## Project Structure
 
 ```

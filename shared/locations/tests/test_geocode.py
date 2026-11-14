@@ -1,7 +1,14 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-from locations.geocode import GeocodeResult, RateLimiter, geocode, in_city_bounds
+from locations.geocode import (
+    GeocodeResult,
+    GeocodeUnavailable,
+    RateLimiter,
+    geocode,
+    in_city_bounds,
+)
 
 LEBANON_CENTER = (43.6426, -72.2518)
 
@@ -101,9 +108,28 @@ def test_no_results_is_a_miss():
         assert look_up("Unknown Place XYZ") is None
 
 
-def test_a_network_error_is_a_miss():
-    with patch("locations.geocode.httpx.get", side_effect=Exception("timeout")):
-        assert look_up() is None
+def _status_error(code: int) -> httpx.HTTPStatusError:
+    request = httpx.Request("GET", "https://nominatim.openstreetmap.org/search")
+    return httpx.HTTPStatusError(
+        str(code), request=request, response=httpx.Response(code, request=request)
+    )
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.ConnectError("offline"),
+        httpx.ReadTimeout("slow"),
+        httpx.RemoteProtocolError("dropped"),
+    ],
+    ids=["offline", "timeout", "dropped"],
+)
+def test_a_network_error_is_unavailable_not_a_miss(failure):
+    with (
+        patch("locations.geocode.httpx.get", side_effect=failure),
+        pytest.raises(GeocodeUnavailable),
+    ):
+        look_up()
 
 
 def test_a_reply_with_no_coordinates_is_a_miss():
@@ -113,11 +139,15 @@ def test_a_reply_with_no_coordinates_is_a_miss():
         assert look_up() is None
 
 
-def test_a_bad_http_status_is_a_miss():
+@pytest.mark.parametrize("code", [403, 429, 500, 503])
+def test_a_bad_http_status_is_unavailable_not_a_miss(code):
     reply = MagicMock()
-    reply.raise_for_status.side_effect = Exception("429")
-    with patch("locations.geocode.httpx.get", return_value=reply):
-        assert look_up() is None
+    reply.raise_for_status.side_effect = _status_error(code)
+    with (
+        patch("locations.geocode.httpx.get", return_value=reply),
+        pytest.raises(GeocodeUnavailable),
+    ):
+        look_up()
 
 
 # --- the user agent ---
@@ -148,9 +178,18 @@ def test_the_request_asks_for_address_details():
     assert get.call_args.kwargs["params"]["addressdetails"] == 1
 
 
-@pytest.mark.parametrize("area", ["city", "town"])
-def test_a_match_in_lebanon_nh_counts_whether_nominatim_calls_it_a_city_or_town(area):
-    reply = nominatim_reply(address={area: "Lebanon", "state": "New Hampshire"})
+@pytest.mark.parametrize(
+    ("area", "name"),
+    [
+        ("city", "Lebanon"),
+        ("town", "Lebanon"),
+        ("village", "West Lebanon"),
+        ("hamlet", "West Lebanon"),
+        ("city", "West Lebanon"),
+    ],
+)
+def test_a_match_in_lebanon_or_west_lebanon_counts_under_any_area_key(area, name):
+    reply = nominatim_reply(address={area: name, "state": "New Hampshire"})
     with patch("locations.geocode.httpx.get", return_value=reply):
         assert look_up() is not None
 
@@ -193,6 +232,10 @@ def test_the_city_center_is_inside_the_bounds():
     assert in_city_bounds(*LEBANON_CENTER)
 
 
+def test_west_lebanon_down_route_12a_is_inside_the_bounds():
+    assert in_city_bounds(43.58, -72.30)
+
+
 @pytest.mark.parametrize(
     ("place", "lat", "lng"),
     [
@@ -200,6 +243,7 @@ def test_the_city_center_is_inside_the_bounds():
         ("Boston", 42.3601, -71.0589),
         ("White River Junction, VT", 43.6489, -72.42),
         ("downtown Hanover, NH", 43.7022, -72.2896),
+        ("Plainfield, NH", 43.54, -72.33),
         ("north of the city", 43.80, -72.25),
         ("south of the city", 43.50, -72.25),
     ],
@@ -266,7 +310,10 @@ def test_every_lookup_waits_for_the_limiter_first():
 
 def test_a_failed_lookup_still_counts_against_the_limit():
     limiter = NoWait()
-    with patch("locations.geocode.httpx.get", side_effect=Exception("down")):
+    with (
+        patch("locations.geocode.httpx.get", side_effect=httpx.ConnectError("down")),
+        pytest.raises(GeocodeUnavailable),
+    ):
         geocode("a, Lebanon, NH", limiter=limiter)
 
     assert limiter.waits == 1

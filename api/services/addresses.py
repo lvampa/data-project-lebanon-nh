@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 import logfire
-from locations.geocode import geocode
+from locations.geocode import GeocodeUnavailable, geocode
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import CursorResult, delete, func, select
@@ -120,9 +120,16 @@ def _new_coordinates(update: AddressUpdate, nominatim_contact: str | None) -> di
             "coordinate_precision": "exact",
         }
     if update.geocode:
-        found = geocode(
-            f"{update.normalized_address}, Lebanon, NH, USA", contact=nominatim_contact
-        )
+        try:
+            found = geocode(
+                f"{update.normalized_address}, Lebanon, NH, USA",
+                contact=nominatim_contact,
+            )
+        except GeocodeUnavailable as exc:
+            logfire.warning(
+                "geocoder unavailable, keeping coordinates: {error}", error=str(exc)
+            )
+            return {}
         # Coordinates Connor types are accepted anywhere. geocode() already treats a
         # match outside Lebanon, NH as a miss.
         if found is not None:

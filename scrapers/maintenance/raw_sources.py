@@ -15,6 +15,7 @@ import subprocess
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +36,6 @@ from maintenance.mongo_backup import Runner, run_tool
 
 PARCEL_SOURCE = "vgsi_parcel"
 PDF_SOURCE = "police_log_pdf"
-PDF_TEXT_SOURCE = "police_log_text"
 SIZE_WARNING_BYTES = 5 * 1024**3
 RESTORE_DATABASE = "scraped_data_restore_test"
 
@@ -63,6 +63,14 @@ class ReplayCounts:
     updated: int
     unchanged: int
     no_body: int
+    # Parcels whose stored row is newer than the newest archived page, left alone.
+    skipped_newer: int = 0
+
+
+# A normal scrape archives a page and writes its row moments later. A row newer than
+# its page by more than this was written by a scrape the archive missed, such as while
+# MongoDB was down, so replaying the older page would put old data over new.
+REPLAY_GRACE = timedelta(hours=1)
 
 
 def replay_parcels(
@@ -70,19 +78,27 @@ def replay_parcels(
 ) -> ReplayCounts:
     """Parse each parcel's newest archived page and store it, without downloading.
 
-    Reads the archive and never writes it.
+    Reads the archive and never writes it. A parcel whose stored row is newer than its
+    newest archived page is skipped. Each replayed row is stamped with its page's own
+    time, so a later replay, after another parser fix, is not skipped by this one.
     """
     keys = parcel_ids or archive.keys(PARCEL_SOURCE)
     spider = VgsiPropertySpider()
     pipeline = PropertyPipeline()
     pipeline.open_spider()
-    replayed = inserted = updated = unchanged = no_body = 0
+    replayed = inserted = updated = unchanged = no_body = skipped_newer = 0
     try:
         for parcel_id in keys:
-            response = _newest_page(archive, parcel_id)
-            if response is None:
+            page = _newest_page(archive, parcel_id)
+            if page is None:
                 no_body += 1
                 continue
+            response, page_time = page
+            stored_at = _stored_updated_at(parcel_id)
+            if stored_at is not None and stored_at > page_time + REPLAY_GRACE:
+                skipped_newer += 1
+                continue
+            pipeline.clock = lambda stamp=page_time: stamp
             before = _stored_parcel(parcel_id)
             for item in spider.parse_parcel(response):
                 pipeline.process_item(item)
@@ -96,7 +112,9 @@ def replay_parcels(
                 unchanged += 1
     finally:
         pipeline.close_spider()
-    counts = ReplayCounts(replayed, inserted, updated, unchanged, no_body)
+    counts = ReplayCounts(
+        replayed, inserted, updated, unchanged, no_body, skipped_newer
+    )
     logfire.info(
         "parcels replayed",
         replayed=counts.replayed,
@@ -104,16 +122,31 @@ def replay_parcels(
         updated=counts.updated,
         unchanged=counts.unchanged,
         no_body=counts.no_body,
+        skipped_newer=counts.skipped_newer,
     )
     return counts
 
 
-def _newest_page(archive: RawArchive, parcel_id: str) -> HtmlResponse | None:
+def _newest_page(
+    archive: RawArchive, parcel_id: str
+) -> tuple[HtmlResponse, datetime] | None:
+    """The newest archived page, and when the archive last saw it (naive UTC)."""
     version = archive.newest(PARCEL_SOURCE, parcel_id)
     body = stored_body(version) if version is not None else None
     if version is None or body is None:
         return None
-    return HtmlResponse(url=version["url"], body=body, encoding="utf-8")
+    seen_at = version.get("last_seen_at") or version["first_fetched_at"]
+    if seen_at.tzinfo is not None:
+        seen_at = seen_at.astimezone(UTC).replace(tzinfo=None)
+    response = HtmlResponse(url=version["url"], body=body, encoding="utf-8")
+    return response, seen_at
+
+
+def _stored_updated_at(parcel_id: str) -> datetime | None:
+    with SessionLocal() as session:
+        return session.scalar(
+            select(Property.updated_at).where(Property.parcel_id == parcel_id)
+        )
 
 
 def _stored_parcel(parcel_id: str) -> tuple[Any, ...] | None:
@@ -154,16 +187,13 @@ class CheckReport:
     sources: list[SourceSize]
     storage_bytes: int
     pdfs_with_body: int
-    # URL records whose PDF exists only as its extracted text, for example ones the
-    # city has since removed.
-    pdfs_text_only: list[str]
-    pdfs_with_neither: list[str]
+    pdfs_without_body: list[str]
     parcels_without_version: list[str]
 
     @property
-    def gate_holds(self) -> bool:
-        """Every finished log PDF has its body or its text in the archive."""
-        return not self.pdfs_with_neither
+    def every_pdf_has_a_body(self) -> bool:
+        """Every finished log PDF has its original in the archive."""
+        return not self.pdfs_without_body
 
 
 def check(collection: RawCollection, session: Session) -> CheckReport:
@@ -186,7 +216,6 @@ def check(collection: RawCollection, session: Session) -> CheckReport:
     bodies = set(
         collection.distinct("source_key", {"source": PDF_SOURCE, "truncated": False})
     )
-    texts = set(collection.distinct("source_key", {"source": PDF_TEXT_SOURCE}))
     parcels = set(collection.distinct("source_key", {"source": PARCEL_SOURCE}))
 
     finished_pdfs = session.scalars(
@@ -202,10 +231,7 @@ def check(collection: RawCollection, session: Session) -> CheckReport:
         sources=sources,
         storage_bytes=_storage_bytes(collection),
         pdfs_with_body=sum(url in bodies for url in finished_pdfs),
-        pdfs_text_only=[u for u in finished_pdfs if u not in bodies and u in texts],
-        pdfs_with_neither=[
-            u for u in finished_pdfs if u not in bodies and u not in texts
-        ],
+        pdfs_without_body=[u for u in finished_pdfs if u not in bodies],
         parcels_without_version=[p for p in parcel_ids if p not in parcels],
     )
     if report.storage_bytes > SIZE_WARNING_BYTES:
@@ -228,11 +254,9 @@ def report_lines(report: CheckReport) -> list[str]:
     ]
     lines.append(
         f"Log PDFs: {report.pdfs_with_body} with an archived body, "
-        f"{len(report.pdfs_text_only)} text only, "
-        f"{len(report.pdfs_with_neither)} with neither."
+        f"{len(report.pdfs_without_body)} without one."
     )
-    lines += [f"  text only: {url}" for url in report.pdfs_text_only]
-    lines += [f"  neither: {url}" for url in report.pdfs_with_neither]
+    lines += [f"  no body: {url}" for url in report.pdfs_without_body]
     lines.append(
         f"Parcels with no archived version: {len(report.parcels_without_version)}."
     )
@@ -330,7 +354,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         with SessionLocal() as session:
             report = check(collection, session)
         print("\n".join(report_lines(report)))
-        return 0 if report.gate_holds else 1
+        return 0 if report.every_pdf_has_a_body else 1
 
     archive = RawArchive(collection)
 
@@ -339,7 +363,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             f"Replayed {counts.replayed} parcels: {counts.inserted} inserted, "
             f"{counts.updated} updated, {counts.unchanged} unchanged. "
-            f"{counts.no_body} had no usable body."
+            f"{counts.no_body} had no usable body, and "
+            f"{counts.skipped_newer} were newer than their archived page."
         )
         return 0
 

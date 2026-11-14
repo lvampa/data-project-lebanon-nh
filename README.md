@@ -1,6 +1,20 @@
 # Data-Project-Lebanon
 ETL, Infrastructure, Presentation Dashboards for data made public by the city of Lebanon, NH
 
+## Database migrations
+
+Schema changes go through Alembic, and you apply them by hand.
+Nothing runs them for you at startup.
+
+Start Postgres, then run this from the repo root:
+```bash
+docker compose up -d postgres
+uv run alembic -c shared/postgres/alembic.ini upgrade head
+```
+It reads `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT` and `POSTGRES_DB` from your shell, and falls back to `app`, `app`, `localhost`, `5432` and `app`.
+If your `.env` sets other values, load them first with `set -a; . ./.env; set +a`.
+Run it again after you pull a branch that adds a migration.
+
 ## Tests
 
 Run every suite from the repo root with `uv run pytest`.

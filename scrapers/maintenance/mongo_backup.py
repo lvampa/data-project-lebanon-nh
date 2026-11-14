@@ -1,12 +1,13 @@
 """Back up the MongoDB database that holds the raw source archive.
 
-The mongo_backup DAG runs this daily inside the Airflow image:
+Run it by hand inside the Airflow image:
 
     python maintenance/mongo_backup.py
 
-It writes a gzipped mongodump archive to BACKUP_DIR, a bind mount of the host's
-~/backups/data-project/mongo, and keeps the 7 newest. Any failure exits non-zero,
-so the DAG run shows it failed.
+It writes a new gzipped mongodump archive to BACKUP_DIR, a bind mount of the host's
+~/backups/data-project/mongo, every time. Nothing is overwritten or deleted, so clear
+out old ones by hand. It writes to a .partial file and renames it only on success, so a failed or
+interrupted run leaves no file that looks like a backup.
 """
 
 import json
@@ -22,7 +23,6 @@ import logfire
 from mongo.client import MongoDB
 
 BACKUP_DIR = Path("/opt/backups/mongo")
-KEEP = 7
 
 Runner = Callable[[Sequence[str]], int]
 
@@ -78,30 +78,28 @@ def run_mongodump(settings: MongoDB, dest: Path, run: Runner) -> None:
     arguments = [f"--db={settings.default_db}", "--gzip", f"--archive={dest}"]
     returncode = run_tool("mongodump", settings, arguments, run)
     if returncode != 0:
-        dest.unlink(missing_ok=True)
         raise BackupError(f"mongodump exited with status {returncode}")
-
-
-def prune(folder: Path, database: str, keep: int = KEEP) -> list[Path]:
-    """Delete all but the newest `keep` backups of the database, and return them."""
-    backups = sorted(folder.glob(f"{database}-*.archive.gz"))
-    old = backups[:-keep] if len(backups) > keep else []
-    for path in old:
-        path.unlink()
-    return old
 
 
 def back_up(folder: Path, settings: MongoDB, now: datetime, run: Runner) -> Path:
     check_writable(folder)
     dest = folder / backup_name(settings.default_db, now)
-    with logfire.span("back up mongo", database=settings.default_db, dest=str(dest)):
-        run_mongodump(settings, dest, run)
-    removed = prune(folder, settings.default_db)
+    if dest.exists():
+        raise BackupError(f"{dest} already exists; wait a second and run it again.")
+    # A half-written file must never carry a backup name, even if the run is killed.
+    partial = dest.with_name(dest.name + ".partial")
+    try:
+        with logfire.span(
+            "back up mongo", database=settings.default_db, dest=str(dest)
+        ):
+            run_mongodump(settings, partial, run)
+        os.replace(partial, dest)
+    finally:
+        partial.unlink(missing_ok=True)
     logfire.info(
         "mongo backup written",
         dest=str(dest),
         size_bytes=dest.stat().st_size,
-        removed=[path.name for path in removed],
     )
     return dest
 

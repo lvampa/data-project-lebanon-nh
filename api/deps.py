@@ -1,8 +1,7 @@
 from collections.abc import Generator
 from dataclasses import dataclass
 
-from elasticsearch import Elasticsearch
-from fastapi import Query, Request
+from fastapi import Query
 from postgres import SessionLocal
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
@@ -14,10 +13,6 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-
-
-def get_es(request: Request) -> Elasticsearch:
-    return request.app.state.es
 
 
 @dataclass(frozen=True)

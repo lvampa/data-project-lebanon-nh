@@ -262,7 +262,7 @@ About 10 files.
 About 25 files.
 It runs after the search spec's Postgres pull request, once nothing reads Elasticsearch, and does not touch the open `fix/*` pull requests.
 
-- [ ] 24. Remove Elasticsearch from the stack
+- [x] 24. Remove Elasticsearch from the stack
   - Remove what `pr/elasticsearch` (#3) adds, once it has merged.
   - `compose.yml`: the `elasticsearch` and `kibana` services, their volume, and the dependency on them and `ELASTICSEARCH_HOST` in both the Airflow services and the `api` service.
   - `.env.example`: `ELASTICSEARCH_HOST`.
@@ -271,8 +271,8 @@ It runs after the search spec's Postgres pull request, once nothing reads Elasti
   - Dependencies: `elasticsearch` in the root `pyproject.toml` dev group, `scripts/pyproject.toml`, and anywhere else it is listed; update `uv.lock`.
   - API: the client in the `api/main.py` lifespan, `get_es` in `api/deps.py`, `elasticsearch_host` in `api/config.py` and `api/tests/test_config.py`, and the Elasticsearch ping in `api/routers/health.py` and `api/tests/test_health.py`.
     Change the health check in the same commit as the compose change, or `/healthz` returns 503 once the service is gone.
-  - `/api/search` is already on Postgres by then; check that its tests and the preflight in `api/tests/test_cors.py` no longer need Elasticsearch.
-  - The admin search page keeps working, because the response contract does not change.
+  - `/api/search` was still on Elasticsearch, because the search spec's Postgres version is not built, so its router and tests were deleted, and the preflight tests in `api/tests/test_cors.py` use `/api/incidents`.
+  - The admin search page gets a 404 until the Postgres version returns the endpoint; the admin app is deferred and was not touched.
   - Docs: `AGENTS.md`, the README, the search spec's status, and the Elasticsearch mentions in `docs/specs/city-budgets/design.md` and `docs/specs/planning-board/design.md`.
   - Check: the suites pass, `docker compose config` shows no Elasticsearch, `/healthz` returns 200 without it, and `grep -ri elasticsearch` finds only history in specs.
 

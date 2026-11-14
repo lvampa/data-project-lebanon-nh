@@ -185,25 +185,6 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
         refer_to = _references(block)
         reference_number = refer_to[0]["number"] if refer_to else None
 
-        dm = _dispatch_times(block, officer_code)
-        dispatched_at = enroute_at = arrived_at = cleared_at = None
-        response_seconds = scene_seconds = None
-        if dm:
-            dispatched_at = _parse_ts(dm.group("disp"), log_date)
-            enroute_at = _advance(_parse_ts(dm.group("enrt"), log_date), dispatched_at)
-            arrived_at = _advance(
-                _parse_ts(dm.group("arvd"), log_date),
-                enroute_at or dispatched_at,
-            )
-            cleared_at = _advance(
-                _parse_ts(dm.group("clrd"), log_date),
-                arrived_at or enroute_at or dispatched_at,
-            )
-            if dispatched_at and arrived_at:
-                response_seconds = int((arrived_at - dispatched_at).total_seconds())
-            if arrived_at and cleared_at:
-                scene_seconds = int((cleared_at - arrived_at).total_seconds())
-
         try:
             hour, minute = int(time_str[:2]), int(time_str[2:])
             reported_at = datetime(
@@ -213,6 +194,29 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
         except ValueError:
             reported_at = None
             parse_error = True
+
+        dm = _dispatch_times(block, officer_code)
+        dispatched_at = enroute_at = arrived_at = cleared_at = None
+        response_seconds = scene_seconds = None
+        if dm:
+            # A time with no date that is earlier than the one before it ran past
+            # midnight. The first time is checked against when the call came in.
+            dispatched_at = _advance(_parse_ts(dm.group("disp"), log_date), reported_at)
+            enroute_at = _advance(
+                _parse_ts(dm.group("enrt"), log_date), dispatched_at or reported_at
+            )
+            arrived_at = _advance(
+                _parse_ts(dm.group("arvd"), log_date),
+                enroute_at or dispatched_at or reported_at,
+            )
+            cleared_at = _advance(
+                _parse_ts(dm.group("clrd"), log_date),
+                arrived_at or enroute_at or dispatched_at or reported_at,
+            )
+            if dispatched_at and arrived_at:
+                response_seconds = int((arrived_at - dispatched_at).total_seconds())
+            if arrived_at and cleared_at:
+                scene_seconds = int((cleared_at - arrived_at).total_seconds())
 
         entries.append(
             {

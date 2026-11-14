@@ -351,6 +351,47 @@ def test_every_time_on_a_line_may_carry_its_own_date():
     assert entry["cleared_at"] == datetime(2026, 11, 12, 0, 20, 0)
 
 
+def test_an_undated_dispatch_after_midnight_lands_on_the_next_day():
+    # Reported at 23:14, dispatched at 00:49: the line carries no date.
+    entry = parse_one(
+        "26-20015        2314 Phone - Suspicious Person Advised\n"
+        "        Primary Id:    XH - Officer H. Example\n"
+        "                ID:    XH -   \n"
+        "                       Disp-00:49:00  Enrt-00:50:00  Arvd-00:55:00  "
+        "Clrd-01:10:00\n"
+    )
+
+    assert entry["dispatched_at"] == datetime(2026, 5, 12, 0, 49, 0)
+    assert entry["enroute_at"] == datetime(2026, 5, 12, 0, 50, 0)
+    assert entry["arrived_at"] == datetime(2026, 5, 12, 0, 55, 0)
+    assert entry["cleared_at"] == datetime(2026, 5, 12, 1, 10, 0)
+    assert entry["response_seconds"] == 360
+    assert entry["scene_seconds"] == 900
+
+
+def test_an_undated_arrival_after_midnight_with_no_dispatch_lands_on_the_next_day():
+    entry = parse_one(
+        "26-20016        2358 Initiated - Directed Patrol Log Information\n"
+        "                ID:    XA -   \n"
+        "                       Arvd-00:02:00  Clrd-00:10:00\n"
+    )
+
+    assert entry["arrived_at"] == datetime(2026, 5, 12, 0, 2, 0)
+    assert entry["cleared_at"] == datetime(2026, 5, 12, 0, 10, 0)
+
+
+def test_a_same_day_dispatch_line_keeps_the_log_date():
+    entry = parse_one(
+        "26-20017        1015 Phone - Suspicious Person Advised\n"
+        "                ID:    XA -   \n"
+        "                       Disp-10:16:00  Enrt-10:17:00  Arvd-10:20:00  "
+        "Clrd-10:30:00\n"
+    )
+
+    assert entry["dispatched_at"] == datetime(2026, 5, 11, 10, 16, 0)
+    assert entry["cleared_at"] == datetime(2026, 5, 11, 10, 30, 0)
+
+
 def test_a_dispatch_with_no_arrival_and_a_clear_after_midnight(nov_1):
     entry = nov_1["26-31459"]
 

@@ -395,14 +395,21 @@ def test_coordinates_set_by_hand_may_be_outside_the_city(dbt):
                 "Main St Apt 3 B",
             )
         ],
-        pytest.param(
-            "public_incidents",
-            "select case_number, 'Smith residence, 12 Main St'::text as location,"
-            " 'place'::text as location_kind"
-            " from marts.incidents where case_number = '26-1001'",
-            "assert_public_non_address_has_no_house_number",
-            id="house-number-in-a-place",
-        ),
+        *[
+            pytest.param(
+                "public_incidents",
+                f"select case_number, '{leak}'::text as location,"
+                " 'place'::text as location_kind"
+                " from marts.incidents where case_number = '26-1001'",
+                "assert_public_non_address_has_no_house_number",
+                id=f"house-number-in-a-place-{leak}",
+            )
+            for leak in (
+                "Smith residence, 12 Main St",
+                "Smith residence at 12 Main St",
+                "Smith Residence 12 Main St",
+            )
+        ],
         pytest.param(
             "public_properties",
             "select parcel_id, owner, owner_address from public.properties",
@@ -428,6 +435,27 @@ def test_a_leaky_model_fails_its_check(dbt, view, leaky_select, check):
     assert result.returncode != 0
     assert result.status(check)[0] == "fail", result.output
     assert result.status(check)[1] >= 1
+
+
+@pytest.mark.parametrize(
+    "place",
+    ["Route 120", "I-89 Exit 18", "mile marker 18", "Route 4 Market Basket"],
+)
+def test_numbered_roads_and_markers_are_not_house_numbers(dbt, place):
+    dbt.seed_rows(good_rows())
+    assert dbt.run("run").returncode == 0
+    dbt.replace_view(
+        "public_incidents",
+        f"select case_number, '{place}'::text as location,"
+        " 'place'::text as location_kind"
+        " from marts.incidents where case_number = '26-1001'",
+    )
+
+    result = dbt.run(
+        "test", "--select", "assert_public_non_address_has_no_house_number"
+    )
+
+    assert result.status("assert_public_non_address_has_no_house_number") == ("pass", 0)
 
 
 def test_the_public_set_holds_no_held_back_values(dbt):

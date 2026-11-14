@@ -51,6 +51,9 @@ allow-star-arg-any = true
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+# Ruff 0.17 formats Python code blocks in Markdown. The spec docs show signatures with
+# aligned trailing comments, which it would reflow, so leave Markdown alone.
+exclude = ["*.md"]
 
 [tool.pyrefly]
 # Strict everywhere, except the files listed under "Not yet strict" below.

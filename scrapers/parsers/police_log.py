@@ -2,41 +2,16 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
+import pypdf
+
+from .dispositions import split_reason_action
+
 # Bump when parsing behavior changes, then reprocess so stored entries pick it up.
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 
-# Longest first so alternation matches the most specific disposition
-_KNOWN_DISPOSITIONS = [
-    "Incident Report Taken",
-    "Broadcast Log Information",
-    "Criminal Summons Issued",
-    "Referred to Other Agency",
-    "Traffic Citation Issued",
-    "Gone on Arrival",
-    "Arrest(s) Made",
-    "Log Information",
-    "Warning Issued",
-    "Report Taken",
-    "Assisted Party",
-    "Services Rendered",
-    "Unable to Locate",
-    "Protective Custody",
-    "No Action Required",
-    "Transport/Escort",
-    "Field Interview",
-    "Verbal Warning",
-    "Vehicle Towed",
-    "False Alarm",
-    "Unfounded",
-    "No Report",
-    "Advised",
-    "Warning",
-]
-
-_DISPOSITION_RE = re.compile(
-    r"\s+(" + "|".join(re.escape(d) for d in _KNOWN_DISPOSITIONS) + r")\s*$",
-    re.IGNORECASE,
-)
+# The text extractor's version. A pypdf upgrade can change the extracted text, so it
+# counts as a parser change: bump PARSER_VERSION with it, then reprocess.
+EXTRACTOR_VERSION = pypdf.__version__
 
 # "For Date: 05/01/2026  -  Friday"
 _DATE_RE = re.compile(r"For Date:\s*(\d{2}/\d{2}/\d{4})")
@@ -47,18 +22,30 @@ _ENTRY_RE = re.compile(
     re.MULTILINE,
 )
 
+# "Call Source:    Telephone"
+_CALL_SOURCE_RE = re.compile(r"Call Source:\s*(.+?)\s*$", re.MULTILINE)
+
 # "Primary Id:    SMN - Officer Stephan Nix"
 _OFFICER_RE = re.compile(
-    r"Primary Id:\s*\S+\s+-\s+(?:Officer\s+)?(.+?)\s*$", re.MULTILINE
+    r"Primary Id:\s*(?P<code>\S+)\s+-\s+(?:Officer\s+)?(?P<name>.+?)\s*$",
+    re.MULTILINE,
 )
 
-# "Location/Address:    [L TWD4] TIMBERWOOD COMMONS - TIMBERWOOD DR"
-_LOCATION_RE = re.compile(
-    r"Location/Address:\s*(?:\[[^\]]*\]\s*)?(.+?)\s*$", re.MULTILINE
+# "Location/Address:    [L TWD4] TIMBERWOOD COMMONS - TIMBERWOOD DR"; the bracket is
+# the place code. A few entries print "Vicinity of:" instead.
+_LOCATION_RES = (
+    re.compile(
+        r"Location/Address:\s*(?:\[(?P<place_code>[^\]]*)\]\s*)?(?P<location>.+?)\s*$",
+        re.MULTILINE,
+    ),
+    re.compile(
+        r"Vicinity of:\s*(?:\[(?P<place_code>[^\]]*)\]\s*)?(?P<location>.+?)\s*$",
+        re.MULTILINE,
+    ),
 )
 
-# "Refer To Incident:      26L-426-OF" or "Refer To Arrest:      26L-346-AR"
-_REFERENCE_RE = re.compile(r"Refer To (?:Incident|Arrest):\s*(\S+)", re.MULTILINE)
+# "Refer To Incident:      26L-426-OF", and the same for Arrest, Citation, Accident
+_REFERENCE_RE = re.compile(r"Refer To (?P<kind>[A-Za-z]+):\s*(?P<number>\S+)")
 
 _DISPATCH_RE = re.compile(
     r"Disp-(?P<disp>\d{2}:\d{2}:\d{2})"
@@ -110,6 +97,21 @@ def count_header_lines(text: str) -> int:
     return len(_HEADER_LINE_RE.findall(_strip_page_headers(text)))
 
 
+def _location(block: str) -> tuple[str | None, str | None]:
+    """The location and its place code. A Location/Address line wins over Vicinity."""
+    for pattern in _LOCATION_RES:
+        match = pattern.search(block)
+        if match:
+            place_code = (match.group("place_code") or "").strip() or None
+            return match.group("location").strip(), place_code
+    return None, None
+
+
+def _references(block: str) -> list[dict[str, str]] | None:
+    found = [m.groupdict() for m in _REFERENCE_RE.finditer(block)]
+    return found or None
+
+
 def parse_log_entries(text: str) -> list[dict[str, Any]]:
     log_date = parse_log_date(text)
     if log_date is None:
@@ -124,7 +126,7 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
     for i, m in enumerate(entry_matches):
         case_number = m.group("case_number")
         time_str = m.group("time")
-        call_source = m.group("call_source")
+        header_call_source = m.group("call_source")
         reason_action = m.group("reason_action")
 
         block_end = (
@@ -133,22 +135,21 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
         block = clean[m.end() : block_end]
         raw_text = clean[m.start() : block_end].strip()
 
-        disp_match = _DISPOSITION_RE.search(reason_action)
-        if disp_match:
-            disposition = disp_match.group(1)
-            incident_type = reason_action[: disp_match.start()].strip()
-        else:
-            incident_type = reason_action
-            disposition = None
+        incident_type, disposition = split_reason_action(reason_action)
+
+        call_source_match = _CALL_SOURCE_RE.search(block)
+        call_source = (
+            call_source_match.group(1) if call_source_match else header_call_source
+        )
 
         officer_match = _OFFICER_RE.search(block)
-        officer = officer_match.group(1).strip() if officer_match else None
+        officer = officer_match.group("name").strip() if officer_match else None
+        officer_code = officer_match.group("code") if officer_match else None
 
-        location_match = _LOCATION_RE.search(block)
-        location = location_match.group(1).strip() if location_match else None
+        location, place_code = _location(block)
 
-        reference_match = _REFERENCE_RE.search(block)
-        reference_number = reference_match.group(1).strip() if reference_match else None
+        refer_to = _references(block)
+        reference_number = refer_to[0]["number"] if refer_to else None
 
         dm = _DISPATCH_RE.search(block)
         dispatched_at = enroute_at = arrived_at = cleared_at = None
@@ -186,10 +187,14 @@ def parse_log_entries(text: str) -> list[dict[str, Any]]:
                 "call_source": call_source,
                 "incident_type": incident_type,
                 "disposition": disposition,
+                "disposition_unmatched": disposition is None,
                 "raw_reason_action": reason_action,
                 "location": location,
+                "place_code": place_code,
                 "officer": officer,
+                "officer_code": officer_code,
                 "reference_number": reference_number,
+                "refer_to": refer_to,
                 "raw_text": raw_text,
                 "parse_error": parse_error,
                 "dispatched_at": dispatched_at,

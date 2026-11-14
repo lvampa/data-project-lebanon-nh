@@ -1,3 +1,4 @@
+import asyncio
 import gzip
 import socket
 from datetime import UTC, datetime
@@ -162,7 +163,10 @@ def test_a_gzip_encoded_response_is_archived_decompressed(raw_sources):
         body=gzip.compress(PDF), headers={"Content-Encoding": "gzip"}
     )
 
-    decoded = HttpCompressionMiddleware().process_response(request_of(encoded), encoded)
+    # Scrapy 2.20 made this middleware's process_response a coroutine.
+    decoded = asyncio.run(
+        HttpCompressionMiddleware().process_response(request_of(encoded), encoded)
+    )
     assert isinstance(decoded, Response)
     middleware.process_response(request_of(encoded), decoded)
 

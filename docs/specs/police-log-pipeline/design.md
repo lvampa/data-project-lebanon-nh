@@ -193,8 +193,11 @@ It never sees a database connection, a file, or a tool.
   It runs with every tool turned off, from a fresh empty temporary working directory that is deleted afterwards, and under a timeout (8.1, 9.8).
   It does not load the project's or the user's settings, hooks, or MCP servers.
   Only the prompt and schema go in, and only stdout comes back.
-- The exact CLI flags for structured output, turning tools off, the model, and skipping settings and MCP servers are confirmed in task 13 against `claude --help` and one real call.
-  This design doesn't name them.
+- The CLI flags, confirmed against `claude --help` (Claude Code 2.1.325) on 2026-11-13:
+  `-p`, `--output-format json`, `--json-schema <schema>`, `--model <model>`, `--tools ""` (no tools), `--setting-sources ""` (no user, project, or local settings, so no hooks from them), `--strict-mcp-config` (no MCP servers, since none are passed), `--no-session-persistence`, and `--disable-slash-commands`.
+  The prompt goes in on stdin, not on the command line.
+  `--bare` is not used: it ignores the subscription login and takes only an API key (9.2).
+  Managed settings still apply, because no flag turns them off.
 - The default model is the small Claude model, Haiku.
   It exits with an error if `ANTHROPIC_API_KEY` is set (9.2).
   The command name comes from `CLAUDE_BIN`, so tests point it at a fake executable.
@@ -204,8 +207,11 @@ It never sees a database connection, a file, or a tool.
 - `check_ready` checks that the binary or server is there.
   It makes no model call; a logged-out first call already stops the run (8.9).
 - Configuration: `NORMALIZE_AI_BACKEND`, `NORMALIZE_AI_MODEL`, `NORMALIZE_BATCH_SIZE`.
-- Open detail: telling a login or usage-limit failure from an ordinary one depends on what the CLI prints.
-  The task captures real output; until then the rule is a best guess and the PR says so.
+- Confirmed by a real run: with no login, the CLI exits 1 and prints a JSON result on stdout with `"is_error": true`, `"terminal_reason": "api_error"`, and `"result": "Not logged in · Please run /login"`.
+- Not confirmed, because the sandbox the backend was written in could not reach the API: the envelope of a successful structured answer, and the wording of a usage-limit message.
+  The backend reads the answer from `structured_output`, else from `result` as JSON text.
+  It treats a result containing "not logged in", "please run /login", "usage limit", or "limit reached" as a login or limit failure that stops the run.
+  Run one real `claude -p` call with these flags, then correct both rules here and in `scripts/normalize/backends.py`.
 
 ### Normalization job
 

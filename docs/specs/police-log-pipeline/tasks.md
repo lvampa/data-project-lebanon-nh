@@ -2,7 +2,7 @@
 
 **Status:** In progress
 **Created:** 2026-11-06
-**Updated:** 2026-11-07
+**Updated:** 2026-11-13
 
 The work stacks on the `fix/*` pull requests: PR 1 branches from the last of them, `pr/url-queue`, and each later one from the one before.
 It ships as nine pull requests of 10 to 40 files each, with archive PR 1a before PR 2, and archive PRs 1b and 1c before PR 2b, because PR 2 stops storing PDF text in Postgres.
@@ -20,11 +20,11 @@ File counts are estimates and include tests.
 | 2b | Move the raw text columns to the archive: legacy copy, guarded drop | about 18 |
 | 3 | Parser fixes, reprocess from the archive, operator commands | about 22 |
 | 4 | Normalization records, locations package, correction API | about 34 |
-| 5 | AI normalization job and geocode job | about 24 |
+| 5 | Rule pass, AI normalization job, and geocode job | about 28 |
 | 6 | Evaluation set and the Ollama backend | about 12 |
 | 7 | dbt consumer models and data checks | about 22 |
 | 8 | API, admin search, and export read the models | about 14 |
-| 9 | Daily schedule and the Airflow image | about 10 |
+| 9 | Daily schedule (no normalize task) | about 8 |
 | Search | `/api/search` on Postgres, in the search spec | about 12 |
 | Follow-up | Remove Elasticsearch | about 25 |
 
@@ -140,15 +140,18 @@ If it passes 40, the `shared/locations` package (task 11) ships first as its own
 No AI yet.
 
 - [ ] 10. Add provenance to the lookup tables
-  - One mixin with `source`, `ai_call_id`, `needs_review`, and `failed_attempts`; `normalized_type` in place of `subcategory`; the location columns in design.md, with no stored public location; the widened `geocoded_via` check.
+  - One mixin with `source` (checked against `rule`, `ai`, `human`), `prompt_version`, `ai_call_id`, `needs_review`, and `failed_attempts`; `normalized_type` in place of `subcategory`; the location columns in design.md, with no stored public location; the widened `geocoded_via` check.
   - One Alembic migration, covered by the up and down test.
   - Delete the three old categorizer scripts and their tests, which stop working when `subcategory` goes.
   - _Requirements: 6.1, 6.9, 7.1, 7.2, 7.10_
 
 - [ ] 11. Add the `shared/locations` package
   - Move `geocode_nominatim` out of `api/`, with the city-bounds check, the 1 per second limiter, and exact or approximate results.
+  - Add `canonical.py` with `RULES_VERSION`, `canonical_address`, `split_house_number`, and `strip_unit`, and `street_suffixes.csv`.
+    These are pure functions, with tests over at least 20 spelling pairs that must match and 5 that must not.
+    They can be built off 2b, before task 10.
   - Add the package to both Dockerfiles.
-  - _Requirements: 6.4, 6.7, 6.9_
+  - _Requirements: 6.4, 6.7, 6.9, 6.14, 6.19_
 
 - [ ] 12. Extend the categories and addresses services and routes
   - Paged lists with source, review mark, and has-normalization filters, and entry counts.
@@ -159,32 +162,55 @@ No AI yet.
 
 ## PR 5: AI normalization job and geocode job
 
-About 24 files.
+About 28 files.
+The job is a workflow, not an agent: see design.md, "A workflow, not an agent".
+Tasks 13, 14 and 14b are pure code with no new columns, so they can be built off 2b in parallel with PRs 3 and 4, and rebased onto PR 4 before this pull request opens.
+Task 15 needs PR 4's columns, and task 16 needs PR 4's `shared/locations` package.
 
 - [ ] 13. Add the AI backend interface
   - `AiBackend`, `FakeBackend`, and `ClaudeCliBackend` with structured output, the configured model, the timeout, and the API key check.
-  - Contract tests: valid, empty, malformed, timeout, login failure.
-  - Confirm the CLI flags against `claude --help`, and capture real output for the login and usage-limit cases.
-  - _Requirements: 8.1, 8.2, 8.9, 9.1, 9.2, 9.3, 9.4, 9.7, 13.5_
+  - `ClaudeCliBackend` runs one `claude -p` subprocess per batch with every tool off, from a new empty temporary directory that is removed afterwards, without project or user settings, hooks, or MCP servers.
+  - Confirm every flag against `claude --help` and one real call, and write the confirmed flags into design.md. Capture real output for the login and usage-limit cases.
+  - Contract tests: valid, empty, malformed, timeout, login failure, and, with a fake executable, the empty working directory and the confirmed flags on every call.
+  - _Requirements: 8.1, 8.2, 8.9, 9.1, 9.2, 9.3, 9.4, 9.7, 9.8, 9.9, 13.5_
 
 - [ ] 14. Add the prompts, answer models, and checks
-  - Prompts and versions for both fields, as in design.md.
-  - Pydantic answer models reusing `IncidentCategory`; `checks.py` for not sent, sent twice, missing, abbreviations, and name reuse.
+  - Prompts and versions for both fields, as in design.md. The location prompt takes the street list as an input and builds the effective prompt version from its hash.
+  - Pydantic answer models reusing `IncidentCategory`; `checks.py` for not sent, sent twice, missing, abbreviations, name reuse, and a street not on the list (review mark).
   - The dispatch abbreviation list.
-  - _Requirements: 5.2, 5.5, 5.6, 5.7, 8.3, 8.4, 8.5_
+  - Measure the street list's real size and its token cost in one location prompt, and record both in design.md.
+  - _Requirements: 5.2, 5.5, 5.6, 5.7, 6.21, 6.22, 6.24, 8.3, 8.4, 8.5_
+
+- [ ] 14b. Add the rule pass and the street list
+  - `streets.py`: the street list from `properties.location`, using `shared/locations` canonical rules, and its version hash.
+  - `rules.py`: pure functions that take canonical locations, the street set, and a place-code map, and return rule normalizations and leftovers. That covers a house number on a listed street, two listed streets, and known place codes.
+  - Tests over the rule cases, and over a bare street name and an unknown place left over.
+  - This needs task 11's `canonical.py`; build that first if it isn't merged.
+  - _Requirements: 6.14, 6.15, 6.16, 6.17, 6.18, 6.19, 6.20_
 
 - [ ] 15. Add the normalization job
-  - Waiting values, case and spacing groups, batches of 50, 5 calls per field with spillover, per-value failed attempts, the review mark at 3.
+  - Waiting values, case and spacing groups for incident types, canonical groups for locations, the rule pass before any location call, batches of 50, 5 calls per field with spillover, per-value failed attempts, the review mark at 3.
+  - No location AI calls when the street list is empty, with an error logged.
+  - Rows store `source` and `prompt_version`. `--redo` skips rows already on the current prompt version.
+  - Tests with `FakeBackend`: a rule-settled location never reaches the backend, a value with a stored normalization is never sent again, and a second `--redo` sends nothing.
   - Writes never touch `human` rows; `--redo` keeps the old value until a valid new one arrives; every call, failed or not, goes to `ai_calls` in MongoDB, best-effort.
   - The per-field summary log and the exit code.
-  - Tests with `FakeBackend` for every AI row in design.md's error table.
+  - It runs on Connor's Mac as `uv run python -m scripts.normalize.job` from the repo root; confirm the module path.
+  - Move `police_log_lock` from `scrapers/ingest/lock.py` to `shared/postgres` with the same key, and take it for the run. A held lock exits with status 1.
+  - Tests with `FakeBackend` for every AI row in design.md's error table, plus a held lock.
   - Each accepted item stores its call's `ai_call_id`; a test with MongoDB unreachable stores the normalizations and counts the lost call records.
-  - _Requirements: 1.2, 5.1, 5.3, 5.4, 6.1, 7.2, 7.9, 7.11, 7.13, 8.6, 8.7, 8.8, 8.10, 8.11, 8.13, 8.14, 9.5, 9.6_
+  - _Requirements: 1.2, 5.1, 5.3, 5.4, 6.1, 6.13, 6.18, 6.23, 6.24, 7.2, 7.9, 7.11, 7.13, 7.14, 8.6, 8.7, 8.8, 8.10, 8.11, 8.13, 8.14, 9.5, 9.6, 9.9, 16.1 to 16.4_
 
 - [ ] 16. Add the geocode job
   - Place-code reuse, query then street fallback, the bounds check, 3 attempts, 600 requests per run, no bare highways, no `human` rows.
+  - It takes `ai` and `rule` rows, and the police log lock.
   - Tests with a fake geocoder.
-  - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6, 6.8, 6.10_
+  - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6, 6.8, 6.10, 16.3_
+
+- [ ] 16b. Document the Mac run
+  - Add the command to the README's running section: `docker compose up -d postgres mongo`, `uv sync`, then the command.
+  - QA: Connor runs one real batch of 10 himself, since it uses his login.
+  - _Requirements: 16.1_
 
 ## PR 6: Evaluation set and the Ollama backend
 
@@ -241,21 +267,24 @@ About 14 files.
   - The export keeps running from `deploy.sh` at deploy time; its files are not committed.
   - _Requirements: 11.3 to 11.12, 12.9_
 
-## PR 9: Daily schedule and the Airflow image
+## PR 9: Daily schedule
 
 About 10 files.
 
 - [ ] 22. Add the daily `police_log` DAG
-  - A plain DAG file next to `dags/specs.py`: discover, process with a limit of 100, normalize, geocode, then dbt build, with the failure rules in design.md and a final watcher task.
+  - A plain DAG file next to `dags/specs.py`: discover, process with a limit of 100, geocode, then dbt build, with the failure rules in design.md and a final watcher task.
+    There is no normalize task: Connor runs normalization on his Mac (requirement 16).
+  - Process and geocode use `all_done`, so a failure in either still runs the stages after it.
+  - Process, reprocess and geocode take the police log lock, and fail fast with a clear message when it's held.
   - A 60 minute timeout per task and a pool of size 1 shared with reprocess.
   - Remove the `discover_urls` and `process_urls` specs.
-  - Structure tests.
-  - _Requirements: 12.1 to 12.7_
+  - Structure tests, including one that the DAG has no normalize task.
+  - _Requirements: 12.1 to 12.7, 16.3, 16.5_
 
-- [ ] 23. Make the AI call run in the Airflow image
-  - Install the `claude` CLI and pass the token from `.env`; add a blank entry to `.env.example`.
-  - Checked by hand when Connor builds the image: one real AI call from inside the container.
-  - _Requirements: 9.1, 9.7, 12.2_
+- [ ] 23. Deferred: make the AI call run in the Airflow image
+  - Not built. Connor chose to run the normalization job on his Mac with his own login (design.md, "The AI normalizing runs by hand on Connor's Mac").
+  - The `airflow-claude-cli` branch exists, unbuilt, if this is revisited.
+  - Do not add a Claude token to `.env` or `.env.example`.
 
 ## Follow-up: Remove Elasticsearch
 
@@ -281,5 +310,5 @@ It runs after the search spec's Postgres pull request, once nothing reads Elasti
 - [ ] 25. Test each pull request before it is pushed
   - Run the suites.
   - Do a real run of what the pull request adds against `app_test`, never `app`.
-  - For PR 5, one real AI batch of 10 values; for PR 6, one evaluation run.
+  - For PR 5, one real AI batch of 10 values, run by Connor on his Mac; for PR 6, one evaluation run.
   - Report pass or fail for each criterion the pull request cites, and for the already-met criteria once in PR 1.

@@ -1,11 +1,12 @@
 from collections.abc import Generator
 from dataclasses import dataclass
 
-from elasticsearch import Elasticsearch
-from fastapi import Query, Request
+from fastapi import Query
 from postgres import SessionLocal
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
+
+from api.schemas import Source
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -16,10 +17,6 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def get_es(request: Request) -> Elasticsearch:
-    return request.app.state.es
-
-
 @dataclass(frozen=True)
 class Paging:
     page: int
@@ -27,6 +24,23 @@ class Paging:
 
     def apply(self, stmt: Select) -> Select:
         return stmt.offset((self.page - 1) * self.per_page).limit(self.per_page)
+
+
+@dataclass(frozen=True)
+class NormalizationFilter:
+    """The filters of the admin lists: who set the value, review mark, and existence."""
+
+    source: Source | None
+    needs_review: bool | None
+    normalized: bool | None
+
+
+def get_normalization_filter(
+    source: Source | None = None,
+    needs_review: bool | None = None,
+    normalized: bool | None = None,
+) -> NormalizationFilter:
+    return NormalizationFilter(source, needs_review, normalized)
 
 
 def get_paging(

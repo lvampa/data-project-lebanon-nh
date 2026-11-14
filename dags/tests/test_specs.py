@@ -28,17 +28,6 @@ def is_valid_cron(expression: str) -> bool:
     return True
 
 
-def downstream_of(dag_id: str) -> set[str]:
-    reached: set[str] = set()
-    pending = list(SPECS_BY_ID[dag_id].triggers)
-    while pending:
-        target = pending.pop()
-        if target not in reached:
-            reached.add(target)
-            pending.extend(SPECS_BY_ID[target].triggers)
-    return reached
-
-
 def spider_names() -> set[str]:
     spider_files = (REPO_ROOT / "scrapers" / "spiders").glob("*.py")
     source = "\n".join(path.read_text() for path in spider_files)
@@ -59,6 +48,8 @@ def test_command_target_exists(spec):
     match spec.command.split():
         case ["scrapy", "crawl", spider, *_]:
             assert spider in spider_names()
+        case ["python", "-m", module, *_]:
+            assert (REPO_ROOT / spec.cwd / f"{module.replace('.', '/')}.py").is_file()
         case ["python", script, *_]:
             assert (REPO_ROOT / spec.cwd / script).is_file()
         case _:
@@ -76,21 +67,35 @@ def test_triggered_dags_have_no_schedule():
         assert SPECS_BY_ID[dag_id].schedule is None, dag_id
 
 
-def test_the_mongo_backup_runs_daily():
-    spec = SPECS_BY_ID["mongo_backup"]
-    assert spec.schedule is not None
-    minute, hour, day, month, weekday = spec.schedule.split()
-    assert (day, month, weekday) == ("*", "*", "*")
-
-
 def test_llc_lookup_runs_after_vgsi_property():
     assert "llc_lookup" in SPECS_BY_ID["vgsi_property"].triggers
 
 
-def test_every_indexed_source_leads_to_elasticsearch_sync():
-    # Budget documents are not indexed; budget data reaches Elasticsearch
-    # through scripts/ingest, which no DAG runs. The backup writes no records.
-    not_indexed = {"sync_elasticsearch", "budget_discovery", "mongo_backup"}
-    for spec in SPECS:
-        if spec.dag_id not in not_indexed:
-            assert "sync_elasticsearch" in downstream_of(spec.dag_id), spec.dag_id
+def test_the_police_log_reprocess_is_run_by_hand_and_nothing_triggers_it():
+    spec = SPECS_BY_ID["police_log_reprocess"]
+    assert spec.schedule is None
+    assert all("police_log_reprocess" not in other.triggers for other in SPECS)
+
+
+def test_the_reprocess_dates_must_look_like_dates_or_be_empty():
+    # The values go into a shell command, so Airflow checks their shape first.
+    params = SPECS_BY_ID["police_log_reprocess"].params
+    pattern = re.compile(params["date_from"]["pattern"])
+    assert params["date_to"]["pattern"] == params["date_from"]["pattern"]
+    assert all(pattern.fullmatch(ok) for ok in ["", "2026-05-11"])
+    assert not any(
+        pattern.fullmatch(bad) for bad in ["'; rm -rf ~; '", "05/11/2026", "2026-5-1"]
+    )
+
+
+def test_the_reprocess_dates_are_described_as_a_pair():
+    params = SPECS_BY_ID["police_log_reprocess"].params
+    for name in ("date_from", "date_to"):
+        assert "both" in params[name]["description"].lower()
+
+
+def test_the_police_log_reprocess_takes_a_date_range_or_everything():
+    spec = SPECS_BY_ID["police_log_reprocess"]
+    assert set(spec.params) == {"date_from", "date_to"}
+    assert "--from '{{ params.date_from }}' --to '{{ params.date_to }}'" in spec.command
+    assert "--all" in spec.command

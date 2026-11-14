@@ -1,17 +1,24 @@
 [tool.uv.workspace]
-members = ["scrapers", "scripts", "shared/postgres", "shared/mongo", "api", "transform"]
+members = ["scrapers", "scripts", "shared/postgres", "shared/mongo", "shared/locations", "api", "transform"]
 
 
 [dependency-groups]
 dev = [
     "beautifulsoup4>=4.15.0",
-    "elasticsearch>=8.13,<9",
     "playwright>=1.60.0",
     "playwright-stealth>=2.0.3",
     "pre-commit>=4.0.0",
     "pyrefly==1.4.0",
     "ruff>=0.15.16",
 ]
+
+[tool.pytest.ini_options]
+# pytest stats every entry in the folder it collects from, `.env` included. In the
+# agents' Claude Code sandbox that read is denied, and collection stops with a
+# PermissionError (Python 3.12's Path.is_dir raises on it). Skip these before pytest
+# looks. The leading `/` is needed: pytest makes each glob absolute, and fnmatch's `*`
+# crosses slashes, so it matches a `.env` at any depth.
+addopts = ["--ignore-glob=/*/.env", "--ignore-glob=/*/.env.*"]
 
 [tool.ruff]
 line-length = 88
@@ -92,10 +99,6 @@ errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]
 matches = "scrapers/settings.py"
-errors = { implicit-any = false, missing-override-decorator = false }
-
-[[tool.pyrefly.sub-config]]
-matches = "scrapers/maintenance/categorize_incident_types.py"
 errors = { implicit-any = false, missing-override-decorator = false }
 
 [[tool.pyrefly.sub-config]]

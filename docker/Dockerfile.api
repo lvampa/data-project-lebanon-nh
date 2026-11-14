@@ -8,6 +8,7 @@ COPY pyproject.toml uv.lock ./
 COPY api/ ./api/
 COPY scrapers/pyproject.toml ./scrapers/
 COPY scripts/pyproject.toml ./scripts/
+COPY shared/locations ./shared/locations/
 COPY shared/mongo ./shared/mongo/
 COPY shared/postgres ./shared/postgres/
 

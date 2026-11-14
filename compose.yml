@@ -20,7 +20,6 @@ x-airflow-common:
     POSTGRES_USER: ${POSTGRES_USER:-app}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?see .env.example}
     POSTGRES_DB: ${POSTGRES_DB:-app}
-    ELASTICSEARCH_HOST: http://elasticsearch:9200
   volumes:
     &airflow-volumes
     - ./dags:/opt/airflow/dags
@@ -28,13 +27,12 @@ x-airflow-common:
     - ./shared:/opt/project/shared
     - ./scripts:/opt/project/scripts
     - airflow_logs:/opt/airflow/logs
-    # The mongo_backup DAG writes here. ${HOME} keeps the path absolute.
+    # The backup scripts write here. ${HOME} keeps the path absolute.
     - ${MONGO_BACKUP_DIR:-${HOME}/backups/data-project/mongo}:/opt/backups/mongo
+    - ${POSTGRES_BACKUP_DIR:-${HOME}/backups/data-project/postgres}:/opt/backups/postgres
   depends_on:
     &airflow-depends
     postgres:
-      condition: service_healthy
-    elasticsearch:
       condition: service_healthy
 
 services:
@@ -51,15 +49,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-app}
-      ELASTICSEARCH_HOST: http://elasticsearch:9200
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?see .env.example}
     depends_on:
       postgres:
         condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
 
   mongo:
     image: mongo:8
@@ -93,34 +86,6 @@ services:
       interval: 10s
       retries: 5
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
-    restart: unless-stopped
-    environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      ES_JAVA_OPTS: -Xms512m -Xmx512m
-    ports:
-      - "127.0.0.1:9200:9200"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
-      interval: 15s
-      retries: 5
-      start_period: 60s
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.13.0
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:5601:5601"
-    environment:
-      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-
   airflow-init:
     <<: *airflow-common
     restart: "no"
@@ -139,31 +104,12 @@ services:
         --firstname Admin --lastname User --role Admin
         --email admin@example.com || true)
 
-  # Applies the Postgres migrations and creates the MongoDB indexes once, so no job
-  # or API request sees an old schema.
-  migrate:
-    <<: *airflow-common
-    restart: "no"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-    entrypoint: /bin/bash
-    command:
-      - -c
-      - >-
-        /opt/project/.venv/bin/alembic -c /opt/project/shared/postgres/alembic.ini upgrade head &&
-        /opt/project/.venv/bin/python -c "from mongo import init_indexes; init_indexes()"
-
   airflow-webserver:
     <<: *airflow-common
     restart: unless-stopped
     depends_on:
       <<: *airflow-depends
       airflow-init:
-        condition: service_completed_successfully
-      migrate:
         condition: service_completed_successfully
     ports:
       - "127.0.0.1:8080:8080"
@@ -176,8 +122,6 @@ services:
       <<: *airflow-depends
       airflow-init:
         condition: service_completed_successfully
-      migrate:
-        condition: service_completed_successfully
     environment:
       <<: *airflow-env
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: "30"
@@ -186,5 +130,4 @@ services:
 volumes:
   mongo_data:
   postgres_data:
-  elasticsearch_data:
   airflow_logs:

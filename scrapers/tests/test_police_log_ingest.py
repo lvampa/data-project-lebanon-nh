@@ -76,6 +76,35 @@ def test_stores_each_entry_with_its_source_and_log_date(db_session):
     assert harassment.created_at == harassment.updated_at
 
 
+CODED = """\
+26-13341        0300 Phone - Motor Vehicle Crash Frobnicated
+       Call Source:    Telephone
+        Primary Id:    SMN - Officer Stephan Nix
+  Location/Address:    [L HANNAF] HANNAFORD - PLAINFIELD RD
+       Refer To Incident:      26L-426-OF
+       Refer To Citation:      26L-77-CT
+"""
+
+
+def test_stores_the_codes_references_and_unmatched_disposition_flag(db_session):
+    url = add_url(db_session)
+
+    ingest_log_text(db_session, url, log_text(CODED))
+
+    stored = entries(db_session)["26-13341"]
+    assert stored.place_code == "L HANNAF"
+    assert stored.location == "HANNAFORD - PLAINFIELD RD"
+    assert stored.officer_code == "SMN"
+    assert stored.refer_to == [
+        {"kind": "Incident", "number": "26L-426-OF"},
+        {"kind": "Citation", "number": "26L-77-CT"},
+    ]
+    assert stored.reference_number == "26L-426-OF"
+    assert stored.incident_type == "Motor Vehicle Crash Frobnicated"
+    assert stored.disposition is None
+    assert stored.disposition_unmatched is True
+
+
 def test_log_date_comes_from_the_text_when_the_url_has_none(db_session):
     url = add_url(db_session, log_date=None)
 
@@ -112,30 +141,6 @@ def test_changed_text_updates_the_entry_and_moves_updated_at(db_session):
     assert entry.location == "HANOVER ST"
     assert entry.created_at == created_at
     assert entry.updated_at > created_at
-
-
-def test_entry_stored_before_these_columns_existed_is_updated(db_session):
-    url = add_url(db_session)
-    old = datetime(2026, 6, 7, 17, 48)
-    db_session.add(
-        LogEntry(
-            case_number="26-13339",
-            source_url=url.canonical_url,
-            log_date=date(2026, 5, 11),
-            incident_type="Telephone Harassment Incident Report Taken",
-            created_at=old,
-            updated_at=old,
-        )
-    )
-    db_session.commit()
-
-    counts = ingest_log_text(db_session, url, log_text(HARASSMENT))
-
-    assert counts.updated == 1
-    entry = entries(db_session)["26-13339"]
-    assert entry.incident_type == "Telephone Harassment"
-    assert entry.parser_version == PARSER_VERSION
-    assert entry.created_at == old
 
 
 def test_later_log_date_wins_when_the_older_pdf_is_ingested_second(

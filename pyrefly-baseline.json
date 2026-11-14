@@ -2,27 +2,6 @@
   "min_severity": "error",
   "errors": [
     {
-      "column": 26,
-      "path": "api/routers/search.py",
-      "name": "bad-assignment",
-      "concise_description": "`dict[str, dict[str, list[str] | str]]` is not assignable to dict value type `str`",
-      "severity": "error"
-    },
-    {
-      "column": 28,
-      "path": "api/routers/search.py",
-      "name": "bad-assignment",
-      "concise_description": "`dict[str, list[str]]` is not assignable to dict value type `str`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "api/routers/search.py",
-      "name": "bad-assignment",
-      "concise_description": "`int` is not assignable to dict value type `str`",
-      "severity": "error"
-    },
-    {
       "column": 15,
       "path": "api/services/addresses.py",
       "name": "bad-argument-type",
@@ -93,27 +72,6 @@
       "severity": "error"
     },
     {
-      "column": 12,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
-      "name": "bad-return",
-      "concise_description": "Returned type `Sequence[str | None]` is not assignable to declared return type `list[str]`",
-      "severity": "error"
-    },
-    {
-      "column": 25,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[IncidentCategoryRecord]` is not assignable to parameter `iterable` with type `Iterable[dict[Unknown, Unknown]]` in function `list.extend`",
-      "severity": "error"
-    },
-    {
-      "column": 32,
-      "path": "scrapers/maintenance/categorize_incident_types.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `list[dict[Unknown, Unknown]]` is not assignable to parameter `rows` with type `list[IncidentCategoryRecord]` in function `scripts.ingest.import_incident_categories.upsert_categories`",
-      "severity": "error"
-    },
-    {
       "column": 9,
       "path": "scrapers/spiders/budget_discovery.py",
       "name": "bad-override-mutable-attribute",
@@ -181,13 +139,6 @@
       "path": "scripts/scrape/scrape_llcs.py",
       "name": "missing-attribute",
       "concise_description": "Object of class `Result` has no attribute `rowcount`",
-      "severity": "error"
-    },
-    {
-      "column": 47,
-      "path": "scripts/sync/sync_es.py",
-      "name": "bad-argument-type",
-      "concise_description": "Argument `Sequence[BudgetCapitalProject] | Sequence[BudgetLineItem] | Sequence[CityStaff] | Sequence[Llc] | Sequence[LogEntry] | Sequence[Officer] | Sequence[PlanningDocument] | Sequence[PlanningMeeting] | Sequence[Property]` is not assignable to parameter `rows` with type `list[Unknown]` in function `sync_index`",
       "severity": "error"
     },
     {

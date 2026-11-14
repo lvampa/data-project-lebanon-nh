@@ -1,11 +1,12 @@
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 
 import logfire
 from ingest import ingest_pdf_url
 from ingest.pdf_urls import kept_for_reprocess, mark_error
-from ingest.police_log import EntryText
+from ingest.police_log import EntryText, archive_entry_texts
 from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
@@ -18,7 +19,6 @@ from models.property import PropertyRecord
 from models.url_record import UrlRecord
 from mongo.archive import RawArchive, archive_collection
 from mongo.client import MongoDB
-from mongo.raw_text import ENTRY_TEXT_SOURCE, entry_text
 from postgres import SessionLocal
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
@@ -130,26 +130,23 @@ class PoliceLogPipeline:
         return item
 
     def _archive_entry_texts(self, texts: tuple[EntryText, ...]) -> None:
-        if self._entry_texts is None:
-            return
-        fetched_at = datetime.now(UTC)
-        for text in texts:
-            version = entry_text(
-                source_url=text.source_url,
-                raw_text=text.raw_text,
-                raw_reason_action=text.raw_reason_action,
-                parser_version=text.parser_version,
-                fetched_at=fetched_at,
-                spider=self._spider_name,
-            )
-            self._entry_texts.add(ENTRY_TEXT_SOURCE, text.case_number, version)
-        self._entry_texts.flush()
+        if self._entry_texts is not None:
+            archive_entry_texts(self._entry_texts, texts, self._spider_name)
 
     def close_spider(self) -> None:
         self._session.close()
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
 class PropertyPipeline:
+    def __init__(self, clock: Callable[[], datetime] = _utc_now) -> None:
+        # Replay swaps it, so a row is stamped with its page's own time and not the
+        # time of the replay.
+        self.clock = clock
+
     def open_spider(self) -> None:
         self._session = SessionLocal()
 
@@ -160,7 +157,7 @@ class PropertyPipeline:
         record = PropertyRecord.model_validate(dict(item))
 
         try:
-            now = datetime.now(UTC).replace(tzinfo=None)
+            now = self.clock()
 
             with logfire.span("save property", parcel_id=record.parcel_id):
                 # Upsert property

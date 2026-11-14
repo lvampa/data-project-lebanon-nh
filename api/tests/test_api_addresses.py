@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+from locations.geocode import GeocodeResult
+
 from api.config import Settings, get_settings
 from api.main import app
 from api.tests.conftest import ADMIN_TOKEN
@@ -13,6 +15,9 @@ def _make_row(location, count, normalized_address=None, lat=None, lng=None):
     row.normalized_address = normalized_address
     row.lat = lat
     row.lng = lng
+    row.kind = None
+    row.source = None
+    row.needs_review = None
     return row
 
 
@@ -55,7 +60,8 @@ def _stored(mock_db, lat=None, lng=None, geocoded_via=None):
 def test_patch_address_upserts_on_raw_address(mock_db, client):
     _stored(mock_db, 43.64, -72.25, "nominatim")
     with patch(
-        "api.services.addresses.geocode_nominatim", return_value=(43.64, -72.25)
+        "api.services.addresses.geocode",
+        return_value=GeocodeResult(43.64, -72.25, "exact"),
     ):
         resp = client.patch(
             "/api/addresses/EAGLE%20RIDGE%20RD",
@@ -76,7 +82,7 @@ def test_patch_address_upserts_on_raw_address(mock_db, client):
 
 def test_patch_address_without_geocode_keeps_existing_coords(mock_db, client):
     _stored(mock_db, 43.64, -72.25, "nominatim")
-    with patch("api.services.addresses.geocode_nominatim") as geocode:
+    with patch("api.services.addresses.geocode") as geocode:
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={"normalized_address": "Timberwood Drive", "geocode": False},
@@ -93,7 +99,7 @@ def test_patch_address_without_geocode_keeps_existing_coords(mock_db, client):
 
 def test_patch_address_geocode_miss_keeps_existing_coords(mock_db, client):
     _stored(mock_db, 43.64, -72.25, "nominatim")
-    with patch("api.services.addresses.geocode_nominatim", return_value=(None, None)):
+    with patch("api.services.addresses.geocode", return_value=None):
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={"normalized_address": "Timberwood Drive", "geocode": True},
@@ -107,7 +113,10 @@ def test_patch_address_geocode_miss_keeps_existing_coords(mock_db, client):
 
 def test_patch_address_geocode_hit_sets_coords(mock_db, client):
     _stored(mock_db, 43.7, -72.3, "nominatim")
-    with patch("api.services.addresses.geocode_nominatim", return_value=(43.7, -72.3)):
+    with patch(
+        "api.services.addresses.geocode",
+        return_value=GeocodeResult(43.7, -72.3, "approximate"),
+    ):
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={"normalized_address": "Timberwood Drive", "geocode": True},
@@ -119,11 +128,31 @@ def test_patch_address_geocode_hit_sets_coords(mock_db, client):
     params = compile_pg(stmt).params
     assert (params["lat"], params["lng"]) == (43.7, -72.3)
     assert params["geocoded_via"] == "nominatim"
+    assert params["coordinate_precision"] == "approximate"
+
+
+def test_patch_address_geocode_outside_the_city_is_a_miss(mock_db, client):
+    # Concord, NH: a lookup that landed in another town must not move the pin.
+    _stored(mock_db, 43.64, -72.25, "nominatim")
+    with patch(
+        "api.services.addresses.geocode",
+        return_value=GeocodeResult(43.2081, -71.5376, "exact"),
+    ):
+        resp = client.patch(
+            "/api/addresses/TIMBERWOOD%20DR",
+            json={"normalized_address": "Timberwood Drive", "geocode": True},
+        )
+
+    assert resp.status_code == 200
+    stmt = executed_stmt(mock_db)
+    assert upsert_set_columns(stmt).isdisjoint(
+        {"lat", "lng", "geocoded_via", "coordinate_precision"}
+    )
 
 
 def test_patch_address_manual_coords_skip_geocoding(mock_db, client):
     _stored(mock_db, 43.65, -72.26, "manual")
-    with patch("api.services.addresses.geocode_nominatim") as geocode:
+    with patch("api.services.addresses.geocode") as geocode:
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={
@@ -158,13 +187,13 @@ def test_patch_address_geocodes_with_configured_contact(mock_db, client):
     app.dependency_overrides[get_settings] = lambda: Settings(
         admin_api_token=ADMIN_TOKEN, nominatim_contact="ops@example.com"
     )
-    with patch(
-        "api.services.addresses.geocode_nominatim", return_value=(None, None)
-    ) as geocode:
+    with patch("api.services.addresses.geocode", return_value=None) as geocode:
         resp = client.patch(
             "/api/addresses/TIMBERWOOD%20DR",
             json={"normalized_address": "Timberwood Drive"},
         )
 
     assert resp.status_code == 200
-    geocode.assert_called_once_with("Timberwood Drive", contact="ops@example.com")
+    geocode.assert_called_once_with(
+        "Timberwood Drive, Lebanon, NH, USA", contact="ops@example.com"
+    )

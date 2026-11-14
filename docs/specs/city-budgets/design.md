@@ -229,8 +229,7 @@ FROM budget_line_items
 GROUP BY fiscal_year, fund_code, department;
 ```
 
-Both data tables are also indexed into Elasticsearch by `scripts/sync/sync_es.py` and searchable through `api/routers/search.py`.
-That is part of the search feature, not this one.
+Searching both data tables is part of the search feature, not this one.
 
 ### Files
 

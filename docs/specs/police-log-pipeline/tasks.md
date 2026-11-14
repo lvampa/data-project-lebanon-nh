@@ -12,7 +12,7 @@ File counts are estimates and include tests.
 
 | PR | What ships | Files |
 |---|---|---|
-| 1 | Test harness, ported tests, migrations at startup | about 15 |
+| 1 | Test harness, ported tests, migrations by hand | about 15 |
 | Archive 1a | Raw source archive: test harness, archive class, middleware (archive spec) | about 20 |
 | Archive 1b | Raw source archive: reads, AI call log, LLC and budget sources, parcel replay (archive spec) | about 16 |
 | Archive 1c | Raw source archive: backup and check command (archive spec) | about 10 |
@@ -41,7 +41,7 @@ QA still checks them in task 24.
 - [x] 6.12 A failed geocode on PATCH keeps the coordinates.
 - [x] 12.4 One run at a time, for the existing DAGs.
 
-## PR 1: Test harness, ported tests, migrations at startup
+## PR 1: Test harness, ported tests, migrations by hand
 
 About 15 files.
 No behavior change.
@@ -60,9 +60,10 @@ The three spec files ride along in this pull request.
   - Delete `FakeSession`.
   - _Requirements: 13.6_
 
-- [x] 3. Run migrations at startup
-  - A one-shot `migrate` service in compose that the Airflow services wait for.
-    Removed in #26 (2026-11-13); `uv run migrate` (#27, extended in task 19) takes its place.
+- [x] 3. Document running migrations by hand
+  - A README section with the one command, `uv run alembic -c shared/postgres/alembic.ini upgrade head`, run from the repo root against the compose Postgres. No compose service runs it.
+    #27 wraps it, with the MongoDB indexes, as `uv run migrate`, and task 19 adds the dbt steps.
+  - The test harness still migrates its own test database to head; that is separate.
   - _Requirements: 12.8_
 
 ## PR 2: Entry schema, one ingest function, process job
@@ -109,7 +110,7 @@ About 6 files.
 
 About 22 files.
 
-- [ ] 7. Fix the parser
+- [x] 7. Fix the parser
   - Bump `PARSER_VERSION`, record `EXTRACTOR_VERSION`, and add the pypdf comment in `scrapers/pyproject.toml`.
   - Parse "Vicinity of:" locations, the "Call Source:" line, every "Refer To" kind, the place code, and the officer code.
   - When no disposition matches, keep the unsplit text as the raw incident type.
@@ -118,7 +119,7 @@ About 22 files.
   - Document that changing the disposition list means a parser version bump and a reprocess.
   - _Requirements: 1.3, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.8_
 
-- [ ] 8. Add the reprocess script
+- [x] 8. Add the reprocess script
   - `reprocess_police_logs.py --from --to | --all`, in log date order, over `complete` and `error` records, reading the newest archived version and extracting with pypdf.
   - Mark repaired `error` records `complete`, record the content hash and versions, log the counts, take the advisory lock.
   - A record with no archived version goes back to `pending`; an unreachable archive stops the run before any change.
@@ -126,7 +127,7 @@ About 22 files.
   - A manual `police_log_reprocess` DAG spec.
   - _Requirements: 3.3, 4.1 to 4.13_
 
-- [ ] 9. Add the operator CLI
+- [x] 9. Add the operator CLI
   - `errors`, `reset <url>...`, and `unmatched-dispositions`.
   - _Requirements: 2.11, 3.7_
 
@@ -136,13 +137,13 @@ About 34 files.
 If it passes 40, the `shared/locations` package (task 11) ships first as its own pull request.
 No AI yet.
 
-- [ ] 10. Add provenance to the lookup tables
+- [x] 10. Add provenance to the lookup tables
   - One mixin with `source` (checked against `rule`, `ai`, `human`), `prompt_version`, `ai_call_id`, `needs_review`, and `failed_attempts`; `normalized_type` in place of `subcategory`; the location columns in design.md, with no stored public location; the widened `geocoded_via` check.
   - One Alembic migration, covered by the up and down test.
   - Delete the three old categorizer scripts and their tests, which stop working when `subcategory` goes.
   - _Requirements: 6.1, 6.9, 7.1, 7.2, 7.10_
 
-- [ ] 11. Add the `shared/locations` package
+- [x] 11. Add the `shared/locations` package
   - Move `geocode_nominatim` out of `api/`, with the city-bounds check, the 1 per second limiter, and exact or approximate results.
   - Add `canonical.py` with `RULES_VERSION`, `canonical_address`, `split_house_number`, and `strip_unit`, and `street_suffixes.csv`.
     These are pure functions, with tests over at least 20 spelling pairs that must match and 5 that must not.
@@ -150,7 +151,7 @@ No AI yet.
   - Add the package to both Dockerfiles.
   - _Requirements: 6.4, 6.7, 6.9, 6.14, 6.19_
 
-- [ ] 12. Extend the categories and addresses services and routes
+- [x] 12. Extend the categories and addresses services and routes
   - Paged lists with source, review mark, and has-normalization filters, and entry counts.
   - PATCH sets `source = 'human'`, clears the review mark, rejects a category outside the five with 422, accepts coordinates outside the city bounds.
   - DELETE hands a value back to AI.
@@ -303,7 +304,7 @@ About 10 files.
 About 25 files.
 It runs after the search spec's Postgres pull request, once nothing reads Elasticsearch, and does not touch the open `fix/*` pull requests.
 
-- [ ] 24. Remove Elasticsearch from the stack
+- [x] 24. Remove Elasticsearch from the stack
   - Remove what `pr/elasticsearch` (#3) adds, once it has merged.
   - `compose.yml`: the `elasticsearch` and `kibana` services, their volume, and the dependency on them and `ELASTICSEARCH_HOST` in both the Airflow services and the `api` service.
   - `.env.example`: `ELASTICSEARCH_HOST`.
@@ -312,8 +313,8 @@ It runs after the search spec's Postgres pull request, once nothing reads Elasti
   - Dependencies: `elasticsearch` in the root `pyproject.toml` dev group, `scripts/pyproject.toml`, and anywhere else it is listed; update `uv.lock`.
   - API: the client in the `api/main.py` lifespan, `get_es` in `api/deps.py`, `elasticsearch_host` in `api/config.py` and `api/tests/test_config.py`, and the Elasticsearch ping in `api/routers/health.py` and `api/tests/test_health.py`.
     Change the health check in the same commit as the compose change, or `/healthz` returns 503 once the service is gone.
-  - `/api/search` is already on Postgres by then; check that its tests and the preflight in `api/tests/test_cors.py` no longer need Elasticsearch.
-  - The admin search page keeps working, because the response contract does not change.
+  - `/api/search` was still on Elasticsearch, because the search spec's Postgres version is not built, so its router and tests were deleted, and the preflight tests in `api/tests/test_cors.py` use `/api/incidents`.
+  - The admin search page gets a 404 until the Postgres version returns the endpoint; the admin app is deferred and was not touched.
   - Docs: `AGENTS.md`, the README, the search spec's status, and the Elasticsearch mentions in `docs/specs/city-budgets/design.md` and `docs/specs/planning-board/design.md`.
   - Check: the suites pass, `docker compose config` shows no Elasticsearch, `/healthz` returns 200 without it, and `grep -ri elasticsearch` finds only history in specs.
 

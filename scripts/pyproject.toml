@@ -1,12 +1,12 @@
 [project]
 name = "scripts"
 version = "0.1.0"
-description = "One-off and scheduled jobs: scrapers, imports, exports, and the Elasticsearch sync"
+description = "One-off and scheduled jobs: scrapers, imports, exports"
 requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.15.0",
-    "elasticsearch>=8.13,<9",
     "httpx>=0.27.0",
+    "locations",
     "logfire>=4.31.0",
     "mongo",
     "playwright>=1.60.0",
@@ -19,6 +19,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+locations = { workspace = true }
 mongo = { workspace = true }
 postgres = { workspace = true }
 
@@ -32,11 +33,10 @@ build-backend = "setuptools.build_meta"
 package-dir = { "scripts" = "." }
 packages = [
     "scripts",
-    "scripts.export",
     "scripts.ingest",
     "scripts.models",
+    "scripts.normalize",
     "scripts.scrape",
-    "scripts.sync",
 ]
 
 [dependency-groups]

@@ -97,7 +97,8 @@ class PoliceLogPipeline:
         try:
             with logfire.span("ingest police log pdf", url_id=url_id):
                 pdf_url = self._session.get(PdfUrl, url_id)
-                assert pdf_url is not None, f"pdf_urls row {url_id} is gone"
+                if pdf_url is None:
+                    raise LookupError(f"pdf_urls row {url_id} does not exist")
                 counts = ingest_pdf_url(
                     self._session,
                     pdf_url,

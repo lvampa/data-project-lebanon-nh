@@ -316,7 +316,7 @@ The work ships as a series of pull requests, each useful on its own; tasks.md li
 5. THE scheduler SHALL stop any police log task that runs longer than 60 minutes and mark it failed.
 6. IF the processing or geocoding stage fails, THEN THE scheduler SHALL still run the stages after it.
 7. WHEN a stage fails after its retries, THE scheduler SHALL show the run as failed and log the stage name and reason.
-8. WHEN the scheduler containers start, THE init service SHALL apply the database migrations before any police log job runs.
+8. THE migrate script SHALL drop the consumer models, apply the database migrations, create the MongoDB indexes, and build the consumer models, in that order, as one command Connor runs by hand. IF a step fails, THEN THE migrate script SHALL stop before the next one.
 9. THE scheduler SHALL NOT run the public export or deploy the site.
    The public export is written from the consumer models when `deploy.sh` runs, and the files are not committed.
 

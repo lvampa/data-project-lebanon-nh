@@ -431,8 +431,8 @@ models/
 - The incidents and stats API and admin search read `marts.incidents` through a read-only SQLAlchemy mapping on its own metadata, outside `Base`, so Alembic's drift check does not see it.
 - `report-gen` becomes plain selects from the four public models and drops its own joins and its 2,000 row cap (see "Public export").
 - Postgres will not let a migration drop or retype a column a view reads.
-  So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, run `dbt run`.
-  The `migrate` service and the test fixture both follow it, and a test proves a migration that drops a column a model uses still upgrades.
+  So the order is always: drop the `marts` schema with cascade, run `alembic upgrade head`, then build the models.
+  `scripts/migrate.sh` runs that order (see "Schedule"), and a test proves a migration that drops a column a model uses still upgrades after the drop.
 - A paid tier later is another model over `incidents` with a different filter.
 
 ### Public export (report-gen)
@@ -587,7 +587,12 @@ discover ─► process (limit 100) ─► geocode ─► dbt build ─► watch
   If Connor is normalizing when the DAG reaches process or geocode, that task finds the lock held, fails fast with the message, and the work waits for the next run.
   So he runs the job outside the DAG's start time.
 - A manual DAG, `police_log_reprocess`, with date parameters, wraps the reprocess script.
-- A one-shot `migrate` service in compose drops `marts`, runs `alembic upgrade head`, then `dbt run`, and the Airflow services wait for it (12.8).
+- There is no migrate container. Connor runs `bash scripts/migrate.sh` from the repo root after pulling a schema change and before the next DAG run (12.8).
+  It loads `.env` like `generate_report.sh`, stops at the first failing step, and runs four steps:
+  1. `dbt run-operation drop_marts`, a one-line macro: `drop schema if exists marts cascade`.
+  2. `alembic upgrade head`, from `shared/postgres`.
+  3. `init_indexes()` for the MongoDB indexes.
+  4. `dbt build`, the models plus their data checks.
 
 The Airflow image has no `claude` CLI and no Claude token.
 That work is deferred; the `airflow-claude-cli` branch exists, unbuilt, if it's ever revisited.

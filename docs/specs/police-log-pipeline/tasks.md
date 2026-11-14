@@ -62,6 +62,7 @@ The three spec files ride along in this pull request.
 
 - [x] 3. Run migrations at startup
   - A one-shot `migrate` service in compose that the Airflow services wait for.
+    Removed in #26 (2026-11-13); `scripts/migrate.sh` in task 19 takes its place.
   - _Requirements: 12.8_
 
 ## PR 2: Entry schema, one ingest function, process job
@@ -236,9 +237,10 @@ Nothing reads the models yet, so this ships alone.
   - `transform/` with the staging and marts models in design.md, built as views in a `marts` schema.
   - The dbt tests in design.md, with the disposition seed generated from the parser's list before each build.
   - The `public_location` macro, including the under-100 rule, used by the public models, plus `public_properties` with `owner` and `owner_address` empty.
-  - Change the `migrate` service in `compose.yml` from PR 1, and add a separate test fixture, so both drop `marts`, run the migrations, then `dbt run`.
+  - Add `scripts/migrate.sh` and the `drop_marts` macro: drop `marts`, `alembic upgrade head`, `init_indexes()`, then `dbt build`, stopping at the first failure. Document it in the README.
+    It replaces the compose `migrate` service, which is removed in #26. The `app_dbt_test` fixture stays as it is.
   - Tests: a passing build on good rows, one bad row per check that fails it, and a migration that drops a column a model uses still upgrades.
-  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 14.1 to 14.7_
+  - _Requirements: 6.11, 8.12, 10.13, 11.1, 11.2, 11.6, 11.7, 11.13 to 11.15, 12.8, 14.1 to 14.7_
 
 ## PR 8: API, admin search, and export read the models
 

@@ -75,7 +75,7 @@ def make_spider() -> ProcessUrlsSpider:
 
 @pytest.fixture
 def pdf_reader():
-    with patch("spiders.process_url_records.PdfReader") as mock_pdf_reader:
+    with patch("ingest.pdf_text.PdfReader") as mock_pdf_reader:
         yield mock_pdf_reader
 
 

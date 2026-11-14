@@ -1,4 +1,5 @@
 from .police_log import (
+    EXTRACTOR_VERSION,
     PARSER_VERSION,
     count_header_lines,
     parse_log_date,
@@ -6,6 +7,7 @@ from .police_log import (
 )
 
 __all__ = [
+    "EXTRACTOR_VERSION",
     "PARSER_VERSION",
     "count_header_lines",
     "parse_log_date",

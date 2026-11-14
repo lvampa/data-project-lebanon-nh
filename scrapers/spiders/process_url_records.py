@@ -1,17 +1,16 @@
-import io
 from collections.abc import AsyncIterator, Iterator
 from datetime import datetime, timedelta
 from typing import Any, cast, override
 
 import logfire
 import scrapy
+from ingest.pdf_text import extract_pdf_text
 from ingest.pdf_urls import ErrorKind, mark_error, utc_now
 from items import PoliceLogPdfItem
 from models import PdfUrlClaim
 from mongo.archive import content_hash
 from postgres import SessionLocal
 from postgres.models.pdf_url import PdfUrl
-from pypdf import PdfReader
 from scrapy.http import Request, Response
 from sqlalchemy import CursorResult, Update, select, update
 from twisted.python.failure import Failure
@@ -169,8 +168,7 @@ class ProcessUrlsSpider(scrapy.Spider):
         pdf_bytes = response.body
         try:
             with logfire.span("extract pdf text", url=source_url):
-                reader = PdfReader(io.BytesIO(pdf_bytes))
-                raw_text = "\n".join(page.extract_text() for page in reader.pages)
+                raw_text = extract_pdf_text(pdf_bytes)
         except Exception as exc:
             logfire.error("pdf text extraction failed", url=source_url, error=repr(exc))
             # No text came out, so there is nothing for a parser fix to work on.

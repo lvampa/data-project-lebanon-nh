@@ -40,6 +40,9 @@ class Checked[Item]:
     discarded: list[Discard]
     # Values that were sent and have no item in the answer at all.
     missing: list[str]
+    # Raw values in the answer that were never sent. They belong to no row, so
+    # nothing is charged to them; the caller may log them.
+    not_sent: list[str]
 
 
 def check_incident_types(
@@ -85,6 +88,7 @@ def _check[Item: AnswerItem](
 
     parsed: list[Item] = []
     discards: dict[str, str] = {}
+    not_sent: list[str] = []
     for raw_item in raw_items:
         try:
             parsed.append(item_model.model_validate(raw_item))
@@ -100,7 +104,8 @@ def _check[Item: AnswerItem](
     for item in parsed:
         raw = item.raw
         if raw not in sent_values:
-            discards.setdefault(raw, "not sent")
+            if raw not in not_sent:
+                not_sent.append(raw)
         elif counts[raw] > 1:
             discards.setdefault(raw, "returned more than once")
         elif raw not in discards:
@@ -118,6 +123,7 @@ def _check[Item: AnswerItem](
         accepted=accepted,
         discarded=[Discard(raw, reason) for raw, reason in discards.items()],
         missing=missing,
+        not_sent=not_sent,
     )
 
 
@@ -127,8 +133,6 @@ def _items_of(answer: Any) -> list[Any]:
     items = answer.get("items")
     if not isinstance(items, list):
         raise AnswerOffSchema("the answer has no list of items")
-    if not items:
-        raise AnswerOffSchema("the answer has no items")
     return items
 
 

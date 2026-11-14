@@ -1,0 +1,114 @@
+ Lebanon Police Department Page:   1
+  Dispatch Log  From: 11/01/2026  Thru: 11/01/2026     0000 - 2359    Printed: 11/09/2026
+For Date: 11/01/2026  -  Sunday   
+Call   Number   Time   Call   Reason   Action    
+26-31404        0042 Initiated - Motor Vehicle Stop Warning Issued    
+       Call Source:    Initiated
+        Primary Id:    XA - Officer A. Example
+  Location/Address:    ROUTE 120 + CENTERRA PKWY
+                ID:    XA -   
+                                                     Arvd-00:42:00  Clrd-00:50:09
+26-31407        0128 Initiated - FOOT PATROL Log Information    
+       Call Source:    Initiated
+        Primary Id:    XA - Officer A. Example
+  Location/Address:    [L 2W] WHIPPLE BLOCK - WEST PARK ST
+                ID:    XA -   
+                                                     Arvd-01:28:55  Clrd-01:41:15
+26-31412        0721 Walk-In - Property Returned Investigated    
+       Call Source:    Walk-In
+        Primary Id:    XB - Officer B. Example
+  Location/Address:    [L 36] LEBANON POLICE DEPARTMENT - POVERTY LN
+                ID:    XC -   
+                       Disp-07:28:46                 Arvd-07:28:48  Clrd-07:34:56
+                ID:    XB -   
+                       Disp-07:34:48  Enrt-07:34:51  Arvd-07:34:52  Clrd-07:44:18
+26-31413        0742 Phone - Welfare Check Gone on Arrival    
+       Call Source:    Telephone
+        Primary Id:    XC - Officer C. Example
+  Location/Address:    TRUES BROOK RD
+                ID:    XC -   
+                       Disp-07:44:25  Enrt-07:47:00  Arvd-07:56:57  Clrd-07:58:57
+                ID:    XB -   
+                       Disp-07:47:22  Enrt-07:47:22                 Clrd-08:00:37
+26-31423        1011 Phone - FD Alarm Work/Test Log Information    
+       Call Source:    Telephone
+  Location/Address:    [L 125H] ALICE PECK DAY HOSPITAL - ALICE PECK DAY DR
+26-31424        1032 911 - CRASH DETECTION Services Rendered    
+       Call Source:    911
+        Primary Id:    XC - Officer C. Example
+  Location/Address:    EASTMAN HILL
+                ID:    XC -   
+                       Disp-10:36:36  Enrt-10:36:44  Arvd-10:41:23  Clrd-10:53:31
+                ID:    XB -   
+                       Disp-10:36:36  Enrt-10:36:53                 Clrd-10:42:19
+         Fire Unit:    LE2-Pumper-Leb Eng 2
+                       Disp-10:36:36  Enrt-10:36:41                 Clrd-10:54:58
+ Lebanon Police Department Page:   2
+  Dispatch Log  From: 11/01/2026  Thru: 11/01/2026     0000 - 2359    Printed: 11/09/2026
+                       InQrtsUnavl-10:54:58  InSrvce-10:54:58
+          EMS Unit:    AMB3-AMBULANCE 3
+                       Disp-10:36:49  Enrt-10:36:49                 Clrd-10:42:15
+                       InQrtsUnavl-10:42:20  InSrvce-10:42:20
+26-31428        1104 Initiated - Paperwork Service All Other Paperwork Served    
+       Call Source:    Initiated
+        Primary Id:    XD - Corporal D. Example
+  Location/Address:    [L TVC] TWIN VIEW CABINS - SEMINARY HILL
+                ID:    XD -   
+                                                     Arvd-11:04:00  Clrd-11:13:40
+                ID:    XB -   
+                       Disp-11:04:56  Enrt-11:05:13  Arvd-11:08:37  Clrd-11:12:41
+26-31436        1515 Cellular - MV Complaint Incident Report Taken   
+       Call Source:    Cellular
+        Primary Id:    XE - Officer E. Example
+  Location/Address:    [L X17] EXIT 17 - INTERSTATE 89
+                ID:    XE -   
+                       Disp-15:17:41  Enrt-15:18:01  Arvd-15:41:04  Clrd-16:19:32
+                ID:    XF -   
+                       Disp-15:19:24  Enrt-15:19:25  Arvd-15:22:23  Clrd-15:34:09
+       Refer To Incident:      26L-1035-OF
+26-31437        1518 911 - 75 YOF SLUMPED OVER Services Rendered    
+       Call Source:    911
+  Location/Address:    [L X18] EXIT 18 NORTH BOUND OFF RAMP - INTERSTATE 89
+          EMS Unit:    AMB1-AMBULANCE 1
+                       Disp-15:21:17  Enrt-15:21:17  Arvd-15:25:51  Clrd-15:41:22
+                       InQrtsUnavl-15:41:22  InSrvce-15:41:22
+         Fire Unit:    LE2-Pumper-Leb Eng 2
+                       Disp-15:21:28  Enrt-15:21:28  Arvd-15:28:57  Clrd-16:11:01
+                       InQrtsUnavl-16:11:01  InSrvce-16:11:01
+                ID:    XG -   
+                       Disp-15:21:52                 Arvd-15:27:22  Clrd-15:27:24
+ Lebanon Police Department Page:   3
+  Dispatch Log  From: 11/01/2026  Thru: 11/01/2026     0000 - 2359    Printed: 11/09/2026
+26-31439        1544 Cellular - MV Complaint Taken/Referred to Other Agency
+   
+       Call Source:    Cellular
+        Primary Id:    XF - Sergeant F. Example
+  Location/Address:    ROUTE 120 + CENTERRA PKWY
+                ID:    XF -   
+                       Disp-15:46:00                 Arvd-15:53:05  Clrd-15:58:23
+26-31441        1549 Initiated - Detail Special Outside Services Rendered    
+       Call Source:    Initiated
+  Location/Address:    [L DHMCED] DHMC EMERGENCY DEPARTMENT - MEDICAL CENTER DR
+                ID:    XB -   
+                                                     Arvd-15:49:00  Clrd-11/02/2026 @ 00:00:06
+26-31454        2002 Walk-In - Property Returned PROPERTY RETURNED    
+       Call Source:    Walk-In
+        Primary Id:    XG - Corporal G. Example
+  Location/Address:    [L 36] LEBANON POLICE DEPARTMENT - POVERTY LN
+                ID:    XG -   
+                                                     Arvd-20:10:28  Clrd-20:10:30
+26-31456        2013 Phone - MVA Roadway No PI Accident Report Taken   
+       Call Source:    Telephone
+        Primary Id:    XE - Officer E. Example
+  Location/Address:    MERIDEN RD
+                ID:    XE -   
+                                                     Arvd-20:17:31  Clrd-20:35:57
+       Refer To Accident:      26L-340-AC
+26-31459        2225 Walk-In - Assault PAST Log Information    
+       Call Source:    Walk-In
+        Primary Id:    XH - Officer H. Example
+ Lebanon Police Department Page:   5
+  Dispatch Log  From: 11/01/2026  Thru: 11/01/2026     0000 - 2359    Printed: 11/09/2026
+  Location/Address:    [L 36] LEBANON POLICE DEPARTMENT - POVERTY LN
+                ID:    XH -   
+                       Disp-22:29:42                                Clrd-11/02/2026 @ 00:31:52

@@ -1,0 +1,29 @@
+ Lebanon Police Department Page:   1
+  Dispatch Log  From: 11/05/2026  Thru: 11/05/2026     0000 - 2359    Printed: 11/09/2026
+For Date: 11/05/2026  -  Thursday   
+Call   Number   Time   Call   Reason   Action    
+26-31819        0340 Initiated - FOOT PATROL Arrest(s) Made    
+       Call Source:    Initiated
+        Primary Id:    XH - Officer H. Example
+  Location/Address:    [L 2W] WHIPPLE BLOCK - WEST PARK ST
+                ID:    XH -   
+                                                     Arvd-03:40:58  Clrd-04:26:22
+                ID:    XA -   
+                                                     Arvd-03:41:08  Clrd-04:20:48
+        Refer To Summons:      26L-975-AR
+26-31850        1104 Initiated - Motor Vehicle Stop Warning Issued    
+       Call Source:    Initiated
+        Primary Id:    XC - Officer C. Example
+  Location/Address:    [L 112N] SIMPLE ENERGY - NORTH MAIN ST
+                ID:    XC -   
+                                                     Arvd-11:04:00  Clrd-11:07:42
+ Refer To Citation:      26-31850
+26-31868        1317 Initiated - Suspicious Person Arrest(s) Made    
+       Call Source:    Initiated
+        Primary Id:    XC - Officer C. Example
+  Location/Address:    [L KLIB] KILTON LIBRARY - MAIN ST
+                ID:    XD -   
+                                                     Arvd-13:17:00  Clrd-14:10:55
+                ID:    XC -   
+                                                     Arvd-13:18:31  Clrd-15:18:55
+         Refer To Arrest:      26L-977-AR

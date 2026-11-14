@@ -1,0 +1,19 @@
+ Lebanon Police Department Page:   1
+  Dispatch Log  From: 11/08/2026  Thru: 11/08/2026     0000 - 2359    Printed: 11/09/2026
+For Date: 11/08/2026  -  Sunday   
+Call   Number   Time   Call   Reason   Action    
+26-32127        2314 Initiated - Arrest Arrest(s) Made    
+       Call Source:    Initiated
+        Primary Id:    XI - Officer I. Example
+  Location/Address:    [L DHMCED] DHMC EMERGENCY DEPARTMENT - MEDICAL CENTER DR
+                ID:    XJ -   
+                                                     Arvd-23:14:00  Clrd-23:17:47
+                ID:    XI -   
+                       Disp-23:14:50  Enrt-23:14:50  Arvd-23:24:44  Clrd-11/09/2026 @ 01:14:09
+                ID:    XK -   
+                       Disp-23:14:54  Enrt-23:14:54  Arvd-23:24:41  Clrd-23:49:11
+                ID:    XJ -   
+                       Disp-23:17:51  Enrt-23:17:51  Arvd-23:24:31  Clrd-23:49:18
+                ID:    XH -   
+                       Disp-00:49:00                 Arvd-00:50:00  Clrd-11/09/2026 @ 03:06:30
+         Refer To Arrest:      26L-988-AR

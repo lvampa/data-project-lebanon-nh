@@ -211,10 +211,15 @@ It never sees a database connection, a file, or a tool.
   It makes no model call; a logged-out first call already stops the run (8.9).
 - Configuration: `NORMALIZE_AI_BACKEND`, `NORMALIZE_AI_MODEL`, `NORMALIZE_BATCH_SIZE`.
 - Confirmed by a real run: with no login, the CLI exits 1 and prints a JSON result on stdout with `"is_error": true`, `"terminal_reason": "api_error"`, and `"result": "Not logged in · Please run /login"`.
-- Not confirmed, because the sandbox the backend was written in could not reach the API: the envelope of a successful structured answer, and the wording of a usage-limit message.
-  The backend reads the answer from `structured_output`, else from `result` as JSON text.
-  It treats a result containing "not logged in", "please run /login", "usage limit", or "limit reached" as a login or limit failure that stops the run.
-  Run one real `claude -p` call with these flags, then correct both rules here and in `scripts/normalize/backends.py`.
+- Confirmed by a real run on 2026-11-13, with 3 made-up addresses: the CLI exits 0 and prints one JSON object with `"type": "result"`, `"subtype": "success"`, `"is_error": false`, and `"terminal_reason": "completed"`.
+  The answer is `structured_output`, an object that matches the schema. `result` holds the same object as a JSON string.
+  The backend reads `structured_output` first, and falls back to `result` as JSON text.
+  It treats `is_error: true`, or a `subtype` other than `success`, as a failed call.
+- Each call costs about 4.9k cached input tokens of overhead plus the output, even with tools off (the run used 4,942 cache-creation tokens for a 3-address batch), and took about 4 seconds on Haiku.
+  Batches of 50 make that overhead small.
+- Not confirmed: the wording of a usage-limit message.
+  The backend treats a result containing "not logged in", "please run /login", "usage limit", or "limit reached" as a login or limit failure that stops the run.
+  That is a best guess until a real limit is hit; then correct it here and in `scripts/normalize/backends.py`.
 
 ### Normalization job
 

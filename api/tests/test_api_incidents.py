@@ -16,7 +16,7 @@ def _make_entry(**kwargs) -> LogEntry:
         "incident_type": "Telephone Harassment",
         "disposition": "Incident Report Taken",
         "location": "TIMBERWOOD DR",
-        "officer": "Stephan Nix",
+        "officer": "A. Example",
         "reference_number": "26L-426-OF",
         "parse_error": False,
     }

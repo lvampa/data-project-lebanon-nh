@@ -14,6 +14,7 @@ DISPOSITIONS = (
     "Incident Report Taken",
     "Broadcast Log Information",
     "Criminal Summons Issued",
+    "Taken/Referred to Other Agency",
     "Referred to Other Agency",
     "Traffic Citation Issued",
     "Paperwork NOT Served",
@@ -35,6 +36,7 @@ DISPOSITIONS = (
     "Paperwork Served",
     "Summons Issued",
     "Removed Hazard",
+    "Property Returned",
     "Investigated",
     "False Alarm",
     "Unfounded",
@@ -43,8 +45,8 @@ DISPOSITIONS = (
     "Warning",
 )
 
-# The old private name, kept in case anything still imports it.
-_DISPOSITIONS = DISPOSITIONS
+# The log sometimes types an ending in capitals, so a match is stored as listed.
+_LISTED_SPELLING = {d.lower(): d for d in DISPOSITIONS}
 
 # Longest first, so a suffix such as "Paperwork NOT Served" is not cut short.
 _DISPOSITION_AT_END = re.compile(
@@ -60,4 +62,6 @@ def split_reason_action(reason_action: str) -> tuple[str, str | None]:
     match = _DISPOSITION_AT_END.search(reason_action)
     if match is None:
         return reason_action, None
-    return reason_action[: match.start()].strip(), match.group(1)
+    return reason_action[: match.start()].strip(), _LISTED_SPELLING[
+        match.group(1).lower()
+    ]

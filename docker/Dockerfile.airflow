@@ -25,6 +25,15 @@ RUN uv sync --frozen --package scrapers --package scripts
 RUN .venv/bin/playwright install chromium
 USER root
 RUN /opt/project/.venv/bin/playwright install-deps chromium
+# mongodump and mongorestore, for the MongoDB backup DAG. Debian does not package
+# MongoDB's tools, so they come from MongoDB's own repository, matching mongo:8.
+RUN curl -fsSL https://pgp.mongodb.com/server-8.0.asc \
+        | gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] http://repo.mongodb.org/apt/debian bookworm/mongodb-org/8.0 main" \
+        > /etc/apt/sources.list.d/mongodb-org-8.0.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends mongodb-database-tools \
+    && rm -rf /var/lib/apt/lists/*
 USER airflow
 
 WORKDIR /opt/airflow

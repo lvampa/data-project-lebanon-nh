@@ -61,6 +61,18 @@ def _utc_now() -> datetime:
 
 class ProcessUrlsSpider(scrapy.Spider):
     name = "process_urls"
+    archive_source = "police_log_pdf"
+    # One at a time, so each PDF's callback knows whether its original was kept.
+    archive_batch_size = 1
+
+    def archive_key(self, response: Response) -> str | None:
+        # The city sometimes answers 200 with an HTML page; that is not the original.
+        if not response.body.startswith(b"%PDF"):
+            return None
+        # Keyed by the city URL, even when the PDF came from its Wayback copy.
+        assert response.request is not None
+        pdf_url: PdfUrlClaim = response.request.cb_kwargs["pdf_url"]
+        return pdf_url.canonical_url
 
     # `scrapy crawl -a limit=10` passes the value as a string.
     def __init__(self, limit: int | str = 10, *args: Any, **kwargs: Any) -> None:

@@ -263,7 +263,7 @@ About 14 files.
 Task 21 ships first, as PR 8a, stacked on PR 7, because it is the go-live gate.
 Task 20 follows as PR 8b.
 
-- [ ] 21a. Read the public models in `report-gen`
+- [x] 21a. Read the public models in `report-gen`
   - Replace the incidents, addresses, properties and stats queries with selects from the `marts.public_*` views, using the field mapping in design.md, "Public export".
   - Remove `INCIDENT_LIMIT` and the joins. Add `category`, `normalized_type`, `lat`, `lng` and `coordinate_precision` to `Incident`, and `by_category` to `Stats`. Leave staff as it is.
   - Rust unit test: the stats shaping from `public_stats` rows, including not-yet-normalized incidents.
@@ -274,7 +274,7 @@ Task 20 follows as PR 8b.
   - Rust unit tests on JSON in a temp dir: clean files pass; each of the four fields, when non-empty, fails with the file, field and count; a missing file fails.
   - _Requirements: 11.16, 11.17, 11.18, 12.9_
 
-- [ ] 21c. Test the export end to end
+- [x] 21c. Test the export end to end
   - In `transform/tests/`, after `dbt run` on the `app_dbt_test` fixture, run `report-gen` with `DATABASE_URL` pointing at it, into `tmp_path`.
   - Assert: today's field names are all present, plus the new ones; `officer`, `reference_number`, `owner` and `owner_address` are empty; only in-window incidents are present; `addresses.json` names hold the public location; `report-gen check` passes on the output and fails on a copy with one officer filled in.
   - It builds report-gen with `cargo build -p report-gen` on first use. Confirm the CI test job has `cargo` and check the time it adds; if it's too slow, move this test into the Rust CI job with Postgres.

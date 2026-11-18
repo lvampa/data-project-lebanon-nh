@@ -17,7 +17,7 @@ THROWAWAY_MONGO = "scraped_data_migrate_cmd_test"
 def run_migrate(**environment: str) -> subprocess.CompletedProcess[str]:
     # A subprocess, because this suite has already built the shared engine for app_test.
     # No Logfire sending, whatever a .env the subprocess finds says.
-    env = {**os.environ, "LOGFIRE_SEND_TO_LOGFIRE": "false", **environment}
+    env = {**os.environ, "LOGFIRE_SEND": "never", **environment}
     return subprocess.run(
         [sys.executable, "-m", "scripts.migrate"],
         env=env,

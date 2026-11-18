@@ -62,7 +62,12 @@ def test_bootstrap_loads_dotenv_before_configuring_logfire(bootstrap_mocks):
 
     assert order.mock_calls == [
         call.load_dotenv(),
-        call.configure(service_name="demo", send_to_logfire="if-token-present"),
+        call.configure(
+            service_name="demo",
+            send_to_logfire=False,
+            token=None,
+            environment=None,
+        ),
     ]
 
 
@@ -71,9 +76,8 @@ def test_second_call_does_nothing(bootstrap_mocks):
     bootstrap.bootstrap("second")
 
     bootstrap_mocks.load_dotenv.assert_called_once()
-    bootstrap_mocks.configure.assert_called_once_with(
-        service_name="first", send_to_logfire="if-token-present"
-    )
+    bootstrap_mocks.configure.assert_called_once()
+    assert bootstrap_mocks.configure.call_args.kwargs["service_name"] == "first"
 
 
 def test_a_failed_call_can_be_retried(bootstrap_mocks):

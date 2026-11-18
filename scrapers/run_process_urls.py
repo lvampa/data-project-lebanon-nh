@@ -4,7 +4,7 @@
 
     uv run python run_process_urls.py --limit 100
 
-Set LOGFIRE_SEND_TO_LOGFIRE=false to run by hand without sending traces.
+Set LOGFIRE_SEND=never to run by hand without sending traces.
 """
 
 import argparse

@@ -9,6 +9,7 @@ from unittest.mock import Mock
 
 import bootstrap
 import pytest
+from bootstrap import telemetry
 
 _session_patch = pytest.MonkeyPatch()
 
@@ -23,8 +24,9 @@ def _silence_bootstrap(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(bootstrap, "_done", False)
     monkeypatch.setattr(bootstrap, "load_dotenv", mocks.load_dotenv)
     monkeypatch.setattr(
-        bootstrap, "logfire", SimpleNamespace(configure=mocks.configure)
+        telemetry, "logfire", SimpleNamespace(configure=mocks.configure)
     )
+    telemetry.get_telemetry_settings.cache_clear()
     return mocks
 
 
@@ -33,7 +35,7 @@ def pytest_configure(config: pytest.Config) -> None:
     # and before any fixture runs.
     _silence_bootstrap(_session_patch)
     # Subprocesses, such as the one test_migrate starts, configure Logfire for real.
-    _session_patch.setenv("LOGFIRE_SEND_TO_LOGFIRE", "false")
+    _session_patch.setenv("LOGFIRE_SEND", "never")
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:

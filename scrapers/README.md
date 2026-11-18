@@ -57,7 +57,7 @@ Use `uv run logfire whoami` to confirm you are logged in. See the [CLI reference
 
 With CLI auth, `bootstrap` needs nothing more; the SDK reads credentials from your user config.
 
-If your process loads `.env`, you can set non-secret tuning there (see `scrapers/.env.example`) - for example `LOGFIRE_ENVIRONMENT` or `LOGFIRE_SEND_TO_LOGFIRE=false` to stop sending to Logfire locally. Full list: [environment variables](https://logfire.pydantic.dev/docs/reference/configuration/).
+If your process loads `.env`, you can set non-secret tuning there (see `scrapers/.env.example`) - for example `LOGFIRE_ENVIRONMENT` or `LOGFIRE_SEND=never` to stop sending to Logfire locally. Full list: [environment variables](https://logfire.pydantic.dev/docs/reference/configuration/).
 
 You can also set defaults in `pyproject.toml` under `[tool.logfire]`; arguments passed in code (`bootstrap` sets `service_name`) override file and env for the options you pass. Precedence is: **code → environment → `pyproject.toml`**.
 

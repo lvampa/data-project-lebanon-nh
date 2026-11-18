@@ -4,8 +4,9 @@ Library code never imports this. Entry points call it first, and so does Alembic
 env.py when it runs from the CLI.
 """
 
-import logfire
 from dotenv import load_dotenv
+
+from .telemetry import configure_telemetry, get_telemetry_settings
 
 _done = False
 
@@ -20,7 +21,5 @@ def bootstrap(service_name: str) -> None:
     if _done:
         return
     load_dotenv()
-    # Without a token, nothing is sent: a local run, a hand run or a test works
-    # without Logfire credentials.
-    logfire.configure(service_name=service_name, send_to_logfire="if-token-present")
+    configure_telemetry(service_name, get_telemetry_settings())
     _done = True

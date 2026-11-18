@@ -109,22 +109,50 @@ def run(
         settled: dict[str, int] = {}
         batches: dict[str, list[list[Group]]] = {name: [] for name in FIELD_NAMES}
         for chosen_field in chosen:
+            waiting = chosen_field.waiting(session)
             plan = chosen_field.plan(session, redo)
             session.commit()
             settled[chosen_field.name] = plan.settled
             if chosen_field.can_call():
                 batches[chosen_field.name] = _chunks(plan.groups, batch_size)
+            logfire.info(
+                "{field}: {waiting} waiting, {settled} settled by rules, "
+                "{to_ask} to ask in {batches} batches",
+                field=chosen_field.name,
+                waiting=waiting,
+                settled=plan.settled,
+                to_ask=sum(len(batch) for batch in batches[chosen_field.name]),
+                batches=len(batches[chosen_field.name]),
+            )
 
         allowed = allocate_calls({n: len(b) for n, b in batches.items()})
+        for name, count in allowed.items():
+            if count < len(batches[name]):
+                logfire.info(
+                    "{field}: this run makes {allowed} of {batches} batches",
+                    field=name,
+                    allowed=count,
+                    batches=len(batches[name]),
+                )
         discarded = {f.name: 0 for f in chosen}
         written = dict(settled)
         for chosen_field in chosen:
-            for batch in batches[chosen_field.name][: allowed[chosen_field.name]]:
+            this_run = batches[chosen_field.name][: allowed[chosen_field.name]]
+            for number, batch in enumerate(this_run, start=1):
                 if result.stopped:
                     break
                 outcome = _call(session, backend, call_log, chosen_field, batch, result)
                 written[chosen_field.name] += outcome.stored
                 discarded[chosen_field.name] += outcome.discarded
+                logfire.info(
+                    "{field}: batch {number}/{total}, {stored} stored, "
+                    "{discarded} discarded",
+                    field=chosen_field.name,
+                    number=number,
+                    total=len(this_run),
+                    stored=outcome.stored,
+                    discarded=outcome.discarded,
+                )
 
         for chosen_field in chosen:
             result.summaries.append(

@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 MAX_ATTEMPTS = 3
 MAX_REQUESTS = 600
+PROGRESS_EVERY = 50
 
 Geocoder = Callable[[str], GeocodeResult | None]
 
@@ -56,7 +57,10 @@ def run(
 ) -> GeocodeCounts:
     counts = GeocodeCounts()
     with open_session() as session:
-        for row in _rows_to_place(session):
+        rows = _rows_to_place(session)
+        logfire.info("geocode: {waiting} rows waiting", waiting=len(rows))
+        last_reported = 0
+        for row in rows:
             if counts.requests >= max_requests:
                 counts.stopped_at_limit = True
                 break
@@ -72,6 +76,16 @@ def run(
                 logfire.error("geocoder unavailable; stopping the run", error=str(exc))
                 break
             session.commit()
+            if counts.requests - last_reported >= PROGRESS_EVERY:
+                last_reported = counts.requests
+                logfire.info(
+                    "geocode: {requests}/{max_requests} requests, "
+                    "{placed} placed, {missed} missed",
+                    requests=counts.requests,
+                    max_requests=max_requests,
+                    placed=counts.placed,
+                    missed=counts.missed,
+                )
     logfire.info(
         "geocoded: {placed} placed, {reused} reused, {missed} missed",
         placed=counts.placed,

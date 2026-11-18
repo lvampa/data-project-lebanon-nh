@@ -217,6 +217,24 @@ def test_each_police_pdf_is_written_before_its_callback_and_flagged(raw_sources)
     assert run.meta["archived"] is True
 
 
+def test_it_archives_a_response_that_has_no_request_yet(raw_sources):
+    # Scrapy attaches `response.request` after the downloader middlewares run, so the
+    # middleware gets the request as an argument and the response has none.
+    middleware = RawArchiveMiddleware.from_crawler(fake_crawler(process_spider()))
+    claim = PdfUrlClaim(id=7, canonical_url=CITY_URL, archive_url=WAYBACK_URL)
+    request = Request(WAYBACK_URL, cb_kwargs={"pdf_url": claim})
+    response = Response(url=WAYBACK_URL, body=PDF)
+
+    middleware.process_response(request, response)
+
+    stored = raw_sources.find_one({"source": "police_log_pdf"})
+    assert stored is not None
+    assert stored["source_key"] == CITY_URL
+    # Scrapy attaches the request next, and the callback reads the flag from it.
+    response.request = request
+    assert response.meta["archived"] is True
+
+
 def test_a_police_pdf_the_archive_could_not_write_is_flagged(monkeypatch):
     monkeypatch.setenv("MONGO_HOST", "127.0.0.1")
     monkeypatch.setenv("MONGO_PORT", str(closed_port()))

@@ -7,12 +7,16 @@ A spider opts in with two attributes:
 
     archive_source = "police_log_pdf"
 
-    def archive_key(self, response: Response) -> str | None:
+    def archive_key(self, request: Request, response: Response) -> str | None:
         # The source key, or None for a response that is not an original.
 
 A spider may also set `archive_batch_size`, which defaults to 50. At 1, each original
 is written before its callback runs, and `response.meta["archived"]` says whether
 the write worked.
+
+This runs before Scrapy attaches the request to the response, so the middleware's
+`request` is passed on and the flag goes on `request.meta`, which the callback's
+`response.meta` reads.
 """
 
 from datetime import UTC, datetime
@@ -31,7 +35,7 @@ class ArchivedSpider(Protocol):
     name: str
     archive_source: str
 
-    def archive_key(self, response: Response) -> str | None: ...
+    def archive_key(self, request: Request, response: Response) -> str | None: ...
 
 
 class RawArchiveMiddleware:
@@ -54,7 +58,7 @@ class RawArchiveMiddleware:
         if spider is None or not _is_archived(spider, response):
             return response
         archived_spider = cast(ArchivedSpider, spider)
-        source_key = archived_spider.archive_key(response)
+        source_key = archived_spider.archive_key(request, response)
         if source_key is not None:
             written = self._archive.add(
                 archived_spider.archive_source,
@@ -62,7 +66,7 @@ class RawArchiveMiddleware:
                 _archived(archived_spider, response),
             )
             if written is not None:
-                response.meta["archived"] = written
+                request.meta["archived"] = written
         return response
 
     def spider_closed(self) -> None:

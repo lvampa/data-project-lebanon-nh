@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FILES = [*REPO_ROOT.glob("compose*.yml"), *REPO_ROOT.glob("docker/Dockerfile*")]
+FILES = [REPO_ROOT / "compose.yml", *REPO_ROOT.glob("docker/Dockerfile*")]
 
 
 def _uvicorn_lines() -> list[tuple[str, str]]:

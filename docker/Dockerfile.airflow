@@ -27,7 +27,7 @@ RUN uv sync --frozen --package scrapers --package scripts
 RUN .venv/bin/playwright install chromium
 USER root
 RUN /opt/project/.venv/bin/playwright install-deps chromium
-# mongodump and mongorestore, for the MongoDB backup DAG. Debian does not package
+# mongodump and mongorestore, for the hand-run MongoDB backup script. Debian does not package
 # MongoDB's tools, so they come from MongoDB's own repository, matching mongo:8.
 RUN curl -fsSL https://pgp.mongodb.com/server-8.0.asc \
         | gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg \

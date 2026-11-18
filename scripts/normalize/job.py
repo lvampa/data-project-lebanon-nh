@@ -109,22 +109,54 @@ def run(
         settled: dict[str, int] = {}
         batches: dict[str, list[list[Group]]] = {name: [] for name in FIELD_NAMES}
         for chosen_field in chosen:
+            waiting = chosen_field.waiting(session)
             plan = chosen_field.plan(session, redo)
             session.commit()
             settled[chosen_field.name] = plan.settled
             if chosen_field.can_call():
                 batches[chosen_field.name] = _chunks(plan.groups, batch_size)
+            logfire.info(
+                "{field}: {waiting} waiting, {settled} settled without AI, "
+                "{to_ask} to ask in {batches} {batch_word}",
+                field=chosen_field.name,
+                waiting=waiting,
+                settled=plan.settled,
+                to_ask=sum(len(batch) for batch in batches[chosen_field.name]),
+                batches=len(batches[chosen_field.name]),
+                batch_word="batch"
+                if len(batches[chosen_field.name]) == 1
+                else "batches",
+            )
 
         allowed = allocate_calls({n: len(b) for n, b in batches.items()})
+        for name, count in allowed.items():
+            if count < len(batches[name]):
+                logfire.info(
+                    "{field}: this run makes {allowed} of {batches} batches",
+                    field=name,
+                    allowed=count,
+                    batches=len(batches[name]),
+                )
         discarded = {f.name: 0 for f in chosen}
         written = dict(settled)
         for chosen_field in chosen:
-            for batch in batches[chosen_field.name][: allowed[chosen_field.name]]:
+            this_run = batches[chosen_field.name][: allowed[chosen_field.name]]
+            for number, batch in enumerate(this_run, start=1):
                 if result.stopped:
                     break
                 outcome = _call(session, backend, call_log, chosen_field, batch, result)
                 written[chosen_field.name] += outcome.stored
                 discarded[chosen_field.name] += outcome.discarded
+                logfire.info(
+                    "{field}: batch {number}/{total}, {stored} values stored "
+                    "({entries} entries), {discarded} discarded",
+                    field=chosen_field.name,
+                    number=number,
+                    total=len(this_run),
+                    stored=outcome.stored,
+                    entries=outcome.entries,
+                    discarded=outcome.discarded,
+                )
 
         for chosen_field in chosen:
             result.summaries.append(
@@ -150,6 +182,8 @@ def run(
 @dataclass(frozen=True)
 class _BatchOutcome:
     stored: int = 0
+    # Log entries that carry the stored values.
+    entries: int = 0
     discarded: int = 0
 
 
@@ -213,15 +247,18 @@ def _call(
         return _BatchOutcome()
 
     stored = discarded = 0
+    stored_raws: list[str] = []
     for entry in checked.accepted:
         stored += chosen.store(session, by_sent[entry.item.raw], entry, call_id)
+        stored_raws.extend(by_sent[entry.item.raw].raws)
     # Only values whose own item was discarded or missing are charged.
     for discard in checked.discarded:
         discarded += chosen.fail(session, by_sent[discard.raw])
     for raw in checked.missing:
         discarded += chosen.fail(session, by_sent[raw])
+    entries = chosen.entries(session, stored_raws) if stored_raws else 0
     session.commit()
-    return _BatchOutcome(stored, discarded)
+    return _BatchOutcome(stored, entries, discarded)
 
 
 def _chunks(groups: Sequence[Group], size: int) -> list[list[Group]]:

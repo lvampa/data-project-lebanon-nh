@@ -1,8 +1,10 @@
+from collections.abc import Iterator
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import bootstrap
 import pytest
+from mongo import get_db
 
 
 @pytest.fixture(autouse=True)
@@ -19,3 +21,11 @@ def bootstrap_mocks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         bootstrap, "logfire", SimpleNamespace(configure=mocks.configure)
     )
     return mocks
+
+
+@pytest.fixture(autouse=True)
+def _fresh_mongo_client() -> Iterator[None]:
+    """A test that changes MONGO_* gets a client built from them, not a cached one."""
+    get_db.cache_clear()
+    yield
+    get_db.cache_clear()

@@ -13,6 +13,7 @@ import postgres
 from alembic import command
 from alembic.config import Config
 from bootstrap import bootstrap
+from mongo import init_indexes
 
 
 def upgrade_postgres() -> None:
@@ -22,9 +23,6 @@ def upgrade_postgres() -> None:
 
 
 def create_mongo_indexes() -> None:
-    # The mongo package reads MONGO_* when it is imported, so import it after bootstrap.
-    from mongo import init_indexes
-
     init_indexes()
 
 

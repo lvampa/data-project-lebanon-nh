@@ -8,10 +8,14 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.4",
+    "bootstrap",
     "psycopg2-binary>=2.9.12",
     "pydantic-settings>=2.14.1",
     "sqlalchemy>=2.1.8",
 ]
+
+[tool.uv.sources]
+bootstrap = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]

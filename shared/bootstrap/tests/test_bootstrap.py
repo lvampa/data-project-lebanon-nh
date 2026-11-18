@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # the call sits at module level.
 ENTRY_POINTS = [
     ("api/main.py", None, "api"),
+    ("shared/postgres/migrations/env.py", None, "alembic"),
     ("scripts/migrate.py", "main", "migrate"),
     ("scripts/normalize/job.py", "main", "normalize"),
     ("scripts/normalize/geocode.py", "main", "geocode"),

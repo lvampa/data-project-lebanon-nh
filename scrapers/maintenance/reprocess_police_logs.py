@@ -26,7 +26,7 @@ from ingest import ingest_pdf_url
 from ingest.pdf_text import extract_pdf_text
 from ingest.police_log import archive_entry_texts
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
-from mongo.client import MongoDB
+from mongo.client import get_db
 from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
@@ -176,7 +176,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     bootstrap("reprocess-police-logs")
     args = _parse_args(argv)
 
-    collection = archive_collection(MongoDB())
+    collection = archive_collection(get_db())
     # Checked before anything changes: with the archive down, every record would
     # look like it has no original and be sent back to be downloaded again.
     if not _archive_is_reachable(collection):

@@ -1,4 +1,4 @@
-"""Entry point setup, in its own package because no shared package needs dotenv or Logfire."""
+"""Entry point setup, in its own package so the other shared packages stay free of Logfire."""
 
 import logfire
 from dotenv import load_dotenv

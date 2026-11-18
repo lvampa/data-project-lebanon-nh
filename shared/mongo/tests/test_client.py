@@ -1,7 +1,11 @@
+import subprocess
+import sys
 from unittest.mock import patch
 
 import pytest
+from mongo import get_db
 from mongo.client import MongoDB
+from pydantic import ValidationError
 
 
 @pytest.fixture(autouse=True)
@@ -18,16 +22,50 @@ def no_mongo_env(monkeypatch):
 
 
 @pytest.fixture
-def db():
+def db(monkeypatch):
+    monkeypatch.setenv("MONGO_PASSWORD", "secret")
     return MongoDB()
 
 
-def test_defaults(db):
+def test_defaults_cover_everything_but_the_password(db):
     assert db.host == "localhost"
     assert db.port == 27017
     assert db.username == "admin"
-    assert db.password == "changeme"
+    assert db.password == "secret"
     assert db.default_db == "scraped_data"
+
+
+def test_a_missing_password_is_an_error_that_names_the_variable():
+    with pytest.raises(ValidationError, match="MONGO_PASSWORD"):
+        MongoDB()
+
+
+def test_get_db_returns_the_same_client_every_call(db):
+    assert get_db() is get_db()
+
+
+IMPORT_READS_NOTHING = """
+import os
+for name in list(os.environ):
+    if name.startswith("MONGO_"):
+        del os.environ[name]
+
+import mongo
+from mongo.client import get_db
+
+assert get_db.cache_info().currsize == 0
+"""
+
+
+def test_importing_mongo_reads_no_settings():
+    result = subprocess.run(
+        [sys.executable, "-c", IMPORT_READS_NOTHING],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_env_vars(monkeypatch, db):
@@ -51,7 +89,7 @@ def test_connect(mock_client, db):
         host="localhost",
         port=27017,
         username="admin",
-        password="changeme",
+        password="secret",
     )
     assert db._client is mock_client.return_value
 

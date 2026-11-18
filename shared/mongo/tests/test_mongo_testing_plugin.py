@@ -1,5 +1,5 @@
 import pytest
-from mongo import db
+from mongo import get_db
 from mongo_testing.plugin import is_test_database
 
 
@@ -17,13 +17,13 @@ def test_only_names_ending_in_test_count_as_test_databases(name, expected):
 
 
 def test_the_shared_client_points_at_the_test_database():
-    assert is_test_database(db.default_db)
+    assert is_test_database(get_db().default_db)
 
 
 def test_writes_go_to_the_test_database(raw_sources):
     raw_sources.insert_one({"source": "probe"})
 
-    assert raw_sources.database.name == db.default_db
+    assert raw_sources.database.name == get_db().default_db
     assert raw_sources.count_documents({}) == 1
 
 

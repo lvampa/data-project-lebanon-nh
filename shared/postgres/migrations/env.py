@@ -2,10 +2,12 @@ from logging.config import fileConfig
 
 import postgres.models  # noqa: F401 — registers models with Base.metadata
 from alembic import context
+from bootstrap import bootstrap
 from postgres.base import Base
 from postgres.client import get_engine
 from sqlalchemy import Connection
 
+bootstrap("alembic")
 config = context.config
 
 if config.config_file_name is not None:

@@ -22,7 +22,7 @@ from typing import Any
 import logfire
 from bootstrap import bootstrap
 from mongo.ai_calls import AiCall, AiCallLog, Outcome, ai_calls_collection
-from mongo.client import MongoDB
+from mongo.client import get_db
 from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 
@@ -248,7 +248,7 @@ def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) ->
                 file=sys.stderr,
             )
             return 1
-        call_log = AiCallLog(ai_calls_collection(MongoDB()))
+        call_log = AiCallLog(ai_calls_collection(get_db()))
         result = run(backend, call_log, fields=fields, redo=args.redo)
 
     for summary in result.summaries:

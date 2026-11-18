@@ -8,7 +8,7 @@ import logfire
 from bootstrap import bootstrap
 from bs4 import BeautifulSoup
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
-from mongo.client import MongoDB
+from mongo.client import get_db
 from postgres import open_session
 from postgres.models.llc import Llc
 from sqlalchemy import Update, or_, select, update
@@ -160,7 +160,7 @@ async def run(limit: int) -> None:
     from playwright_stealth import Stealth
 
     session = open_session()
-    archive = RawArchive(archive_collection(MongoDB()))
+    archive = RawArchive(archive_collection(get_db()))
     try:
         released = session.execute(
             release_stale_claims(datetime.now(UTC).replace(tzinfo=None))

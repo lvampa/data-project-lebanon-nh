@@ -21,7 +21,7 @@ from typing import Any
 
 import logfire
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
-from mongo.client import MongoDB
+from mongo.client import MongoDB, get_db
 from pipelines import PropertyPipeline
 from postgres import open_session
 from postgres.models.pdf_url import PdfUrl
@@ -346,7 +346,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     restore.add_argument("backup", type=Path)
 
     args = parser.parse_args(argv)
-    settings = MongoDB()
+    settings = get_db()
 
     if args.command == "restore-check":
         problems = restore_check(args.backup, settings, _run)

@@ -18,7 +18,7 @@ from models.officer import OfficerRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
 from mongo.archive import RawArchive, archive_collection
-from mongo.client import MongoDB
+from mongo.client import get_db
 from postgres import open_session
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
@@ -83,7 +83,7 @@ class PoliceLogPipeline:
     def from_crawler(cls, crawler: Crawler) -> Self:
         if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
             return cls(spider_name=crawler.spidercls.name)
-        archive = RawArchive(archive_collection(MongoDB()))
+        archive = RawArchive(archive_collection(get_db()))
         return cls(archive, spider_name=crawler.spidercls.name)
 
     def open_spider(self) -> None:

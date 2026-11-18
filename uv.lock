@@ -1561,11 +1561,15 @@ name = "mongo"
 version = "0.1.0"
 source = { editable = "shared/mongo" }
 dependencies = [
+    { name = "pydantic-settings" },
     { name = "pymongo" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pymongo", specifier = ">=4.19.0" }]
+requires-dist = [
+    { name = "pydantic-settings", specifier = ">=2.14.1" },
+    { name = "pymongo", specifier = ">=4.19.0" },
+]
 
 [[package]]
 name = "multidict"
@@ -1976,6 +1980,7 @@ version = "0.1.0"
 source = { editable = "shared/postgres" }
 dependencies = [
     { name = "alembic" },
+    { name = "bootstrap" },
     { name = "psycopg2-binary" },
     { name = "pydantic-settings" },
     { name = "sqlalchemy" },
@@ -1984,6 +1989,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.4" },
+    { name = "bootstrap", editable = "shared/bootstrap" },
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "sqlalchemy", specifier = ">=2.1.8" },

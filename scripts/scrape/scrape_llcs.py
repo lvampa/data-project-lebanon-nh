@@ -7,10 +7,11 @@ from datetime import UTC, datetime, timedelta
 import logfire
 from bootstrap import bootstrap
 from bs4 import BeautifulSoup
-from mongo.archive import ArchivedResponse, RawArchive
+from mongo.archive import ArchivedResponse, RawArchive, archive_collection
+from mongo.client import MongoDB
 from postgres import open_session
 from postgres.models.llc import Llc
-from sqlalchemy import Update, or_, update
+from sqlalchemy import Update, or_, select, update
 
 from scripts.models import LlcLookupRecord
 
@@ -155,11 +156,8 @@ def save_lookup(session, llc_id: int, data: dict | None, now: datetime) -> None:
 async def run(limit: int) -> None:
     bootstrap("scrape-llcs")
 
-    from mongo.archive import archive_collection
-    from mongo.client import MongoDB
     from playwright.async_api import async_playwright
     from playwright_stealth import Stealth
-    from sqlalchemy import select
 
     session = open_session()
     archive = RawArchive(archive_collection(MongoDB()))

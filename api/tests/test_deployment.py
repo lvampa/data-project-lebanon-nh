@@ -23,3 +23,19 @@ def test_the_api_is_started_somewhere():
 def test_uvicorn_starts_the_app_factory(name, line):
     # api.main has no module-level app, so `api.main:app` would fail to start.
     assert '"--factory", "api.main:create_app"' in line
+
+
+SHARED_PACKAGES = sorted(
+    pyproject.parent.name
+    for pyproject in (REPO_ROOT / "shared").glob("*/pyproject.toml")
+)
+IMAGES = ["Dockerfile.api", "Dockerfile.airflow"]
+
+
+@pytest.mark.parametrize("image", IMAGES)
+@pytest.mark.parametrize("package", SHARED_PACKAGES)
+def test_every_shared_package_is_copied_into_the_image(image, package):
+    # `uv sync --frozen` fails on a workspace dependency whose folder is missing.
+    dockerfile = (REPO_ROOT / "docker" / image).read_text()
+
+    assert f"shared/{package} ./shared/{package}/" in dockerfile

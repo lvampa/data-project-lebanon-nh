@@ -1,7 +1,9 @@
 """Copies each original a spider downloads into the raw source archive.
 
-It sits in the downloader middleware chain, so it sees the body before any callback
-and the Postgres path never carries bodies around.
+It is a spider middleware, so it runs after Scrapy has attached the request to the
+response and before the callback. It sits behind the built-in HttpErrorMiddleware
+(priority 50), so it only sees responses that reach the callback, after
+decompression and redirects.
 
 A spider opts in with two attributes:
 
@@ -24,7 +26,7 @@ from mongo.client import get_db
 from scrapy import Spider, signals
 from scrapy.crawler import Crawler
 from scrapy.exceptions import NotConfigured
-from scrapy.http import Request, Response
+from scrapy.http import Response
 
 
 class ArchivedSpider(Protocol):
@@ -49,10 +51,10 @@ class RawArchiveMiddleware:
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
         return middleware
 
-    def process_response(self, request: Request, response: Response) -> Response:
+    def process_spider_input(self, response: Response) -> None:
         spider = self._crawler.spider
         if spider is None or not _is_archived(spider, response):
-            return response
+            return
         archived_spider = cast(ArchivedSpider, spider)
         source_key = archived_spider.archive_key(response)
         if source_key is not None:
@@ -63,7 +65,6 @@ class RawArchiveMiddleware:
             )
             if written is not None:
                 response.meta["archived"] = written
-        return response
 
     def spider_closed(self) -> None:
         counts = self._archive.flush()

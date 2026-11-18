@@ -76,8 +76,11 @@ class ProcessUrlsSpider(scrapy.Spider):
         if not response.body.startswith(b"%PDF"):
             return None
         # Keyed by the city URL, even when the PDF came from its Wayback copy.
-        assert response.request is not None
-        pdf_url: PdfUrlClaim = response.request.cb_kwargs["pdf_url"]
+        request = response.request
+        assert request is not None, (
+            "spider middlewares run after the request is attached"
+        )
+        pdf_url: PdfUrlClaim = request.cb_kwargs["pdf_url"]
         return pdf_url.canonical_url
 
     # `scrapy crawl -a limit=10` passes the value as a string.

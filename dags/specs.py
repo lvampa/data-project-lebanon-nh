@@ -59,11 +59,20 @@ SPECS = [
     ),
     DagSpec(
         dag_id="vgsi_property",
-        schedule="0 3 * * 0",  # 3am every Sunday
+        schedule="0 3 1 * *",  # 3am on the 1st of every month
         cwd="scrapers",
         command="scrapy crawl vgsi_property",
         # Every parcel, one request at a time with autothrottle: several hours.
         timeout=timedelta(hours=12),
+        tags=("property",),
+        triggers=("build_properties",),
+    ),
+    DagSpec(
+        dag_id="build_properties",
+        schedule=None,
+        # Parses the archived parcel pages, so it fetches nothing.
+        command="python -m scripts.properties.build",
+        timeout=timedelta(hours=1),
         tags=("property",),
         triggers=("llc_lookup",),
     ),

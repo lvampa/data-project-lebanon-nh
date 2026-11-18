@@ -1,13 +1,14 @@
 from datetime import date
 
 import pytest
-from models.property import PropertyRecord, SaleRecord
 from pydantic import ValidationError
+
+from scripts.models.property import PropertyRecord, SaleRecord
 
 
 def make_property(**kwargs):
     defaults = {
-        "parcel_id": "10001",
+        "vgsi_pid": "10001",
         "location": "  123 MAIN ST  ",
         "owner": "SMITH, JOHN",
         "owner_address": "PO BOX 1, LEBANON NH 03766",
@@ -27,7 +28,7 @@ def make_property(**kwargs):
 
 def test_property_record_shape():
     record = PropertyRecord.model_validate(make_property())
-    assert record.parcel_id == "10001"
+    assert record.vgsi_pid == "10001"
     assert record.assessed_total == 350000
     assert record.sales == []
 
@@ -52,6 +53,16 @@ def test_property_record_converts_the_text_a_page_prints():
     assert record.assessment_year is None
 
 
+def test_property_record_keeps_the_mblu_compact():
+    record = PropertyRecord.model_validate(make_property(mblu="91/    264/    /    /"))
+    assert record.mblu == "91/264///"
+
+
+def test_property_record_treats_an_empty_mblu_as_missing():
+    record = PropertyRecord.model_validate(make_property(mblu="  /  /  /  /  "))
+    assert record.mblu is None
+
+
 def test_property_record_strips_whitespace():
     record = PropertyRecord.model_validate(make_property(location="  123 MAIN ST  "))
     assert record.location == "123 MAIN ST"
@@ -68,7 +79,7 @@ def test_property_record_null_fields():
 
 def test_property_record_missing_parcel_id_raises():
     data = make_property()
-    del data["parcel_id"]
+    del data["vgsi_pid"]
     with pytest.raises(ValidationError):
         PropertyRecord.model_validate(data)
 
@@ -112,12 +123,12 @@ def test_property_record_sales_parsed():
 
 def test_property_record_blank_parcel_id_raises():
     with pytest.raises(ValidationError):
-        PropertyRecord.model_validate(make_property(parcel_id=""))
+        PropertyRecord.model_validate(make_property(vgsi_pid=""))
 
 
 def test_property_record_whitespace_parcel_id_raises():
     with pytest.raises(ValidationError):
-        PropertyRecord.model_validate(make_property(parcel_id="   "))
+        PropertyRecord.model_validate(make_property(vgsi_pid="   "))
 
 
 def test_sale_record_date_object_passthrough():

@@ -20,4 +20,7 @@ class PropertySale(Base):
     certificate: Mapped[str | None] = mapped_column(Text)
     book_page: Mapped[str | None] = mapped_column(Text)
     instrument: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    crawl_run_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("crawl_runs.id"), nullable=False
+    )
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

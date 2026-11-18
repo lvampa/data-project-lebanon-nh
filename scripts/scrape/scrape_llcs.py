@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import contextlib
 import random
+import re
 from datetime import UTC, datetime, timedelta
 
 import logfire
@@ -11,7 +12,9 @@ from mongo.archive import ArchivedResponse, RawArchive, archive_collection
 from mongo.client import get_db
 from postgres import open_session
 from postgres.models.llc import Llc
+from postgres.models.property import Property
 from sqlalchemy import Update, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from scripts.models import LlcLookupRecord
 
@@ -20,6 +23,11 @@ SEARCH_URL = "https://quickstart.sos.nh.gov/online/BusinessInquire/"
 # in_progress; after this long they go back to pending.
 CLAIM_LEASE = timedelta(hours=2)
 ARCHIVE_SOURCE = "nh_sos_business"
+# An owner that looks like a business gets looked up on the Secretary of State site.
+LLC_PATTERN = re.compile(
+    r"\b(LLC|L\.L\.C|INC|CORP|CORPORATION|TRUST|LP|LLP|PLLC)\b",
+    re.IGNORECASE,
+)
 
 
 def parse_llc_detail(html: str, business_id: str | None) -> dict:
@@ -153,6 +161,32 @@ def save_lookup(session, llc_id: int, data: dict | None, now: datetime) -> None:
         session.commit()
 
 
+def queue_new_owners(session, now: datetime) -> int:
+    """Add each business owner in `properties` that has no llcs row, as pending."""
+    owners = session.scalars(
+        select(Property.owner).where(Property.owner.is_not(None)).distinct()
+    ).all()
+    rows = [
+        {
+            "name": owner.strip().upper(),
+            "raw_owner_name": owner,
+            "lookup_status": "pending",
+            "created_at": now,
+        }
+        for owner in owners
+        if LLC_PATTERN.search(owner)
+    ]
+    if not rows:
+        return 0
+    queued = session.execute(
+        pg_insert(Llc)
+        .values(rows)
+        .on_conflict_do_nothing(index_elements=["name"])
+        .returning(Llc.id)
+    ).all()
+    return len(queued)
+
+
 async def run(limit: int) -> None:
     bootstrap("scrape-llcs")
 
@@ -162,6 +196,9 @@ async def run(limit: int) -> None:
     session = open_session()
     archive = RawArchive(archive_collection(get_db()))
     try:
+        queued = queue_new_owners(session, datetime.now(UTC).replace(tzinfo=None))
+        session.commit()
+        logfire.info("queued new business owners", count=queued)
         released = session.execute(
             release_stale_claims(datetime.now(UTC).replace(tzinfo=None))
         ).rowcount

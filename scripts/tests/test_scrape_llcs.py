@@ -7,12 +7,17 @@ from unittest.mock import MagicMock
 import pytest
 from mongo.archive import RawArchive, archive_collection
 from mongo.client import MongoDB
+from postgres.models.crawl_run import CrawlRun
+from postgres.models.llc import Llc
+from postgres.models.property import Property
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
 from scripts.scrape.scrape_llcs import (
     CLAIM_LEASE,
     parse_llc_detail,
+    queue_new_owners,
     release_stale_claims,
     save_lookup,
     scrape_llc,
@@ -243,3 +248,32 @@ def test_the_lookup_is_unchanged_when_mongodb_is_unreachable(monkeypatch):
     assert business_id == "757045"
     assert data == parse_llc_detail(DETAIL_HTML, "757045")
     assert counts.failed == 1
+
+
+def test_the_job_queues_each_business_owner_once(db_session):
+    run = CrawlRun(source="vgsi_property", started_at=NOW)
+    db_session.add(run)
+    db_session.flush()
+    for number, owner in enumerate(
+        ["ACME HOLDINGS LLC", "SMITH, JOHN", "ACME HOLDINGS LLC", None]
+    ):
+        db_session.add(
+            Property(
+                mblu=f"{number}/1///",
+                vgsi_pid=str(number),
+                owner=owner,
+                crawl_run_id=run.id,
+                fetched_at=NOW,
+            )
+        )
+    db_session.flush()
+
+    assert queue_new_owners(db_session, NOW) == 1
+    assert queue_new_owners(db_session, NOW) == 0
+
+    [llc] = db_session.scalars(select(Llc)).all()
+    assert (llc.name, llc.raw_owner_name, llc.lookup_status) == (
+        "ACME HOLDINGS LLC",
+        "ACME HOLDINGS LLC",
+        "pending",
+    )

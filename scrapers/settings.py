@@ -64,7 +64,6 @@ EXTENSIONS = {
 ITEM_PIPELINES = {
     "pipelines.UrlRecordPipeline": 100,
     "pipelines.PoliceLogPipeline": 300,
-    "pipelines.PropertyPipeline": 400,
     "pipelines.CityStaffPipeline": 500,
     "pipelines.OfficerPipeline": 600,
     "pipelines.BudgetDocumentPipeline": 700,

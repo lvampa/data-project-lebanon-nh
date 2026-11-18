@@ -6,6 +6,7 @@ from datetime import date, datetime
 import pytest
 from mongo.ai_calls import AiCallLog
 from postgres.models.address_normalization import AddressNormalization
+from postgres.models.crawl_run import CrawlRun
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 from postgres.models.property import Property
@@ -54,13 +55,17 @@ def add_locations(session, *raw_values: str, place_code: str | None = None) -> N
 
 
 def add_parcels(session, *locations: str) -> None:
+    run = CrawlRun(source="vgsi_property", started_at=NOW)
+    session.add(run)
+    session.flush()
     for location in locations:
         session.add(
             Property(
-                parcel_id=f"p-{location}",
+                mblu=f"{location}///",
+                vgsi_pid=f"p-{location}",
                 location=location,
-                created_at=NOW,
-                updated_at=NOW,
+                crawl_run_id=run.id,
+                fetched_at=NOW,
             )
         )
     session.commit()

@@ -209,7 +209,7 @@ pub async fn fetch_properties(pool: &PgPool) -> Result<Vec<Property>> {
             year_built, building_sqft,
             assessed_land, assessed_building, assessed_total, assessment_year,
             detail_url
-        FROM properties
+        FROM public_properties
         ORDER BY assessed_total DESC NULLS LAST
         ",
     )

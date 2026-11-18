@@ -9,7 +9,7 @@ PIPELINE_PATHS = sorted(settings.ITEM_PIPELINES)
 
 
 def test_every_configured_pipeline_is_checked():
-    assert len(PIPELINE_PATHS) == 6
+    assert len(PIPELINE_PATHS) == 5
 
 
 @pytest.mark.parametrize("path", PIPELINE_PATHS)

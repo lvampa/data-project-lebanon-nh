@@ -58,11 +58,12 @@ class SaleRecord(BaseModel):
 class PropertyRecord(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    parcel_id: str = Field(min_length=1)
+    vgsi_pid: str = Field(min_length=1)
     location: str | None = None
     owner: str | None = None
     co_owner: str | None = None
     owner_address: str | None = None
+    # The town's parcel key, as '91/264///': map, block, lot, unit, sub-lot.
     mblu: str | None = None
     account_number: str | None = None
     use_code: str | None = None
@@ -86,3 +87,10 @@ class PropertyRecord(BaseModel):
     value_history: dict[str, Any] | None = None
     detail_url: str | None = None
     sales: list[SaleRecord] = Field(default_factory=list)
+
+    @field_validator("mblu")
+    @classmethod
+    def compact_mblu(cls, v: str | None) -> str | None:
+        """The page prints '91/    264/    /    /'. Spaces go, so the key compares."""
+        compact = re.sub(r"\s+", "", v) if v else ""
+        return compact if compact.strip("/") else None

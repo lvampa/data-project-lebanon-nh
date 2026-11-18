@@ -8,7 +8,7 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from scripts.models.property import PropertyRecord
+from models.property import PropertyRecord
 
 # Lebanon has a few thousand parcels. A first build with fewer is a partial crawl.
 FIRST_BUILD_FLOOR = 3000

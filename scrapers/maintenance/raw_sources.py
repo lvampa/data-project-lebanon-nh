@@ -6,7 +6,7 @@ Run from scrapers/:
     uv run python -m maintenance.raw_sources check
     uv run python -m maintenance.raw_sources restore-check BACKUP
 
-Parcel pages are parsed by `uv run build-properties`, and police log PDFs by the
+Parcel pages are parsed by `maintenance.build_properties`, and police log PDFs by the
 police log reprocess job.
 """
 

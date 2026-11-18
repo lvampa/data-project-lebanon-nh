@@ -1,9 +1,6 @@
-from datetime import datetime
 from pathlib import Path
 
 import pytest
-from crawl_runs import finish_run, start_run
-from postgres.models.crawl_run import CrawlRun
 from scrapy.http import HtmlResponse
 from spiders.vgsi_property import VgsiPropertySpider
 
@@ -79,42 +76,9 @@ def test_a_street_page_leads_to_its_parcels(spider):
     ]
 
 
-def test_a_parcel_page_yields_nothing_and_is_counted(spider):
+def test_a_parcel_page_yields_nothing(spider):
     response = HtmlResponse(
         url="https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=10001", body=b"<html/>"
     )
 
     assert spider.parse_parcel(response) is None
-    assert spider.pages == 1
-
-
-def test_a_finished_crawl_records_its_run(db_session, spider):
-    spider.run_id = start_run(spider.name)
-    spider.pages = 3
-
-    spider.close_run("finished")
-
-    run = db_session.get(CrawlRun, spider.run_id)
-    assert run is not None
-    assert (run.source, run.pages) == ("vgsi_property", 3)
-    assert isinstance(run.finished_at, datetime)
-
-
-def test_a_stopped_crawl_stays_unfinished(db_session, spider):
-    spider.run_id = start_run(spider.name)
-
-    spider.close_run("shutdown")
-
-    run = db_session.get(CrawlRun, spider.run_id)
-    assert run is not None
-    assert run.finished_at is None
-
-
-def test_finish_run_stamps_the_pages(db_session):
-    run_id = start_run("vgsi_property")
-
-    finish_run(run_id, 7)
-
-    run = db_session.get(CrawlRun, run_id)
-    assert run is not None
-    assert run.pages == 7

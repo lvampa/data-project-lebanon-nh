@@ -2,14 +2,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from ingest import property_checks as checks
+from maintenance.build_properties import main
 from mongo.archive import ArchivedResponse, RawArchive
 from postgres.models.crawl_run import CrawlRun
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
 from sqlalchemy import select
-
-from scripts.properties import checks
-from scripts.properties.build import main
 
 PARCEL_HTML = (
     Path(__file__).parent / "fixtures" / "vgsi" / "parcel_business.html"

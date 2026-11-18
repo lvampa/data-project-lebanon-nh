@@ -76,9 +76,9 @@ Every original the scrapers download is kept in the MongoDB `raw_sources` collec
 These commands read it; run them from `scrapers/`.
 
 Build the property tables from the archived parcel pages, without downloading anything.
-Run it from the repo root:
+Run it from `scrapers/`:
 ```bash
-uv run build-properties
+uv run python -m maintenance.build_properties
 ```
 It parses the newest archived page of each parcel seen in the latest finished `vgsi_property` crawl, runs the quality checks, and replaces `properties` and `property_sales` in one transaction.
 When a check fails it writes nothing, logs why, and exits 1.

@@ -1,33 +1,26 @@
-"""Build the property tables from the raw archive, by hand or from Airflow.
+"""Rebuild `properties` and `property_sales` from the raw archive.
 
-    uv run build-properties
-
-It takes the newest archived page of each parcel seen in the latest finished crawl,
-parses it, runs the quality checks, and replaces `properties` and `property_sales` in
-one transaction. When a check fails it writes nothing, logs why, and exits 1. Run it
-again after any parser fix: it reads the archive, so nothing is fetched.
+It takes the newest archived page of each parcel seen in the latest finished
+`vgsi_property` crawl, parses it, runs the quality checks, and replaces both tables in
+one transaction. When a check fails it writes nothing.
 """
 
-import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 import logfire
-from bootstrap import bootstrap
-from mongo.archive import RawArchive, archive_collection, stored_body
-from mongo.client import get_db
-from postgres import open_session
+from models.property import PropertyRecord
+from mongo.archive import RawArchive, stored_body
+from parsers.vgsi_parcel import parse_parcel
 from postgres.models.crawl_run import CrawlRun
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
 from sqlalchemy import delete, func, insert, select
 from sqlalchemy.orm import Session
 
-from scripts.models.property import PropertyRecord
-from scripts.properties.checks import CheckResult, run_checks
-from scripts.properties.parse import parse_parcel
+from ingest.property_checks import CheckResult, run_checks
 
 PARCEL_SOURCE = "vgsi_parcel"
 CRAWL_SOURCE = "vgsi_property"
@@ -95,54 +88,61 @@ def replace_properties(
     return len(sales)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    bootstrap("build-properties")
-    with open_session() as session:
-        run = latest_finished_run(session)
-        if run is None:
-            logfire.error("no finished crawl of vgsi_property; run the crawl first")
-            return 1
-
-        run_id = run.id
-        archive = RawArchive(archive_collection(get_db()))
-        pages, unparsed = parse_archive(archive, run)
-        current = session.scalar(select(func.count()).select_from(Property)) or 0
-        results = run_checks([page.record for page in pages], current)
-        print("\n".join(_check_lines(results)))
-        failed = [result for result in results if not result.passed]
-        for result in failed:
-            logfire.error(
-                "property build check failed: {check}: {detail}",
-                check=result.name,
-                detail=result.detail,
-            )
-        if failed:
-            print(f"Nothing written. The tables still hold {current} parcels.")
-            return 1
-
-        # The key is not empty on the parcels that pass; the rest cannot be stored.
-        keyed = [page for page in pages if page.record.mblu]
-        sales = replace_properties(session, run, keyed)
-        session.commit()
-    print(
-        f"Built {len(keyed)} parcels and {sales} sales from crawl run {run_id}. "
-        f"{unparsed} pages did not parse, and {len(pages) - len(keyed)} had no mblu."
-    )
-    return 0
-
-
-def _check_lines(results: Sequence[CheckResult]) -> list[str]:
-    return [
-        f"{'ok  ' if result.passed else 'FAIL'} {result.name}: {result.detail}"
-        for result in results
-    ]
-
-
 def _naive_utc(moment: datetime) -> datetime:
     if moment.tzinfo is not None:
         return moment.astimezone(UTC).replace(tzinfo=None)
     return moment
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+@dataclass(frozen=True)
+class BuildResult:
+    checks: list[CheckResult] = field(default_factory=list)
+    # Parcels in the table before the build.
+    current: int = 0
+    # None when no crawl has finished.
+    run_id: int | None = None
+    parcels: int = 0
+    sales: int = 0
+    unparsed: int = 0
+    without_mblu: int = 0
+
+    @property
+    def failed(self) -> list[CheckResult]:
+        return [check for check in self.checks if not check.passed]
+
+    @property
+    def written(self) -> bool:
+        return self.run_id is not None and not self.failed
+
+
+def build(session: Session, archive: RawArchive) -> BuildResult:
+    run = latest_finished_run(session)
+    if run is None:
+        return BuildResult()
+    run_id = run.id
+    pages, unparsed = parse_archive(archive, run)
+    current = session.scalar(select(func.count()).select_from(Property)) or 0
+    checks = run_checks([page.record for page in pages], current)
+    result = BuildResult(checks, current, run_id, unparsed=unparsed)
+    for check in result.failed:
+        logfire.error(
+            "property build check failed: {check}: {detail}",
+            check=check.name,
+            detail=check.detail,
+        )
+    if result.failed:
+        return result
+
+    # A parcel with no mblu cannot be stored. The core fields check already counted it.
+    keyed = [page for page in pages if page.record.mblu]
+    sales = replace_properties(session, run, keyed)
+    session.commit()
+    return BuildResult(
+        checks,
+        current,
+        run_id,
+        len(keyed),
+        sales,
+        unparsed,
+        len(pages) - len(keyed),
+    )

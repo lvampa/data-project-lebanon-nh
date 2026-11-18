@@ -2,9 +2,8 @@
 
 from typing import Any
 
-from parsel import Selector
-
-from scripts.models.property import PropertyRecord
+from models.property import PropertyRecord
+from scrapy.selector import Selector
 
 # The page's label for each sales column, and the field it fills.
 SALE_COLUMNS = {

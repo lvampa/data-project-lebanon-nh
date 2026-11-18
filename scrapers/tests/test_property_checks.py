@@ -1,12 +1,11 @@
 import pytest
-
-from scripts.models.property import PropertyRecord, SaleRecord
-from scripts.properties.checks import (
+from ingest.property_checks import (
     check_core_fields,
     check_count,
     check_sales,
     check_unique_mblu,
 )
+from models.property import PropertyRecord, SaleRecord
 
 
 def parcel(number: int, **fields) -> PropertyRecord:

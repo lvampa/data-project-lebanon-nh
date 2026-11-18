@@ -1,9 +1,8 @@
 from datetime import date
 
 import pytest
+from models.property import PropertyRecord, SaleRecord
 from pydantic import ValidationError
-
-from scripts.models.property import PropertyRecord, SaleRecord
 
 
 def make_property(**kwargs):

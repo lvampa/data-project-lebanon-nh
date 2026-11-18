@@ -1,11 +1,7 @@
-from typing import Any, Self
 from urllib.parse import urljoin
 
 import logfire
 import scrapy
-from crawl_runs import finish_run, start_run
-from scrapy import signals
-from scrapy.crawler import Crawler
 from scrapy.http import Request, Response
 
 BASE_URL = "https://gis.vgsi.com/LebanonNH/"
@@ -20,30 +16,13 @@ def _parcel_id(url: str) -> str:
 class VgsiPropertySpider(scrapy.Spider):
     """Fetches every parcel page and parses nothing.
 
-    The raw archive middleware stores each page. `uv run build-properties` parses the
+    The raw archive middleware stores each page. `maintenance.build_properties` parses the
     archive, so a parser fix never needs a recrawl.
     """
 
     name = "vgsi_property"
     allowed_domains = ["gis.vgsi.com"]
     archive_source = "vgsi_parcel"
-    pages = 0
-    run_id: int | None = None
-
-    @classmethod
-    def from_crawler(cls, crawler: Crawler, *args: Any, **kwargs: Any) -> Self:
-        spider = super().from_crawler(crawler, *args, **kwargs)
-        crawler.signals.connect(spider.open_run, signal=signals.spider_opened)
-        crawler.signals.connect(spider.close_run, signal=signals.spider_closed)
-        return spider
-
-    def open_run(self) -> None:
-        self.run_id = start_run(self.name)
-
-    def close_run(self, reason: str) -> None:
-        # Only a crawl that ran to the end counts. A stopped one stays unfinished.
-        if reason == "finished" and self.run_id is not None:
-            finish_run(self.run_id, self.pages)
 
     def archive_key(self, response: Response) -> str | None:
         # Street index pages only list parcels; the parcel pages are the originals.
@@ -78,4 +57,5 @@ class VgsiPropertySpider(scrapy.Spider):
             )
 
     def parse_parcel(self, response: Response, **kwargs) -> None:
-        self.pages += 1
+        # The archive middleware has stored the page. The build parses it.
+        return None

@@ -11,7 +11,6 @@ dependencies = [
     "locations",
     "logfire>=5.4.0",
     "mongo",
-    "parsel>=1.9.1",
     "playwright>=1.64.1",
     "playwright-stealth>=2.0.3",
     "postgres",
@@ -24,7 +23,6 @@ dependencies = [
 migrate = "scripts.migrate:main"
 normalize = "scripts.normalize.job:main"
 geocode = "scripts.normalize.geocode:main"
-build-properties = "scripts.properties.build:main"
 
 [tool.uv.sources]
 bootstrap = { workspace = true }
@@ -45,7 +43,6 @@ packages = [
     "scripts.ingest",
     "scripts.models",
     "scripts.normalize",
-    "scripts.properties",
     "scripts.scrape",
 ]
 

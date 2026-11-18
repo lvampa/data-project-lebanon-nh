@@ -71,7 +71,8 @@ SPECS = [
         dag_id="build_properties",
         schedule=None,
         # Parses the archived parcel pages, so it fetches nothing.
-        command="python -m scripts.properties.build",
+        cwd="scrapers",
+        command="python -m maintenance.build_properties",
         timeout=timedelta(hours=1),
         tags=("property",),
         triggers=("llc_lookup",),

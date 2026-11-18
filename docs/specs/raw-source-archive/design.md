@@ -21,7 +21,7 @@ process spider ─┐                         ┌─► callbacks ─► pipelin
 VGSI spider ────┘                         └─► RawArchiveMiddleware ─► buffer ─► bulk upsert ─► MongoDB raw_sources
 
 police reprocess ─► raw_sources ─► pypdf ─► ingest_pdf_url ─► Postgres
-build-properties ─► raw_sources ─► parse_parcel ─► checks ─► Postgres
+build_properties ─► raw_sources ─► parse_parcel ─► checks ─► Postgres
 normalize job ────► AiCallLog ─► MongoDB ai_calls          (Postgres keeps ai_call_id)
 backup script ────► mongodump ─► one dated file per run
 ```

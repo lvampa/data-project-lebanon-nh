@@ -1,9 +1,8 @@
 from pathlib import Path
 
 import pytest
-
-from scripts.models.property import PropertyRecord
-from scripts.properties.parse import parse_parcel
+from models.property import PropertyRecord
+from parsers.vgsi_parcel import parse_parcel
 
 # A real page from gis.vgsi.com. The parcel is owned by a business, and the earlier
 # owners in its sales history are replaced with made-up names.

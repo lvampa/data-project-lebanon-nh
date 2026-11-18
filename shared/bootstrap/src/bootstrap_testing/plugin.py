@@ -1,14 +1,20 @@
-from collections.abc import Iterator
+"""Pytest plugin that keeps tests off .env and off Logfire.
+
+It loads through the `pytest11` entry point, so every suite in the workspace gets it,
+from whichever directory pytest runs.
+"""
+
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import bootstrap
 import pytest
-from mongo import get_db, get_mongo_settings
+
+_session_patch = pytest.MonkeyPatch()
 
 
 def _silence_bootstrap(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
-    """Replace the two things bootstrap does, so tests never read .env or reach Logfire.
+    """Replace the two things bootstrap does.
 
     Entry points import `bootstrap` by name, so the real function stays and its two
     calls are replaced. The agents' sandbox cannot read .env at all.
@@ -22,12 +28,9 @@ def _silence_bootstrap(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     return mocks
 
 
-_session_patch = pytest.MonkeyPatch()
-
-
 def pytest_configure(config: pytest.Config) -> None:
-    # Modules such as api.main bootstrap when a test file imports them, which is
-    # during collection and before any fixture runs.
+    # Modules may bootstrap while a test file imports them, which is during collection
+    # and before any fixture runs.
     _silence_bootstrap(_session_patch)
     # Subprocesses, such as the one test_migrate starts, configure Logfire for real.
     _session_patch.setenv("LOGFIRE_SEND_TO_LOGFIRE", "false")
@@ -41,17 +44,3 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 def bootstrap_mocks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """Fresh mocks and an unused flag for each test."""
     return _silence_bootstrap(monkeypatch)
-
-
-def _forget_mongo() -> None:
-    # No disconnect: the session-scoped mongo_test_db fixture holds the first client.
-    get_db.cache_clear()
-    get_mongo_settings.cache_clear()
-
-
-@pytest.fixture(autouse=True)
-def _fresh_mongo_client() -> Iterator[None]:
-    """A test that changes MONGO_* gets a client built from them, not a cached one."""
-    _forget_mongo()
-    yield
-    _forget_mongo()

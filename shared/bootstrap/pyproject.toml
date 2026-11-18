@@ -13,4 +13,9 @@ requires = ["uv_build>=0.10.4,<0.11.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "bootstrap"
+# bootstrap_testing is its own top-level module so pytest can load it before any
+# test module imports bootstrap.
+module-name = ["bootstrap", "bootstrap_testing"]
+
+[project.entry-points.pytest11]
+bootstrap_testing = "bootstrap_testing.plugin"

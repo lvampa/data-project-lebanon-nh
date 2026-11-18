@@ -106,6 +106,35 @@ def test_bootstrap_works_with_no_logfire_token(tmp_path):
     assert result.returncode == 0, result.stderr
 
 
+PROBE_TEST = """
+from unittest.mock import Mock
+
+import bootstrap
+
+
+def test_bootstrap_is_silenced():
+    assert isinstance(bootstrap.load_dotenv, Mock)
+    bootstrap.bootstrap("probe")
+    bootstrap.load_dotenv.assert_called_once()
+"""
+
+
+def test_bootstrap_is_silenced_when_pytest_runs_from_scrapers(tmp_path):
+    probe = tmp_path / "test_probe.py"
+    probe.write_text(PROBE_TEST)
+    scrapers = REPO_ROOT / "scrapers"
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(probe)],
+        cwd=scrapers,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def _calls_bootstrap(tree: ast.Module) -> bool:
     return any(
         isinstance(node, ast.Call)

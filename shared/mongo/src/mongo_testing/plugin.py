@@ -42,6 +42,17 @@ def pytest_configure(config: pytest.Config) -> None:
     get_db.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _fresh_mongo_client() -> Iterator[None]:
+    """A test that changes MONGO_* gets a client built from them, not a cached one."""
+    # No disconnect: the session-scoped mongo_test_db fixture holds the first client.
+    get_db.cache_clear()
+    get_mongo_settings.cache_clear()
+    yield
+    get_db.cache_clear()
+    get_mongo_settings.cache_clear()
+
+
 @pytest.fixture(scope="session")
 def mongo_test_db() -> Database[dict[str, Any]]:
     """The MongoDB test database, after checking the server answers."""

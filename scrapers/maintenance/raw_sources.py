@@ -21,6 +21,7 @@ from typing import Any
 
 import logfire
 from bootstrap import bootstrap
+from models.property import PropertyRecord, SaleRecord
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB, get_db
 from pipelines import PropertyPipeline
@@ -41,20 +42,10 @@ SIZE_WARNING_BYTES = 5 * 1024**3
 RESTORE_DATABASE = "scraped_data_restore_test"
 
 # Parsed values only; timestamps move on every upsert.
-_PROPERTY_FIELDS = (
-    "location",
-    "owner",
-    "owner_address",
-    "land_use",
-    "lot_size_acres",
-    "year_built",
-    "building_sqft",
-    "assessed_land",
-    "assessed_building",
-    "assessed_total",
-    "assessment_year",
-    "detail_url",
+_PROPERTY_FIELDS = tuple(
+    name for name in PropertyRecord.model_fields if name != "sales"
 )
+_SALE_FIELDS = tuple(SaleRecord.model_fields)
 
 
 @dataclass(frozen=True)
@@ -163,14 +154,9 @@ def _parcel_values(session: Session, parcel_id: str) -> tuple[Any, ...] | None:
     if row is None:
         return None
     sales = session.execute(
-        select(
-            PropertySale.sale_date,
-            PropertySale.sale_price,
-            PropertySale.grantee,
-            PropertySale.grantor,
-        )
+        select(*(getattr(PropertySale, field) for field in _SALE_FIELDS))
         .where(PropertySale.property_id == row.id)
-        .order_by(PropertySale.sale_date, PropertySale.grantee)
+        .order_by(PropertySale.sale_date, PropertySale.owner)
     ).all()
     return (*(getattr(row, field) for field in _PROPERTY_FIELDS), tuple(sales))
 

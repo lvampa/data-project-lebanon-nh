@@ -160,50 +160,16 @@ class PropertyPipeline:
             now = self.clock()
 
             with logfire.span("save property", parcel_id=record.parcel_id):
-                # Upsert property
-                stmt = (
+                # Every record field but the sales is a column of the same name.
+                columns = record.model_dump(exclude={"sales"})
+                property_id = self._session.execute(
                     pg_insert(Property)
-                    .values(
-                        parcel_id=record.parcel_id,
-                        location=record.location,
-                        owner=record.owner,
-                        owner_address=record.owner_address,
-                        land_use=record.land_use,
-                        lot_size_acres=record.lot_size_acres,
-                        year_built=record.year_built,
-                        building_sqft=record.building_sqft,
-                        assessed_land=record.assessed_land,
-                        assessed_building=record.assessed_building,
-                        assessed_total=record.assessed_total,
-                        assessment_year=record.assessment_year,
-                        detail_url=record.detail_url,
-                        created_at=now,
-                        updated_at=now,
-                    )
+                    .values(**columns, created_at=now, updated_at=now)
                     .on_conflict_do_update(
                         index_elements=["parcel_id"],
-                        set_={
-                            "location": record.location,
-                            "owner": record.owner,
-                            "owner_address": record.owner_address,
-                            "land_use": record.land_use,
-                            "lot_size_acres": record.lot_size_acres,
-                            "year_built": record.year_built,
-                            "building_sqft": record.building_sqft,
-                            "assessed_land": record.assessed_land,
-                            "assessed_building": record.assessed_building,
-                            "assessed_total": record.assessed_total,
-                            "assessment_year": record.assessment_year,
-                            "detail_url": record.detail_url,
-                            "updated_at": now,
-                        },
+                        set_={**columns, "updated_at": now},
                     )
-                )
-                self._session.execute(stmt)
-
-                # Get the property PK to link sales
-                property_id = self._session.execute(
-                    select(Property.id).where(Property.parcel_id == record.parcel_id)
+                    .returning(Property.id)
                 ).scalar_one()
 
                 # Queue LLC lookup if owner looks like a business entity
@@ -236,10 +202,7 @@ class PropertyPipeline:
                     self._session.execute(
                         pg_insert(PropertySale).values(
                             property_id=property_id,
-                            sale_date=sale.sale_date,
-                            sale_price=sale.sale_price,
-                            grantee=sale.grantee,
-                            grantor=sale.grantor,
+                            **sale.model_dump(),
                             created_at=now,
                         )
                     )

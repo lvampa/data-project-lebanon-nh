@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import logfire
+from bootstrap import bootstrap
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB, get_db
 from pipelines import PropertyPipeline
@@ -327,6 +328,7 @@ def version_lines(versions: Iterable[dict[str, Any]]) -> list[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    bootstrap("raw-sources")
     parser = argparse.ArgumentParser(prog="raw_sources")
     commands = parser.add_subparsers(dest="command", required=True)
 

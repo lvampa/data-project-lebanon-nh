@@ -23,9 +23,6 @@ TEST_PASSWORD = "app"
 POSTGRES_PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = POSTGRES_PACKAGE_ROOT / "alembic.ini"
 
-# What a sessionmaker uses when it is not told otherwise.
-_DEFAULT_JOIN_TRANSACTION_MODE = "conditional_savepoint"
-
 
 def is_test_database(name: str | None) -> bool:
     return bool(name) and name.endswith("_test")
@@ -54,10 +51,10 @@ def _sessions_unbound_outside_fixtures(monkeypatch: pytest.MonkeyPatch) -> None:
     where it would otherwise commit rows to the test database for good.
     """
 
-    def no_database() -> Connection:
+    def no_database() -> Session:
         raise UnboundExecutionError("This test needs the `db_connection` fixture.")
 
-    monkeypatch.setattr(client, "_session_bind", no_database)
+    monkeypatch.setattr(client, "_new_session", no_database)
 
 
 @pytest.fixture(scope="session")
@@ -100,15 +97,15 @@ def db_connection(
     """
     with test_engine.connect() as connection:
         transaction = connection.begin()
-        monkeypatch.setattr(client, "_session_bind", lambda: connection)
-        client.SessionLocal.configure(join_transaction_mode="create_savepoint")
+        monkeypatch.setattr(
+            client,
+            "_new_session",
+            lambda: Session(bind=connection, join_transaction_mode="create_savepoint"),
+        )
         try:
             yield connection
         finally:
             transaction.rollback()
-            client.SessionLocal.configure(
-                join_transaction_mode=_DEFAULT_JOIN_TRANSACTION_MODE
-            )
 
 
 @pytest.fixture

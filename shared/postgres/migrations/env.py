@@ -7,7 +7,6 @@ from postgres.base import Base
 from postgres.client import get_engine
 from sqlalchemy import Connection
 
-bootstrap("alembic")
 config = context.config
 
 if config.config_file_name is not None:
@@ -17,6 +16,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    bootstrap("alembic")
     context.configure(
         url=get_engine().url,
         target_metadata=target_metadata,
@@ -31,6 +31,7 @@ def run_migrations_online() -> None:
     # Tests pass their own connection so the migrations join its transaction.
     connection = config.attributes.get("connection")
     if connection is None:
+        bootstrap("alembic")
         with get_engine().connect() as connection:
             _run_migrations(connection)
     else:

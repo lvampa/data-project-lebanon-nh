@@ -1,7 +1,7 @@
 from functools import cache
 
-from sqlalchemy import Connection, Engine, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session
 
 from .settings import get_postgres_settings
 
@@ -14,14 +14,11 @@ def get_engine() -> Engine:
     return create_engine(get_postgres_settings().url, pool_pre_ping=True)
 
 
-SessionLocal: sessionmaker[Session] = sessionmaker()
-
-
-def _session_bind() -> Engine | Connection:
+def _new_session() -> Session:
     # The test plugin replaces this to put sessions on its rolled-back connection.
-    return get_engine()
+    return Session(bind=get_engine())
 
 
 def open_session() -> Session:
     """A new session on the shared engine. The caller closes it."""
-    return SessionLocal(bind=_session_bind())
+    return _new_session()

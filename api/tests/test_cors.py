@@ -1,14 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from api.main import app
-
 ADMIN_ORIGIN = "http://localhost:3001"
 OTHER_ORIGIN = "https://example.com"
 
 
 @pytest.fixture
-def client():
+def client(app):
     return TestClient(app)
 
 

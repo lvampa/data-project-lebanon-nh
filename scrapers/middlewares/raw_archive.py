@@ -20,7 +20,7 @@ from typing import Protocol, Self, cast
 
 import logfire
 from mongo.archive import BATCH_SIZE, ArchivedResponse, RawArchive, archive_collection
-from mongo.client import MongoDB
+from mongo.client import get_db
 from scrapy import Spider, signals
 from scrapy.crawler import Crawler
 from scrapy.exceptions import NotConfigured
@@ -44,7 +44,7 @@ class RawArchiveMiddleware:
         if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
             raise NotConfigured("RAW_ARCHIVE_ENABLED is off")
         batch_size = getattr(crawler.spidercls, "archive_batch_size", BATCH_SIZE)
-        archive = RawArchive(archive_collection(MongoDB()), batch_size=batch_size)
+        archive = RawArchive(archive_collection(get_db()), batch_size=batch_size)
         middleware = cls(crawler, archive)
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
         return middleware

@@ -4,7 +4,7 @@
 
     uv run python run_process_urls.py --limit 100
 
-Set LOGFIRE_SEND_TO_LOGFIRE=false to run by hand without sending traces.
+Set LOGFIRE_SEND=never to run by hand without sending traces.
 """
 
 import argparse
@@ -13,8 +13,9 @@ from datetime import datetime
 from typing import Any
 
 import logfire
+from bootstrap import bootstrap
 from ingest.pdf_urls import utc_now
-from postgres import SessionLocal, engine
+from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
 from scrapy.crawler import CrawlerProcess
@@ -54,7 +55,9 @@ def count_errors_since(session: Session, started_at: datetime) -> int:
 
 
 def main(limit: int) -> int:
-    with police_log_lock(engine) as acquired:
+    # The crawl's LogfireExtension bootstraps again, and the first call wins.
+    bootstrap("process-urls")
+    with police_log_lock(get_engine()) as acquired:
         if not acquired:
             print(
                 "Another police log job (process or reprocess) is running. "
@@ -65,7 +68,7 @@ def main(limit: int) -> int:
 
         started_at = utc_now()
         stats = crawl(limit)
-        with SessionLocal() as session:
+        with open_session() as session:
             errors = count_errors_since(session, started_at)
 
     if crawl_failed(stats):

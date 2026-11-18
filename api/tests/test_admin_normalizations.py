@@ -9,7 +9,6 @@ from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import select
 
-from api.main import app
 from api.schemas import CATEGORIES
 from api.tests.conftest import ADMIN_TOKEN
 from scripts.models import INCIDENT_CATEGORIES
@@ -18,8 +17,8 @@ NOW = datetime(2026, 11, 13)
 
 
 @pytest.fixture
-def real_client(db_connection):
-    """No mocked session: SessionLocal is bound to the test's rolled-back connection."""
+def real_client(app, db_connection):
+    """No mocked session: sessions are bound to the test's rolled-back connection."""
     with TestClient(app, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"}) as client:
         yield client
 
@@ -387,7 +386,7 @@ def test_an_address_delete_hands_the_value_back(db_session, real_client):
     assert real_client.delete("/api/addresses/12 MAIN ST").status_code == 404
 
 
-def test_patch_and_delete_need_the_admin_token(db_connection):
+def test_patch_and_delete_need_the_admin_token(app, db_connection):
     anonymous = TestClient(app)
 
     assert (

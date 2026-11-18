@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from api.deps import Paging, get_db, get_paging
+from api.deps import Paging, get_paging, get_session
 from api.schemas import Incident, Page
 from api.services import incidents
 
@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.get("", response_model=Page[Incident])
 def list_incidents(
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[Session, Depends(get_session)],
     paging: Annotated[Paging, Depends(get_paging)],
     date_from: date | None = None,
     date_to: date | None = None,

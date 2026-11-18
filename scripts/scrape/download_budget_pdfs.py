@@ -15,9 +15,10 @@ from pathlib import Path
 import httpx
 import logfire
 import pypdf
+from bootstrap import bootstrap
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
-from mongo.client import MongoDB
-from postgres import SessionLocal
+from mongo.client import get_db
+from postgres import open_session
 from postgres.models.budget_document import BudgetDocument
 from sqlalchemy import select
 
@@ -89,11 +90,11 @@ def fetch_document(
 
 
 def main() -> None:
-    logfire.configure()
+    bootstrap("download-budget-pdfs")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    archive = RawArchive(archive_collection(MongoDB()))
-    with SessionLocal() as session, make_client() as client:
+    archive = RawArchive(archive_collection(get_db()))
+    with open_session() as session, make_client() as client:
         all_docs = session.execute(select(BudgetDocument)).scalars().all()
         docs = documents_needing_text(all_docs)
 

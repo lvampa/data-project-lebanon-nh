@@ -102,7 +102,6 @@ def test_the_script_exits_non_zero_when_the_folder_is_missing(
     tmp_path, monkeypatch, capsys
 ):
     monkeypatch.setattr(mongo_backup, "BACKUP_DIR", tmp_path / "missing")
-    monkeypatch.setattr(mongo_backup.logfire, "configure", lambda: None)
 
     assert mongo_backup.main() == 1
     assert str(tmp_path / "missing") in capsys.readouterr().err

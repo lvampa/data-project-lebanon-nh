@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import logfire
+from bootstrap import bootstrap
+from postgres import get_engine
 from sqlalchemy import URL
 
 from maintenance.mongo_backup import BackupError, check_writable
@@ -91,11 +93,10 @@ def _run(command: Sequence[str], env: Mapping[str, str]) -> int:
 
 
 def main() -> int:
-    from postgres.client import engine
+    bootstrap("postgres-backup")
 
-    logfire.configure()
     try:
-        dest = back_up(BACKUP_DIR, engine.url, datetime.now(UTC), _run)
+        dest = back_up(BACKUP_DIR, get_engine().url, datetime.now(UTC), _run)
     except BackupError as exc:
         print(exc, file=sys.stderr)
         return 1

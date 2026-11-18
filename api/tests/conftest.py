@@ -4,8 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.config import get_settings
-from api.deps import get_db
-from api.main import app
+from api.deps import get_session
+from api.main import create_app
 
 ADMIN_TOKEN = "test-token"
 
@@ -19,12 +19,17 @@ def admin_token(monkeypatch):
 
 
 @pytest.fixture
+def app():
+    return create_app()
+
+
+@pytest.fixture
 def mock_db():
     return MagicMock()
 
 
 @pytest.fixture
-def client(mock_db):
-    app.dependency_overrides[get_db] = lambda: mock_db
+def client(app, mock_db):
+    app.dependency_overrides[get_session] = lambda: mock_db
     yield TestClient(app, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"})
     app.dependency_overrides.clear()

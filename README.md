@@ -14,7 +14,7 @@ uv run migrate
 It applies the Postgres migrations, then creates the MongoDB indexes, and stops at the first failure.
 It is safe to run again, and you should after you pull a branch that adds a migration or an index.
 
-It reads `POSTGRES_*` and `MONGO_*` from your shell or your `.env`, and falls back to the local compose values.
+It reads `POSTGRES_*` and `MONGO_*` from your shell or your `.env`, and needs `POSTGRES_PASSWORD` and `MONGO_PASSWORD`. User, host, port and database fall back to the local compose values.
 For any other Alembic command, `uv run alembic -c shared/postgres/alembic.ini ...` still works.
 
 ## Normalizing with AI

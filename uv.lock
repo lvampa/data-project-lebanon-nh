@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "api",
+    "bootstrap",
     "locations",
     "mongo",
     "postgres",
@@ -262,24 +263,24 @@ name = "api"
 version = "0.1.0"
 source = { virtual = "api" }
 dependencies = [
+    { name = "bootstrap" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "locations" },
     { name = "logfire", extra = ["fastapi"] },
     { name = "postgres" },
     { name = "pydantic-settings" },
-    { name = "python-dotenv" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "bootstrap", editable = "shared/bootstrap" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.162.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "locations", editable = "shared/locations" },
     { name = "logfire", extras = ["fastapi"], specifier = ">=5.4.0" },
     { name = "postgres", editable = "shared/postgres" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
-    { name = "python-dotenv", specifier = ">=1.2.4" },
 ]
 
 [[package]]
@@ -373,6 +374,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/43/65/318323f98dbee45d42dff61d8f047181bc6f2268a9068cfad035a46be5af/beautifulsoup4-4.15.0.tar.gz", hash = "sha256:288e3ca7d54b06f2ac191970bc275c1939cb46d450b255bf6718b04aa37ab4f7", size = 632571, upload-time = "2026-06-07T16:44:20.453Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/88/c6/92fcd42f1ba33e1184263f25bfabf3d27c383410470f169e4b8163bf9c17/beautifulsoup4-4.15.0-py3-none-any.whl", hash = "sha256:d6f88de62e1d4e38ecb1077eb9724cd0eff29d2a08ca16a401e9b9e93f117cf9", size = 109924, upload-time = "2026-06-07T16:44:21.566Z" },
+]
+
+[[package]]
+name = "bootstrap"
+version = "0.1.0"
+source = { editable = "shared/bootstrap" }
+dependencies = [
+    { name = "logfire" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "logfire", specifier = ">=5.4.0" },
+    { name = "pydantic-settings", specifier = ">=2.14.1" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
 ]
 
 [[package]]
@@ -1545,11 +1563,15 @@ name = "mongo"
 version = "0.1.0"
 source = { editable = "shared/mongo" }
 dependencies = [
+    { name = "pydantic-settings" },
     { name = "pymongo" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pymongo", specifier = ">=4.19.0" }]
+requires-dist = [
+    { name = "pydantic-settings", specifier = ">=2.14.1" },
+    { name = "pymongo", specifier = ">=4.19.0" },
+]
 
 [[package]]
 name = "multidict"
@@ -1960,14 +1982,18 @@ version = "0.1.0"
 source = { editable = "shared/postgres" }
 dependencies = [
     { name = "alembic" },
+    { name = "bootstrap" },
     { name = "psycopg2-binary" },
+    { name = "pydantic-settings" },
     { name = "sqlalchemy" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.4" },
+    { name = "bootstrap", editable = "shared/bootstrap" },
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
+    { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "sqlalchemy", specifier = ">=2.1.8" },
 ]
 
@@ -2852,12 +2878,12 @@ name = "scrapers"
 version = "0.1.0"
 source = { virtual = "scrapers" }
 dependencies = [
+    { name = "bootstrap" },
     { name = "logfire", extra = ["pymongo"] },
     { name = "mongo" },
     { name = "postgres" },
     { name = "pydantic" },
     { name = "pypdf" },
-    { name = "python-dotenv" },
     { name = "scrapy" },
     { name = "scripts" },
 ]
@@ -2869,12 +2895,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bootstrap", editable = "shared/bootstrap" },
     { name = "logfire", extras = ["pymongo"], specifier = ">=5.4.0" },
     { name = "mongo", editable = "shared/mongo" },
     { name = "postgres", editable = "shared/postgres" },
     { name = "pydantic", specifier = ">=2.14.3" },
     { name = "pypdf", specifier = ">=6.9.1" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "scrapy", specifier = ">=2.16" },
     { name = "scripts", editable = "scripts" },
 ]
@@ -2926,6 +2952,7 @@ source = { editable = "scripts" }
 dependencies = [
     { name = "alembic" },
     { name = "beautifulsoup4" },
+    { name = "bootstrap" },
     { name = "httpx" },
     { name = "locations" },
     { name = "logfire" },
@@ -2935,7 +2962,6 @@ dependencies = [
     { name = "postgres" },
     { name = "pydantic" },
     { name = "pypdf" },
-    { name = "python-dotenv" },
     { name = "sqlalchemy" },
 ]
 
@@ -2948,16 +2974,16 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.4" },
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
+    { name = "bootstrap", editable = "shared/bootstrap" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "locations", editable = "shared/locations" },
-    { name = "logfire", specifier = ">=4.31.0" },
+    { name = "logfire", specifier = ">=5.4.0" },
     { name = "mongo", editable = "shared/mongo" },
     { name = "playwright", specifier = ">=1.64.1" },
     { name = "playwright-stealth", specifier = ">=2.0.3" },
     { name = "postgres", editable = "shared/postgres" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pypdf", specifier = ">=6.9.1" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "sqlalchemy", specifier = ">=2.0.50" },
 ]
 

@@ -4,8 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.config import get_settings
-from api.deps import get_db
-from api.main import app
+from api.deps import get_session
 from api.tests.conftest import ADMIN_TOKEN
 
 WRITE_ROUTES = [
@@ -21,15 +20,15 @@ READ_ROUTES = ["/api/addresses", "/api/categories", "/api/llcs"]
 
 
 @pytest.fixture
-def mock_db():
+def mock_db(app):
     db = MagicMock()
-    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_session] = lambda: db
     yield db
     app.dependency_overrides.clear()
 
 
 @pytest.mark.parametrize(("path", "body"), WRITE_ROUTES)
-def test_write_without_token_returns_401(mock_db, path, body):
+def test_write_without_token_returns_401(app, mock_db, path, body):
     resp = TestClient(app).patch(path, json=body)
 
     assert resp.status_code == 401
@@ -38,7 +37,7 @@ def test_write_without_token_returns_401(mock_db, path, body):
 
 
 @pytest.mark.parametrize(("path", "body"), WRITE_ROUTES)
-def test_write_with_wrong_token_returns_401(mock_db, path, body):
+def test_write_with_wrong_token_returns_401(app, mock_db, path, body):
     headers = {"Authorization": "Bearer wrong-token"}
     resp = TestClient(app).patch(path, json=body, headers=headers)
 
@@ -46,7 +45,7 @@ def test_write_with_wrong_token_returns_401(mock_db, path, body):
     mock_db.commit.assert_not_called()
 
 
-def test_write_with_correct_token_passes_through(mock_db):
+def test_write_with_correct_token_passes_through(app, mock_db):
     mock_db.scalar.return_value = None
     headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
     resp = TestClient(app).patch(
@@ -59,7 +58,7 @@ def test_write_with_correct_token_passes_through(mock_db):
     mock_db.commit.assert_called_once()
 
 
-def test_write_rejected_when_token_not_configured(mock_db, monkeypatch):
+def test_write_rejected_when_token_not_configured(app, mock_db, monkeypatch):
     monkeypatch.delenv("ADMIN_API_TOKEN")
     get_settings.cache_clear()
     headers = {"Authorization": "Bearer anything"}
@@ -74,7 +73,7 @@ def test_write_rejected_when_token_not_configured(mock_db, monkeypatch):
 
 
 @pytest.mark.parametrize("path", READ_ROUTES)
-def test_reads_need_no_token(mock_db, path):
+def test_reads_need_no_token(app, mock_db, path):
     mock_db.execute.return_value.all.return_value = []
     mock_db.scalars.return_value.all.return_value = []
     mock_db.scalar.return_value = 0

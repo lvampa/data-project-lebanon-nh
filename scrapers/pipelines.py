@@ -18,8 +18,8 @@ from models.officer import OfficerRecord
 from models.property import PropertyRecord
 from models.url_record import UrlRecord
 from mongo.archive import RawArchive, archive_collection
-from mongo.client import MongoDB
-from postgres import SessionLocal
+from mongo.client import get_db
+from postgres import open_session
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
 from postgres.models.llc import Llc, PropertyLlc
@@ -61,7 +61,7 @@ class UrlRecordPipeline:
         )
         with (
             logfire.span("insert pdf urls", found=len(self._records)),
-            SessionLocal() as session,
+            open_session() as session,
         ):
             # An INSERT returns a CursorResult; Session.execute is typed for SELECTs.
             result = cast(CursorResult[Any], session.execute(statement))
@@ -83,11 +83,11 @@ class PoliceLogPipeline:
     def from_crawler(cls, crawler: Crawler) -> Self:
         if not crawler.settings.getbool("RAW_ARCHIVE_ENABLED"):
             return cls(spider_name=crawler.spidercls.name)
-        archive = RawArchive(archive_collection(MongoDB()))
+        archive = RawArchive(archive_collection(get_db()))
         return cls(archive, spider_name=crawler.spidercls.name)
 
     def open_spider(self) -> None:
-        self._session = SessionLocal()
+        self._session = open_session()
 
     def process_item(self, item: Item) -> Item:
         if not isinstance(item, PoliceLogPdfItem):
@@ -148,7 +148,7 @@ class PropertyPipeline:
         self.clock = clock
 
     def open_spider(self) -> None:
-        self._session = SessionLocal()
+        self._session = open_session()
 
     def process_item(self, item: Item) -> Item:
         if not isinstance(item, PropertyItem):
@@ -256,7 +256,7 @@ class PropertyPipeline:
 
 class CityStaffPipeline:
     def open_spider(self) -> None:
-        self._session = SessionLocal()
+        self._session = open_session()
 
     def process_item(self, item: Item) -> Item:
         if not isinstance(item, CityStaffItem):
@@ -306,7 +306,7 @@ class CityStaffPipeline:
 
 class OfficerPipeline:
     def open_spider(self) -> None:
-        self._session = SessionLocal()
+        self._session = open_session()
 
     def process_item(self, item: Item) -> Item:
         if not isinstance(item, OfficerItem):
@@ -353,7 +353,7 @@ class OfficerPipeline:
 
 class BudgetDocumentPipeline:
     def open_spider(self) -> None:
-        self._session = SessionLocal()
+        self._session = open_session()
 
     def process_item(self, item: Item) -> Item:
         if not isinstance(item, BudgetDocumentItem):

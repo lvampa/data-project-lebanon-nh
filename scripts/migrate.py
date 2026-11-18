@@ -9,20 +9,20 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+import postgres
+from alembic import command
+from alembic.config import Config
+from bootstrap import bootstrap
+from mongo import init_indexes
+
 
 def upgrade_postgres() -> None:
-    import postgres
-    from alembic import command
-    from alembic.config import Config
-
     # The workspace is installed from its source tree, so alembic.ini sits beside src/.
     alembic_ini = Path(postgres.__file__).resolve().parents[2] / "alembic.ini"
     command.upgrade(Config(alembic_ini), "head")
 
 
 def create_mongo_indexes() -> None:
-    from mongo import init_indexes
-
     init_indexes()
 
 
@@ -33,11 +33,7 @@ STEPS: list[tuple[str, Callable[[], None]]] = [
 
 
 def main() -> int:
-    from dotenv import load_dotenv
-
-    # postgres.client reads POSTGRES_* when it is first imported, so load .env before
-    # any step imports it.
-    load_dotenv()
+    bootstrap("migrate")
     for name, step in STEPS:
         try:
             step()

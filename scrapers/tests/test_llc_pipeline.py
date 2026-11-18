@@ -38,7 +38,7 @@ def make_item(**kwargs):
     return PropertyItem(**defaults)
 
 
-@patch("pipelines.SessionLocal")
+@patch("pipelines.open_session")
 def test_llc_owner_queues_lookup(mock_session_cls):
     mock_session = MagicMock()
     mock_session_cls.return_value = mock_session
@@ -54,7 +54,7 @@ def test_llc_owner_queues_lookup(mock_session_cls):
     assert any("property_llcs" in c.lower() for c in calls)
 
 
-@patch("pipelines.SessionLocal")
+@patch("pipelines.open_session")
 def test_individual_owner_skips_lookup(mock_session_cls):
     mock_session = MagicMock()
     mock_session_cls.return_value = mock_session
@@ -68,7 +68,7 @@ def test_individual_owner_skips_lookup(mock_session_cls):
     assert not any("llcs" in c.lower() for c in calls)
 
 
-@patch("pipelines.SessionLocal")
+@patch("pipelines.open_session")
 def test_none_owner_skips_lookup(mock_session_cls):
     mock_session = MagicMock()
     mock_session_cls.return_value = mock_session

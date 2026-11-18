@@ -2,11 +2,11 @@ from pymongo import ASCENDING, DESCENDING
 
 from .ai_calls import COLLECTION as AI_CALLS_COLLECTION
 from .archive import COLLECTION as ARCHIVE_COLLECTION
-from .client import MongoDB
+from .client import MongoDB, get_db
 
 
 def init_indexes(mongo: MongoDB | None = None) -> None:
-    db = mongo or MongoDB()
+    db = mongo or get_db()
     urls = db.get_collection("urls")
     urls.create_index("state")
     urls.create_index("canonical_url", unique=True)

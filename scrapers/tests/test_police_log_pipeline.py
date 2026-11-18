@@ -74,7 +74,7 @@ def stored_url(session, url_id: int) -> PdfUrl:
     return session.get(PdfUrl, url_id)
 
 
-@patch("pipelines.SessionLocal")
+@patch("pipelines.open_session")
 def test_pipeline_passes_through_non_police_log_items(mock_session_local):
     mock_session_local.return_value = MagicMock()
 

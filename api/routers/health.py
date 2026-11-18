@@ -7,13 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from api.deps import get_db
+from api.deps import get_session
 
 router = APIRouter()
 
 
 @router.get("/healthz")
-def healthz(db: Annotated[Session, Depends(get_db)]) -> JSONResponse:
+def healthz(db: Annotated[Session, Depends(get_session)]) -> JSONResponse:
     checks = {"postgres": _postgres_status(db)}
     failing = [name for name, status in checks.items() if status != "ok"]
     if failing:

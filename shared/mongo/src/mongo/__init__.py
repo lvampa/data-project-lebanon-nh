@@ -1,6 +1,5 @@
-from .client import MongoDB
+from .client import MongoDB, get_db
 from .init import init_indexes
+from .settings import MongoSettings, get_mongo_settings
 
-db = MongoDB()
-
-__all__ = ["db", "init_indexes", "MongoDB"]
+__all__ = ["MongoDB", "MongoSettings", "get_db", "get_mongo_settings", "init_indexes"]

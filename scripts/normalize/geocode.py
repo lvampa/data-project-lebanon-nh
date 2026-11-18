@@ -17,13 +17,14 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import logfire
+from bootstrap import bootstrap
 from locations.geocode import (
     GeocodeResult,
     GeocodeUnavailable,
     geocode,
     in_city_bounds,
 )
-from postgres import SessionLocal, engine
+from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import ColumnElement, or_, select
@@ -54,7 +55,7 @@ def run(
     geocoder: Geocoder = geocode, *, max_requests: int = MAX_REQUESTS
 ) -> GeocodeCounts:
     counts = GeocodeCounts()
-    with SessionLocal() as session:
+    with open_session() as session:
         for row in _rows_to_place(session):
             if counts.requests >= max_requests:
                 counts.stopped_at_limit = True
@@ -220,6 +221,7 @@ def _names_a_point(normalized_address: str) -> bool:
 
 
 def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int:
+    bootstrap("geocode")
     # It takes no options, but parsing still makes --help print usage instead of
     # running the job.
     argparse.ArgumentParser(
@@ -227,7 +229,7 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    with police_log_lock(engine) as acquired:
+    with police_log_lock(get_engine()) as acquired:
         if not acquired:
             print(
                 "Another police log job is running (process, reprocess, or "

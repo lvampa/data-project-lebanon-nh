@@ -20,7 +20,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import logfire
-from mongo.client import MongoDB
+from bootstrap import bootstrap
+from mongo.client import MongoDB, get_db
 
 BACKUP_DIR = Path("/opt/backups/mongo")
 
@@ -59,7 +60,7 @@ def run_tool(
     with tempfile.NamedTemporaryFile("w", suffix=".yaml") as config:
         os.chmod(config.name, 0o600)
         # JSON quoting is valid YAML, so any password survives.
-        config.write(f"password: {json.dumps(settings.password)}\n")
+        config.write(f"password: {json.dumps(settings.password.get_secret_value())}\n")
         config.flush()
         return run(
             [
@@ -109,9 +110,9 @@ def _run(command: Sequence[str]) -> int:
 
 
 def main() -> int:
-    logfire.configure()
+    bootstrap("mongo-backup")
     try:
-        dest = back_up(BACKUP_DIR, MongoDB(), datetime.now(UTC), _run)
+        dest = back_up(BACKUP_DIR, get_db(), datetime.now(UTC), _run)
     except BackupError as exc:
         print(exc, file=sys.stderr)
         return 1

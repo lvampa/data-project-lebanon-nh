@@ -131,7 +131,7 @@ def test_real_crawl_that_cannot_claim_urls_exits_non_zero(test_engine):
         env={
             **os.environ,
             "POSTGRES_DB": test_engine.url.database,
-            "LOGFIRE_SEND_TO_LOGFIRE": "false",
+            "LOGFIRE_SEND": "never",
         },
         capture_output=True,
         text=True,

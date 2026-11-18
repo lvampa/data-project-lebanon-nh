@@ -1,4 +1,5 @@
 import logfire
+from bootstrap import bootstrap
 from scrapy import Item, Spider, signals
 from scrapy.crawler import Crawler
 from scrapy.http import Response
@@ -11,7 +12,7 @@ class LogfireExtension:
 
     def __init__(self, stats: StatsCollector) -> None:
         self.stats = stats
-        logfire.configure()
+        bootstrap("scrapers")
         logfire.instrument_pymongo()
 
     @classmethod

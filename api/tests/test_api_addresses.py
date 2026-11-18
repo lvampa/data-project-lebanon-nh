@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 from locations.geocode import GeocodeResult, GeocodeUnavailable
 
 from api.config import Settings, get_settings
-from api.main import app
 from api.tests.conftest import ADMIN_TOKEN
 from api.tests.sql import compile_pg, executed_stmt, upsert_set_columns
 
@@ -183,7 +182,7 @@ def test_patch_address_lat_without_lng_returns_422(mock_db, client):
     mock_db.execute.assert_not_called()
 
 
-def test_patch_address_geocodes_with_configured_contact(mock_db, client):
+def test_patch_address_geocodes_with_configured_contact(app, mock_db, client):
     _stored(mock_db)
     app.dependency_overrides[get_settings] = lambda: Settings(
         admin_api_token=ADMIN_TOKEN, nominatim_contact="ops@example.com"

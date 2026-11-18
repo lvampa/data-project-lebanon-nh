@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -7,7 +8,7 @@ import pytest
 from items import PoliceLogPdfItem
 from models import PdfUrlClaim
 from mongo.archive import content_hash
-from postgres import SessionLocal
+from postgres import open_session
 from postgres.models.pdf_url import PdfUrl
 from scrapy.http import Request, Response
 from spiders.process_url_records import (
@@ -18,7 +19,7 @@ from spiders.process_url_records import (
 )
 from sqlalchemy import delete, insert, select, text
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from twisted.internet.error import DNSLookupError
 from twisted.python.failure import Failure
 
@@ -203,11 +204,11 @@ def test_limit_from_the_command_line_is_read_as_a_number():
 
 
 @pytest.fixture
-def queue_db(db_connection) -> sessionmaker[Session]:
-    return SessionLocal
+def queue_db(db_connection) -> Callable[[], Session]:
+    return open_session
 
 
-def add_url(session_factory: sessionmaker[Session], **kwargs: Any) -> int:
+def add_url(session_factory: Callable[[], Session], **kwargs: Any) -> int:
     defaults = {
         "canonical_url": f"https://example.com/{kwargs.get('created_at', '')}.pdf",
         "state": "pending",
@@ -221,7 +222,7 @@ def add_url(session_factory: sessionmaker[Session], **kwargs: Any) -> int:
         return row.id
 
 
-def get_url(session_factory: sessionmaker[Session], url_id: int) -> PdfUrl:
+def get_url(session_factory: Callable[[], Session], url_id: int) -> PdfUrl:
     with session_factory() as session:
         return session.scalars(select(PdfUrl).where(PdfUrl.id == url_id)).one()
 

@@ -20,10 +20,11 @@ from pathlib import Path
 from typing import Any
 
 import logfire
+from bootstrap import bootstrap
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
-from mongo.client import MongoDB
+from mongo.client import MongoDB, get_db
 from pipelines import PropertyPipeline
-from postgres import SessionLocal
+from postgres import open_session
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
@@ -143,7 +144,7 @@ def _newest_page(
 
 
 def _stored_updated_at(parcel_id: str) -> datetime | None:
-    with SessionLocal() as session:
+    with open_session() as session:
         return session.scalar(
             select(Property.updated_at).where(Property.parcel_id == parcel_id)
         )
@@ -151,7 +152,7 @@ def _stored_updated_at(parcel_id: str) -> datetime | None:
 
 def _stored_parcel(parcel_id: str) -> tuple[Any, ...] | None:
     # A short session per read, so it never spans the pipeline's own commit.
-    with SessionLocal() as session:
+    with open_session() as session:
         return _parcel_values(session, parcel_id)
 
 
@@ -327,6 +328,7 @@ def version_lines(versions: Iterable[dict[str, Any]]) -> list[str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    bootstrap("raw-sources")
     parser = argparse.ArgumentParser(prog="raw_sources")
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -346,7 +348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     restore.add_argument("backup", type=Path)
 
     args = parser.parse_args(argv)
-    settings = MongoDB()
+    settings = get_db()
 
     if args.command == "restore-check":
         problems = restore_check(args.backup, settings, _run)
@@ -355,7 +357,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     collection = archive_collection(settings)
     if args.command == "check":
-        with SessionLocal() as session:
+        with open_session() as session:
             report = check(collection, session)
         print("\n".join(report_lines(report)))
         return 0 if report.every_pdf_has_a_body else 1

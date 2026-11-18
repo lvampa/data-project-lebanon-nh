@@ -20,9 +20,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 import logfire
+from bootstrap import bootstrap
 from mongo.ai_calls import AiCall, AiCallLog, Outcome, ai_calls_collection
-from mongo.client import MongoDB
-from postgres import SessionLocal, engine
+from mongo.client import get_db
+from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 
 from scripts.normalize.backends import (
@@ -91,7 +92,7 @@ def run(
     batch_size: int = BATCH_SIZE,
 ) -> RunResult:
     result = RunResult()
-    with SessionLocal() as session:
+    with open_session() as session:
         streets = load_street_list(session)
         every_field: dict[str, Field] = {
             "incident_type": IncidentTypes(),
@@ -228,6 +229,7 @@ def _chunks(groups: Sequence[Group], size: int) -> list[list[Group]]:
 
 
 def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) -> int:
+    bootstrap("normalize")
     args = _parse_args(argv)
     fields = FIELD_NAMES if args.field is None else (args.field,)
 
@@ -238,7 +240,7 @@ def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) ->
         print(f"Cannot run: {exc}", file=sys.stderr)
         return 1
 
-    with police_log_lock(engine) as acquired:
+    with police_log_lock(get_engine()) as acquired:
         if not acquired:
             print(
                 "Another police log job is running (process, reprocess, or geocode). "
@@ -246,7 +248,7 @@ def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) ->
                 file=sys.stderr,
             )
             return 1
-        call_log = AiCallLog(ai_calls_collection(MongoDB()))
+        call_log = AiCallLog(ai_calls_collection(get_db()))
         result = run(backend, call_log, fields=fields, redo=args.redo)
 
     for summary in result.summaries:

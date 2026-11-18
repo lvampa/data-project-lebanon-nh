@@ -39,7 +39,7 @@ uv run init-db
 
 ## Logfire (observability)
 
-The `logfire` package is included so you can add tracing and logging that shows up in the [Logfire](https://logfire.pydantic.dev/) UI. It is optional until you call `logfire.configure()` in your code (for example at process entry or in Scrapy extension setup).
+The `logfire` package is included so you can add tracing and logging that shows up in the [Logfire](https://logfire.pydantic.dev/) UI. Every entry point calls `bootstrap(service_name)` from `shared/bootstrap`, which loads `.env` and then configures Logfire. Call it once at startup instead of calling `logfire.configure()` yourself. The first call wins, so a later one (the Scrapy extension, for example) keeps the first service name.
 
 ### Configure
 
@@ -55,11 +55,11 @@ Use `uv run logfire whoami` to confirm you are logged in. See the [CLI reference
 
 **CI or headless environments:** Create a write token in the Logfire UI (**Settings** → **Write tokens**) and set `LOGFIRE_TOKEN` in that environment only—avoid committing it or putting it in the project `.env` if you keep secrets out of the tree.
 
-In code, call `logfire.configure()` once at startup. With CLI auth, `logfire.configure()` with no arguments is usually enough; the SDK reads credentials from your user config.
+With CLI auth, `bootstrap` needs nothing more; the SDK reads credentials from your user config.
 
-If your process loads `.env`, you can set non-secret tuning there (see `scrapers/.env.example`)—for example `LOGFIRE_SERVICE_NAME`, `LOGFIRE_ENVIRONMENT`, or `LOGFIRE_SEND_TO_LOGFIRE=false` to stop sending to Logfire locally. Full list: [environment variables](https://logfire.pydantic.dev/docs/reference/configuration/).
+If your process loads `.env`, you can set non-secret tuning there (see `scrapers/.env.example`) - for example `LOGFIRE_ENVIRONMENT` or `LOGFIRE_SEND=never` to stop sending to Logfire locally. Full list: [environment variables](https://logfire.pydantic.dev/docs/reference/configuration/).
 
-You can also set defaults in `pyproject.toml` under `[tool.logfire]`; programmatic `logfire.configure(...)` overrides file and env for the options you pass. Precedence is: **code → environment → `pyproject.toml`**.
+You can also set defaults in `pyproject.toml` under `[tool.logfire]`; arguments passed in code (`bootstrap` sets `service_name`) override file and env for the options you pass. Precedence is: **code → environment → `pyproject.toml`**.
 
 ## Testing
 

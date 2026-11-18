@@ -2,15 +2,15 @@ from collections.abc import Generator
 from dataclasses import dataclass
 
 from fastapi import Query
-from postgres import SessionLocal
+from postgres import open_session
 from sqlalchemy import Select
 from sqlalchemy.orm import Session
 
 from api.schemas import Source
 
 
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
+def get_session() -> Generator[Session, None, None]:
+    db = open_session()
     try:
         yield db
     finally:

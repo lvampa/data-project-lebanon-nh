@@ -15,7 +15,8 @@ import re
 from pathlib import Path
 
 import logfire
-from postgres import SessionLocal
+from bootstrap import bootstrap
+from postgres import open_session
 from postgres.models.budget_capital_project import BudgetCapitalProject
 from postgres.models.budget_line_item import BudgetLineItem
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -86,7 +87,7 @@ def upsert_capital_projects(
 
 
 def main() -> None:
-    logfire.configure()
+    bootstrap("import-budget-data")
     if not INPUT_FILE.exists():
         raise FileNotFoundError(
             f"{INPUT_FILE} not found — run the Claude Code agent first to generate it"
@@ -96,7 +97,7 @@ def main() -> None:
     # does not leave a partial import behind.
     years = [validate_year_entry(entry) for entry in parse_budget_data(text)]
 
-    with SessionLocal() as session:
+    with open_session() as session:
         for year in years:
             fiscal_year = year.fiscal_year
             with logfire.span("import budget year", fiscal_year=fiscal_year):

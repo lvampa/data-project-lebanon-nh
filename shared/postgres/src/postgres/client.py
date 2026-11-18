@@ -1,22 +1,24 @@
-import os
+from functools import cache
 
-from sqlalchemy import URL, Engine, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session
 
-
-def _build_url() -> URL:
-    return URL.create(
-        "postgresql+psycopg2",
-        username=os.environ.get("POSTGRES_USER", "app"),
-        password=os.environ.get("POSTGRES_PASSWORD", "app"),
-        host=os.environ.get("POSTGRES_HOST", "localhost"),
-        port=int(os.environ.get("POSTGRES_PORT", "5432")),
-        database=os.environ.get("POSTGRES_DB", "app"),
-    )
+from .settings import get_postgres_settings
 
 
+# Built on first use, not on import, so an entry point can load .env first.
 # Scrapers and DAGs run for hours, so a connection can be dropped by the server
 # while the pool holds it. pre_ping replaces a dead connection instead of raising.
-engine: Engine = create_engine(_build_url(), pool_pre_ping=True)
+@cache
+def get_engine() -> Engine:
+    return create_engine(get_postgres_settings().url, pool_pre_ping=True)
 
-SessionLocal: sessionmaker[Session] = sessionmaker(bind=engine)
+
+def _new_session() -> Session:
+    # The test plugin replaces this to put sessions on its rolled-back connection.
+    return Session(bind=get_engine())
+
+
+def open_session() -> Session:
+    """A new session on the shared engine. The caller closes it."""
+    return _new_session()

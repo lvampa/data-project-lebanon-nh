@@ -116,13 +116,16 @@ def run(
             if chosen_field.can_call():
                 batches[chosen_field.name] = _chunks(plan.groups, batch_size)
             logfire.info(
-                "{field}: {waiting} waiting, {settled} settled by rules, "
-                "{to_ask} to ask in {batches} batches",
+                "{field}: {waiting} waiting, {settled} settled without AI, "
+                "{to_ask} to ask in {batches} {batch_word}",
                 field=chosen_field.name,
                 waiting=waiting,
                 settled=plan.settled,
                 to_ask=sum(len(batch) for batch in batches[chosen_field.name]),
                 batches=len(batches[chosen_field.name]),
+                batch_word="batch"
+                if len(batches[chosen_field.name]) == 1
+                else "batches",
             )
 
         allowed = allocate_calls({n: len(b) for n, b in batches.items()})

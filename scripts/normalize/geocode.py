@@ -27,7 +27,8 @@ from locations.geocode import (
 from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
-from sqlalchemy import ColumnElement, or_, select
+from postgres.models.log_entry import LogEntry
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session
 
 MAX_ATTEMPTS = 3
@@ -60,6 +61,7 @@ def run(
         rows = _rows_to_place(session)
         logfire.info("geocode: {waiting} rows waiting", waiting=len(rows))
         last_reported = 0
+        with_coordinates: list[str] = []
         for row in rows:
             if counts.requests >= max_requests:
                 counts.stopped_at_limit = True
@@ -76,15 +78,19 @@ def run(
                 logfire.error("geocoder unavailable; stopping the run", error=str(exc))
                 break
             session.commit()
+            if row.lat is not None:
+                with_coordinates.append(row.raw_address)
             if counts.requests - last_reported >= PROGRESS_EVERY:
                 last_reported = counts.requests
                 logfire.info(
                     "geocode: {requests}/{max_requests} requests, "
-                    "{placed} placed, {reused} reused, {missed} missed",
+                    "{placed} placed, {reused} reused ({entries} entries together), "
+                    "{missed} missed",
                     requests=counts.requests,
                     max_requests=max_requests,
                     placed=counts.placed,
                     reused=counts.reused,
+                    entries=_entries_at(session, with_coordinates),
                     missed=counts.missed,
                 )
     logfire.info(
@@ -94,6 +100,17 @@ def run(
         missed=counts.missed,
     )
     return counts
+
+
+def _entries_at(session: Session, raw_addresses: list[str]) -> int:
+    return (
+        session.scalar(
+            select(func.count())
+            .select_from(LogEntry)
+            .where(LogEntry.location.in_(raw_addresses))
+        )
+        or 0
+    )
 
 
 def _rows_to_place(session: Session) -> list[AddressNormalization]:

@@ -16,7 +16,6 @@ settings = get_settings()
 
 
 app = FastAPI(title="Lebanon PD Log - Internal API")
-logfire.configure()
 logfire.instrument_fastapi(app)
 
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins)

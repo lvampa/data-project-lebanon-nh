@@ -33,11 +33,11 @@ STEPS: list[tuple[str, Callable[[], None]]] = [
 
 
 def main() -> int:
-    from dotenv import load_dotenv
+    from bootstrap import bootstrap
 
-    # postgres.client reads POSTGRES_* when it is first imported, so load .env before
+    # postgres.client reads POSTGRES_* when it is first imported, so bootstrap before
     # any step imports it.
-    load_dotenv()
+    bootstrap("migrate")
     for name, step in STEPS:
         try:
             step()

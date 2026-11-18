@@ -1,5 +1,5 @@
-from dotenv import load_dotenv
+from bootstrap import bootstrap
 
 # The shared postgres package reads POSTGRES_* from os.environ when it is first
-# imported, so .env has to be loaded before any api module imports it.
-load_dotenv()
+# imported, so this runs before any api module imports it.
+bootstrap("api")

@@ -17,6 +17,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
+from bootstrap import bootstrap
 from postgres import SessionLocal
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
@@ -91,6 +92,9 @@ def list_unmatched_dispositions() -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
+    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
+    bootstrap("police-logs")
     parser = argparse.ArgumentParser(prog="police_logs")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("errors", help="List URL records in error, with reasons.")

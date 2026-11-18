@@ -17,6 +17,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import logfire
+from bootstrap import bootstrap
 from locations.geocode import (
     GeocodeResult,
     GeocodeUnavailable,
@@ -220,6 +221,9 @@ def _names_a_point(normalized_address: str) -> bool:
 
 
 def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int:
+    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
+    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
+    bootstrap("geocode")
     # It takes no options, but parsing still makes --help print usage instead of
     # running the job.
     argparse.ArgumentParser(

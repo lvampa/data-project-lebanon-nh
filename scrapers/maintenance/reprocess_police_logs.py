@@ -21,6 +21,7 @@ from datetime import date
 from typing import Self
 
 import logfire
+from bootstrap import bootstrap
 from ingest import ingest_pdf_url
 from ingest.pdf_text import extract_pdf_text
 from ingest.police_log import archive_entry_texts
@@ -172,6 +173,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
+    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
+    bootstrap("reprocess-police-logs")
     args = _parse_args(argv)
 
     collection = archive_collection(MongoDB())

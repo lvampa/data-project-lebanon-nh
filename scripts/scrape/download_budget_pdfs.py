@@ -15,6 +15,7 @@ from pathlib import Path
 import httpx
 import logfire
 import pypdf
+from bootstrap import bootstrap
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
 from mongo.client import MongoDB
 from postgres import SessionLocal
@@ -89,7 +90,9 @@ def fetch_document(
 
 
 def main() -> None:
-    logfire.configure()
+    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
+    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
+    bootstrap("download-budget-pdfs")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     archive = RawArchive(archive_collection(MongoDB()))

@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import logfire
+from bootstrap import bootstrap
 from mongo.ai_calls import AiCall, AiCallLog, Outcome, ai_calls_collection
 from mongo.client import MongoDB
 from postgres import SessionLocal, engine
@@ -228,6 +229,9 @@ def _chunks(groups: Sequence[Group], size: int) -> list[list[Group]]:
 
 
 def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) -> int:
+    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
+    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
+    bootstrap("normalize")
     args = _parse_args(argv)
     fields = FIELD_NAMES if args.field is None else (args.field,)
 

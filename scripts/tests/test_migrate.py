@@ -100,7 +100,7 @@ def test_the_steps_run_in_order_and_stop_at_the_first_failure(monkeypatch, capsy
         "STEPS",
         [("Postgres", failing), ("Mongo", lambda: calls.append("mongo"))],
     )
-    monkeypatch.setattr("dotenv.load_dotenv", lambda: None)
+    monkeypatch.setattr("bootstrap.bootstrap", lambda service_name: None)
 
     assert migrate.main() == 1
     assert calls == ["postgres"]

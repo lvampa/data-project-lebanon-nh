@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    "bootstrap",
     "logfire[pymongo]>=5.4.0",
     "mongo",
     "postgres",
@@ -12,13 +13,13 @@ dependencies = [
     # is a parser change: bump PARSER_VERSION and reprocess.
     "pypdf>=6.9.1",
     "scripts",
-    "python-dotenv>=1.2.2",
     # 2.16 calls pipeline methods without `spider` when they do not ask for it.
     "scrapy>=2.16",
 ]
 
 
 [tool.uv.sources]
+bootstrap = { workspace = true }
 mongo = { workspace = true }
 postgres = { workspace = true }
 scripts = { workspace = true }

@@ -1,0 +1,16 @@
+[project]
+name = "bootstrap"
+version = "0.1.0"
+description = "One setup step for every entry point: load .env, then configure Logfire"
+requires-python = ">=3.12"
+dependencies = [
+    "logfire>=5.4.0",
+    "python-dotenv>=1.2.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "bootstrap"

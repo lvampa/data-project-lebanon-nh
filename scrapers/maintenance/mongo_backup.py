@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import logfire
+from bootstrap import bootstrap
 from mongo.client import MongoDB
 
 BACKUP_DIR = Path("/opt/backups/mongo")
@@ -109,7 +110,7 @@ def _run(command: Sequence[str]) -> int:
 
 
 def main() -> int:
-    logfire.configure()
+    bootstrap("mongo-backup")
     try:
         dest = back_up(BACKUP_DIR, MongoDB(), datetime.now(UTC), _run)
     except BackupError as exc:

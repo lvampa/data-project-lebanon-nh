@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 import logfire
+from bootstrap import bootstrap
 from ingest.pdf_urls import utc_now
 from postgres import SessionLocal, engine
 from postgres.lock import police_log_lock
@@ -54,6 +55,11 @@ def count_errors_since(session: Session, started_at: datetime) -> int:
 
 
 def main(limit: int) -> int:
+    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
+    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
+    # TODO(bootstrap): the crawl's LogfireExtension bootstraps again as "scrapers",
+    # so the service name ends up "scrapers". Decide which one should win.
+    bootstrap("process-urls")
     with police_log_lock(engine) as acquired:
         if not acquired:
             print(

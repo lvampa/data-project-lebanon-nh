@@ -85,6 +85,21 @@ def test_a_replayed_parcel_matches_a_normal_ingest(db_session, raw_sources):
     assert (counts.replayed, counts.inserted) == (1, 1)
 
 
+def test_a_replay_fills_the_columns_the_parser_added(db_session, raw_sources):
+    archive = RawArchive(raw_sources)
+    archive_parcel(archive)
+
+    replay_parcels(archive)
+
+    row = db_session.scalars(select(Property)).one()
+    assert row.owner_address == "PO BOX 1325 LEBANON, NH 03766"
+    assert row.appraised_total == 1502200
+    assert row.buildings is not None
+    sale = db_session.scalars(select(PropertySale).order_by(PropertySale.id)).first()
+    assert sale is not None
+    assert sale.book_page == "4446/0736"
+
+
 def test_replaying_again_leaves_the_parcel_unchanged(db_session, raw_sources):
     archive = RawArchive(raw_sources)
     archive_parcel(archive)

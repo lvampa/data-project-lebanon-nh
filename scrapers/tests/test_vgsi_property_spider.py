@@ -43,7 +43,7 @@ def item(spider) -> PropertyItem:
     return item
 
 
-def test_the_index_page_leads_to_every_street_and_every_letter(spider):
+def test_the_index_page_leads_to_every_street_and_every_letter_but_a(spider):
     response = HtmlResponse(
         url="https://gis.vgsi.com/LebanonNH/Streets.aspx", body=STREETS_INDEX_HTML
     )
@@ -54,7 +54,7 @@ def test_the_index_page_leads_to_every_street_and_every_letter(spider):
     letters = [r for r in requests if r.callback == spider.parse]
     assert len(streets) == 36
     assert [r.url.split("Letter=")[-1] for r in letters] == list(
-        "ABCDEFGHIJKLMNOPQRSTUVWY"
+        "BCDEFGHIJKLMNOPQRSTUVWY"
     )
 
 

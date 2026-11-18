@@ -7,6 +7,8 @@ from scrapy.http import Request, Response
 from scrapy.selector import Selector
 
 BASE_URL = "https://gis.vgsi.com/LebanonNH/"
+# Streets.aspx lists the A streets, so the link to letter A would fetch the same page.
+FIRST_LETTER_HREF = "Streets.aspx?Letter=A"
 # The page's label for each sales column, and the field it fills.
 SALE_COLUMNS = {
     "Owner": "owner",
@@ -94,17 +96,20 @@ class VgsiPropertySpider(scrapy.Spider):
         yield Request(urljoin(BASE_URL, "Streets.aspx"), callback=self.parse)
 
     def parse(self, response: Response, **kwargs):
-        # An index page lists one letter's streets and links to every other letter.
+        # An index page lists one letter's streets and links to the other letters.
         # The dupe filter stops the letters from following each other round.
-        streets = response.css("a[href*='Streets.aspx?Name=']")
-        letters = response.css("a[href*='Streets.aspx?Letter=']")
-        logfire.info("vgsi streets index", streets=len(streets), letters=len(letters))
-        for link in streets:
+        links = response.css("a[href*='Streets.aspx?Name=']")
+        logfire.info("vgsi streets index", count=len(links))
+        for link in links:
             yield Request(
-                urljoin(BASE_URL, link.attrib["href"]), callback=self.parse_street
+                urljoin(BASE_URL, link.attrib["href"]),
+                callback=self.parse_street,
             )
-        for link in letters:
-            yield Request(urljoin(BASE_URL, link.attrib["href"]), callback=self.parse)
+        for link in response.css("a[href*='Streets.aspx?Letter=']"):
+            if link.attrib["href"] != FIRST_LETTER_HREF:
+                yield Request(
+                    urljoin(BASE_URL, link.attrib["href"]), callback=self.parse
+                )
 
     def parse_street(self, response: Response, **kwargs):
         for link in response.css("a[href*='Parcel.aspx?pid=']"):

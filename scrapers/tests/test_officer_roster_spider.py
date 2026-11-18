@@ -1,7 +1,7 @@
 import pytest
 from items.officer import OfficerItem
 from scrapy.http import HtmlResponse
-from spiders.officer_roster import OfficerRosterSpider
+from spiders.officer_roster import ROSTER_URL, OfficerRosterSpider
 
 ROSTER_INDEX_HTML = b"""
 <html><body>
@@ -78,3 +78,12 @@ def test_parse_division_extracts_fields(spider):
     assert chief["phone"] == "(603) 448-1212"
     assert chief["email"] == "jsmith@lebanonnh.gov"
     assert chief["source_url"] == "https://www.lebanonnh.gov/290/Patrol-Division"
+
+
+def test_division_pages_are_archived_by_url_and_the_roster_index_is_not():
+    spider = OfficerRosterSpider()
+    division = HtmlResponse("https://www.lebanonnh.gov/290/Patrol", body=b"<html/>")
+    index = HtmlResponse(ROSTER_URL, body=b"<html/>")
+
+    assert spider.archive_key(division) == division.url
+    assert spider.archive_key(index) is None

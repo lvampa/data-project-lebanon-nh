@@ -1,7 +1,7 @@
 import pytest
 from items.budget import BudgetDocumentItem
 from scrapy.http import HtmlResponse
-from spiders.budget_discovery import BudgetDiscoverySpider
+from spiders.budget_discovery import INDEX_URL, BudgetDiscoverySpider
 
 INDEX_HTML = b"""
 <html><body>
@@ -79,3 +79,12 @@ def test_parse_year_page_skips_non_document_center_links(spider):
     )
     items = list(spider.parse_year_page(response))
     assert all("DocumentCenter" in item["source_url"] for item in items)
+
+
+def test_year_pages_are_archived_by_url_and_the_index_is_not():
+    spider = BudgetDiscoverySpider()
+    year = HtmlResponse("https://www.lebanonnh.gov/900/2026-Budget", body=b"<html/>")
+    index = HtmlResponse(INDEX_URL, body=b"<html/>")
+
+    assert spider.archive_key(year) == year.url
+    assert spider.archive_key(index) is None

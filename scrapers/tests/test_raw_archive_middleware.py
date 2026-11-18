@@ -27,8 +27,8 @@ from scrapy.exceptions import NotConfigured
 from scrapy.http import HtmlResponse, Request, Response
 from scrapy.settings import Settings
 from scrapy.settings.default_settings import SPIDER_MIDDLEWARES_BASE
+from scrapy.spiders import Spider
 from settings import SPIDER_MIDDLEWARES
-from spiders.city_staff import CityStaffSpider
 from spiders.process_url_records import ProcessUrlsSpider
 from spiders.vgsi_property import VgsiPropertySpider
 from sqlalchemy import select
@@ -156,7 +156,7 @@ def test_only_fresh_200_responses_are_archived(raw_sources, response):
 
 
 def test_a_spider_that_does_not_opt_in_is_not_archived(raw_sources):
-    middleware = middleware_for(CityStaffSpider(), raw_sources)
+    middleware = middleware_for(Spider(name="plain"), raw_sources)
     response = HtmlResponse("https://www.lebanonnh.gov/796", body=b"<html></html>")
 
     middleware.process_spider_input(response)

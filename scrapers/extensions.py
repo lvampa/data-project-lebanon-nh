@@ -12,8 +12,6 @@ class LogfireExtension:
 
     def __init__(self, stats: StatsCollector) -> None:
         self.stats = stats
-        # TODO(bootstrap): spiders and pipelines import postgres at module level, so its
-        # engine reads POSTGRES_* before this runs. Bootstrap earlier, e.g. in settings.py.
         bootstrap("scrapers")
         logfire.instrument_pymongo()
 

@@ -1,4 +1,4 @@
 from .base import Base
-from .client import SessionLocal, engine
+from .client import SessionLocal, get_engine
 
-__all__ = ["Base", "engine", "SessionLocal"]
+__all__ = ["Base", "get_engine", "SessionLocal"]

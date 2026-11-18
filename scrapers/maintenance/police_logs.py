@@ -92,8 +92,6 @@ def list_unmatched_dispositions() -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("police-logs")
     parser = argparse.ArgumentParser(prog="police_logs")
     commands = parser.add_subparsers(dest="command", required=True)

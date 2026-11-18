@@ -5,7 +5,7 @@ from collections.abc import Iterator
 
 import pytest
 from mongo.client import MongoDB
-from postgres.client import engine
+from postgres.client import get_engine
 from sqlalchemy import create_engine, text
 
 from scripts import migrate
@@ -15,8 +15,7 @@ THROWAWAY_MONGO = "scraped_data_migrate_cmd_test"
 
 
 def run_migrate(**environment: str) -> subprocess.CompletedProcess[str]:
-    # A subprocess, because postgres.client builds its engine from POSTGRES_* when it
-    # is first imported, and this suite has already pointed it at app_test.
+    # A subprocess, because this suite has already built the shared engine for app_test.
     env = {**os.environ, **environment}
     return subprocess.run(
         [sys.executable, "-m", "scripts.migrate"],
@@ -31,7 +30,7 @@ def run_migrate(**environment: str) -> subprocess.CompletedProcess[str]:
 def throwaway_databases() -> Iterator[dict[str, str]]:
     """An empty Postgres database and an empty MongoDB database, dropped afterwards."""
     server = create_engine(
-        engine.url.set(database="postgres"), isolation_level="AUTOCOMMIT"
+        get_engine().url.set(database="postgres"), isolation_level="AUTOCOMMIT"
     )
     mongo = MongoDB()
     with server.connect() as connection:
@@ -49,7 +48,7 @@ def throwaway_databases() -> Iterator[dict[str, str]]:
 
 
 def migrated_revision() -> str:
-    database = create_engine(engine.url.set(database=THROWAWAY_POSTGRES))
+    database = create_engine(get_engine().url.set(database=THROWAWAY_POSTGRES))
     try:
         with database.connect() as connection:
             return connection.execute(
@@ -100,7 +99,6 @@ def test_the_steps_run_in_order_and_stop_at_the_first_failure(monkeypatch, capsy
         "STEPS",
         [("Postgres", failing), ("Mongo", lambda: calls.append("mongo"))],
     )
-    monkeypatch.setattr("bootstrap.bootstrap", lambda service_name: None)
 
     assert migrate.main() == 1
     assert calls == ["postgres"]

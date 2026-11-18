@@ -23,7 +23,7 @@ import logfire
 from bootstrap import bootstrap
 from mongo.ai_calls import AiCall, AiCallLog, Outcome, ai_calls_collection
 from mongo.client import MongoDB
-from postgres import SessionLocal, engine
+from postgres import SessionLocal, get_engine
 from postgres.lock import police_log_lock
 
 from scripts.normalize.backends import (
@@ -229,8 +229,6 @@ def _chunks(groups: Sequence[Group], size: int) -> list[list[Group]]:
 
 
 def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) -> int:
-    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("normalize")
     args = _parse_args(argv)
     fields = FIELD_NAMES if args.field is None else (args.field,)
@@ -242,7 +240,7 @@ def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) ->
         print(f"Cannot run: {exc}", file=sys.stderr)
         return 1
 
-    with police_log_lock(engine) as acquired:
+    with police_log_lock(get_engine()) as acquired:
         if not acquired:
             print(
                 "Another police log job is running (process, reprocess, or geocode). "

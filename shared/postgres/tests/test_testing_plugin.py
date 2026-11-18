@@ -1,5 +1,5 @@
 import pytest
-from postgres.client import SessionLocal, engine
+from postgres.client import SessionLocal, get_engine
 from postgres.models.pdf_url import PdfUrl
 from postgres_testing.plugin import is_test_database
 from sqlalchemy import func, select, text
@@ -15,7 +15,7 @@ def test_only_names_ending_in_test_count_as_test_databases(name, expected):
 
 
 def test_engine_points_at_the_test_database():
-    assert is_test_database(engine.url.database)
+    assert is_test_database(get_engine().url.database)
 
 
 def test_schema_is_built_by_the_migrations(db_session):
@@ -45,7 +45,7 @@ def test_commits_never_reach_the_database(db_session):
     _add_pdf_url(db_session)
     db_session.commit()
 
-    with engine.connect() as outside:
+    with get_engine().connect() as outside:
         assert outside.scalar(select(func.count()).select_from(PdfUrl)) == 0
 
 

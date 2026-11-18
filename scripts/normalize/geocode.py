@@ -24,7 +24,7 @@ from locations.geocode import (
     geocode,
     in_city_bounds,
 )
-from postgres import SessionLocal, engine
+from postgres import SessionLocal, get_engine
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import ColumnElement, or_, select
@@ -221,8 +221,6 @@ def _names_a_point(normalized_address: str) -> bool:
 
 
 def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int:
-    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("geocode")
     # It takes no options, but parsing still makes --help print usage instead of
     # running the job.
@@ -231,7 +229,7 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    with police_log_lock(engine) as acquired:
+    with police_log_lock(get_engine()) as acquired:
         if not acquired:
             print(
                 "Another police log job is running (process, reprocess, or "

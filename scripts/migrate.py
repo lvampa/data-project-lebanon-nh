@@ -35,8 +35,6 @@ STEPS: list[tuple[str, Callable[[], None]]] = [
 def main() -> int:
     from bootstrap import bootstrap
 
-    # postgres.client reads POSTGRES_* when it is first imported, so bootstrap before
-    # any step imports it.
     bootstrap("migrate")
     for name, step in STEPS:
         try:

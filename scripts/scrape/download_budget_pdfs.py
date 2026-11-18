@@ -90,8 +90,6 @@ def fetch_document(
 
 
 def main() -> None:
-    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("download-budget-pdfs")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 

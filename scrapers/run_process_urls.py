@@ -15,7 +15,7 @@ from typing import Any
 import logfire
 from bootstrap import bootstrap
 from ingest.pdf_urls import utc_now
-from postgres import SessionLocal, engine
+from postgres import SessionLocal, get_engine
 from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
 from scrapy.crawler import CrawlerProcess
@@ -55,12 +55,9 @@ def count_errors_since(session: Session, started_at: datetime) -> int:
 
 
 def main(limit: int) -> int:
-    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
-    # TODO(bootstrap): the crawl's LogfireExtension bootstraps again as "scrapers",
-    # so the service name ends up "scrapers". Decide which one should win.
+    # The crawl's LogfireExtension bootstraps again, and the first call wins.
     bootstrap("process-urls")
-    with police_log_lock(engine) as acquired:
+    with police_log_lock(get_engine()) as acquired:
         if not acquired:
             print(
                 "Another police log job (process or reprocess) is running. "

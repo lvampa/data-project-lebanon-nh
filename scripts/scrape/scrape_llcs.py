@@ -153,8 +153,6 @@ def save_lookup(session, llc_id: int, data: dict | None, now: datetime) -> None:
 async def run(limit: int) -> None:
     from bootstrap import bootstrap
 
-    # TODO(bootstrap): postgres.models is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("scrape-llcs")
 
     from mongo.archive import archive_collection

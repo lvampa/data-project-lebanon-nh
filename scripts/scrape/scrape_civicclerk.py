@@ -193,8 +193,6 @@ async def save_event(
 async def run(limit: int) -> None:
     from bootstrap import bootstrap
 
-    # TODO(bootstrap): postgres.models is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("scrape-civicclerk")
 
     from playwright.async_api import async_playwright

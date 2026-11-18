@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 
 TEST_DATABASE = os.environ.get("TEST_POSTGRES_DB", "app_test")
 
-# postgres.client builds its engine from the environment when it is first imported,
-# so this has to be set before any test module or conftest imports it.
+# postgres.client builds its engine from the environment on first use, so this has
+# to be set before any test module or conftest asks for it.
 os.environ["POSTGRES_DB"] = TEST_DATABASE
 
 # The workspace is installed from its source tree, so alembic.ini sits beside src/.
@@ -49,15 +49,16 @@ def _sessions_unbound_outside_fixtures() -> None:
     """
     from postgres.client import SessionLocal
 
-    SessionLocal.configure(bind=None)
+    SessionLocal.configure(bind=None, default_engine=False)
 
 
 @pytest.fixture(scope="session")
 def test_engine() -> Engine:
     """The engine for the migrated test database."""
-    from postgres.client import engine
+    from postgres.client import get_engine
 
-    # postgres.client may have been imported before this plugin set POSTGRES_DB.
+    engine = get_engine()
+    # The engine may have been built before this plugin set POSTGRES_DB.
     if not is_test_database(engine.url.database):
         pytest.exit(
             f"Refusing to run tests: the Postgres engine points at "
@@ -102,7 +103,9 @@ def db_connection(test_engine: Engine) -> Iterator[Connection]:
         finally:
             transaction.rollback()
             SessionLocal.configure(
-                bind=None, join_transaction_mode=_DEFAULT_JOIN_TRANSACTION_MODE
+                bind=None,
+                default_engine=False,
+                join_transaction_mode=_DEFAULT_JOIN_TRANSACTION_MODE,
             )
 
 

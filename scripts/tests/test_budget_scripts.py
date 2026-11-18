@@ -237,7 +237,6 @@ def test_validate_rejects_line_item_missing_field():
 
 def test_main_fails_when_input_file_is_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(import_budget_data, "INPUT_FILE", tmp_path / "missing.json")
-    monkeypatch.setattr(import_budget_data.logfire, "configure", lambda: None)
     session_factory = MagicMock()
     monkeypatch.setattr(import_budget_data, "SessionLocal", session_factory)
 
@@ -250,7 +249,6 @@ def test_main_writes_nothing_when_any_year_is_invalid(tmp_path, monkeypatch):
     input_file = tmp_path / "budget_data.json"
     input_file.write_text('[{"fiscal_year": 2025}, {"fiscal_year": "2026"}]')
     monkeypatch.setattr(import_budget_data, "INPUT_FILE", input_file)
-    monkeypatch.setattr(import_budget_data.logfire, "configure", lambda: None)
     session_factory = MagicMock()
     monkeypatch.setattr(import_budget_data, "SessionLocal", session_factory)
 

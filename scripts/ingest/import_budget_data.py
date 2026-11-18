@@ -87,8 +87,6 @@ def upsert_capital_projects(
 
 
 def main() -> None:
-    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("import-budget-data")
     if not INPUT_FILE.exists():
         raise FileNotFoundError(

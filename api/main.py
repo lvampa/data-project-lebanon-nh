@@ -1,4 +1,5 @@
 import logfire
+from bootstrap import bootstrap
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,6 +13,7 @@ from api.routers import (
     stats,
 )
 
+bootstrap("api")
 settings = get_settings()
 
 

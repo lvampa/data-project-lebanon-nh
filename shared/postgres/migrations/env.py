@@ -3,7 +3,7 @@ from logging.config import fileConfig
 import postgres.models  # noqa: F401 — registers models with Base.metadata
 from alembic import context
 from postgres.base import Base
-from postgres.client import engine
+from postgres.client import get_engine
 from sqlalchemy import Connection
 
 config = context.config
@@ -16,7 +16,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=engine.url,
+        url=get_engine().url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -29,7 +29,7 @@ def run_migrations_online() -> None:
     # Tests pass their own connection so the migrations join its transaction.
     connection = config.attributes.get("connection")
     if connection is None:
-        with engine.connect() as connection:
+        with get_engine().connect() as connection:
             _run_migrations(connection)
     else:
         _run_migrations(connection)

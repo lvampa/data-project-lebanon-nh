@@ -27,7 +27,7 @@ from ingest.pdf_text import extract_pdf_text
 from ingest.police_log import archive_entry_texts
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB
-from postgres import SessionLocal, engine
+from postgres import SessionLocal, get_engine
 from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
 from pymongo.errors import PyMongoError
@@ -173,8 +173,6 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    # TODO(bootstrap): postgres is imported at module level above, so its engine reads
-    # POSTGRES_* before this runs. Move bootstrap ahead of that import.
     bootstrap("reprocess-police-logs")
     args = _parse_args(argv)
 
@@ -188,7 +186,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    with police_log_lock(engine) as acquired:
+    with police_log_lock(get_engine()) as acquired:
         if not acquired:
             print(
                 "Another police log job (process or reprocess) is running. "

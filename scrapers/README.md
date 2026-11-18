@@ -59,6 +59,8 @@ With CLI auth, `bootstrap` needs nothing more; the SDK reads credentials from yo
 
 If your process loads `.env`, you can set non-secret tuning there (see `scrapers/.env.example`) - for example `LOGFIRE_ENVIRONMENT` or `LOGFIRE_SEND=never` to stop sending to Logfire locally. Full list: [environment variables](https://logfire.pydantic.dev/docs/reference/configuration/).
 
+Set `LOG_FILE=tmp/logs/dev.log` to also append everything to a file while you debug a hand run: Scrapy's log lines and the `logfire` messages and spans. It is off when unset, so containers and CI log to stdout only. Warnings and errors from stdlib logging, Scrapy's included, also go to Logfire.
+
 You can also set defaults in `pyproject.toml` under `[tool.logfire]`; arguments passed in code (`bootstrap` sets `service_name`) override file and env for the options you pass. Precedence is: **code → environment → `pyproject.toml`**.
 
 ## Testing

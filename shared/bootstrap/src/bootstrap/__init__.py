@@ -6,7 +6,7 @@ env.py when it runs from the CLI.
 
 from dotenv import load_dotenv
 
-from .telemetry import configure_telemetry, get_telemetry_settings
+from .telemetry import attach_log_handlers, configure_telemetry, get_telemetry_settings
 
 _done = False
 
@@ -21,5 +21,7 @@ def bootstrap(service_name: str) -> None:
     if _done:
         return
     load_dotenv()
-    configure_telemetry(service_name, get_telemetry_settings())
+    settings = get_telemetry_settings()
+    configure_telemetry(service_name, settings)
+    attach_log_handlers(settings)
     _done = True

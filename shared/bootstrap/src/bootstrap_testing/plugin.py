@@ -26,6 +26,7 @@ def _silence_bootstrap(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     monkeypatch.setattr(
         telemetry, "logfire", SimpleNamespace(configure=mocks.configure)
     )
+    monkeypatch.setattr(bootstrap, "attach_log_handlers", Mock())
     telemetry.get_telemetry_settings.cache_clear()
     return mocks
 

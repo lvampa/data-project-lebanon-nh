@@ -9,12 +9,15 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from bootstrap_testing.names import checkout_database_name
 from postgres import client, get_engine, get_postgres_settings, open_session
 from sqlalchemy import URL, Connection, Engine, create_engine, text
 from sqlalchemy.exc import OperationalError, UnboundExecutionError
 from sqlalchemy.orm import Session
 
-TEST_DATABASE = os.environ.get("TEST_POSTGRES_DB", "app_test")
+# One database per checkout, so worktrees on different branches do not share a schema.
+# TEST_POSTGRES_DB overrides it.
+TEST_DATABASE = os.environ.get("TEST_POSTGRES_DB") or checkout_database_name("app")
 
 # Only for the local compose database. Tests never read .env.
 TEST_PASSWORD = "app"

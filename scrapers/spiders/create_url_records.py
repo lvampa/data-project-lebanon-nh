@@ -1,10 +1,11 @@
 import re
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, cast, override
 from urllib.parse import urljoin, urlparse, urlunparse
 
 from items import UrlRecordItem
+from postgres import utc_now
 from scrapy.http import Request, Response
 from scrapy.selector import Selector
 from scrapy.spiders import Spider
@@ -49,7 +50,7 @@ class BuildDailyUrlsSpider(Spider):
 
     def parse_index(self, response: Response, **kwargs: Any) -> Iterator[UrlRecordItem]:
         # pdf_urls.created_at is a naive column that holds UTC, like the other writers.
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utc_now()
         for link in cast(list[Selector], response.css("a.fileType.pdf")):
             result = self.extract_url(link, response.url)
             if not result:

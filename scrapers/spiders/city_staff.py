@@ -1,11 +1,11 @@
 import re
 from collections.abc import AsyncIterator, Generator
-from datetime import UTC, datetime
 from typing import Any, override
 
 import logfire
 import scrapy
 from items.city_staff import CityStaffItem
+from postgres import utc_now
 from scrapy.http import Request, Response
 
 DEPT_ROSTER_SOURCES = [
@@ -47,7 +47,7 @@ class CityStaffSpider(scrapy.Spider):
     def parse_dept_roster(
         self, response: Response, department: str = "", **kwargs: Any
     ) -> Generator[CityStaffItem, None, None]:
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utc_now()
         current_division: str | None = None
         items: list[CityStaffItem] = []
 
@@ -104,7 +104,7 @@ class CityStaffSpider(scrapy.Spider):
     def parse_directory_table(
         self, response: Response, department: str = "", **kwargs: Any
     ) -> Generator[CityStaffItem, None, None]:
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utc_now()
         items: list[CityStaffItem] = []
 
         for row in response.css("table tbody tr"):
@@ -148,7 +148,7 @@ class CityStaffSpider(scrapy.Spider):
     def parse_council_member(
         self, response: Response, **kwargs: Any
     ) -> Generator[CityStaffItem, None, None]:
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utc_now()
 
         page_title = _clean(response.css("title::text").get() or "")
         name = (

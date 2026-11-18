@@ -192,27 +192,6 @@ def version_upsert(
     )
 
 
-def version_insert(
-    source: str, source_key: str, response: ArchivedResponse
-) -> UpdateOne:
-    """One write that stores a new version and leaves a stored one exactly as it is.
-
-    For copies that may run more than once, where a rerun is not a new sighting.
-    """
-    first_fetch = _first_fetch(source_key, response)
-    return UpdateOne(
-        _version_filter(source, source_key, response),
-        {
-            "$setOnInsert": {
-                **first_fetch,
-                "last_seen_at": response.fetched_at,
-                "seen_count": 1,
-            }
-        },
-        upsert=True,
-    )
-
-
 def _version_filter(
     source: str, source_key: str, response: ArchivedResponse
 ) -> dict[str, Any]:

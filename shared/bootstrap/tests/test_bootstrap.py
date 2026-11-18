@@ -17,8 +17,6 @@ OTHER_ENTRY_POINTS = [
     "scrapers/extensions.py",
     "shared/postgres/migrations/env.py",
 ]
-# A hello-world stub, not an entry point.
-NOT_ENTRY_POINTS = {"scrapers/main.py"}
 SKIPPED_DIRECTORIES = {"tests", "versions", "node_modules"}
 
 
@@ -50,7 +48,7 @@ def _entry_point_files() -> list[str]:
         if '__name__ == "__main__"' in path.read_text()
     }
     found = with_main_guard | _console_script_files() | set(OTHER_ENTRY_POINTS)
-    return sorted(found - NOT_ENTRY_POINTS)
+    return sorted(found)
 
 
 def test_bootstrap_loads_dotenv_before_configuring_logfire(bootstrap_mocks):

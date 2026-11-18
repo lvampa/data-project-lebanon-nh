@@ -12,10 +12,10 @@ whose source is `human` is never selected and never written.
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from locations.canonical import canonical_address
+from postgres import utc_now
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
@@ -497,10 +497,6 @@ def _groups(by_key: Mapping[str, Sequence[str]]) -> list[Group]:
     return [Group(tuple(sorted(raws))) for _, raws in sorted(by_key.items())]
 
 
-def _now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
-
-
 # Coordinates belong to an address. When the address changes they no longer apply.
 _COORDINATES_CLEARED_ON_NEW_ADDRESS = {
     "lat": None,
@@ -524,7 +520,7 @@ def _upsert(
 
     `cleared_if_changed` columns are reset when `changes_on` gets a new value.
     """
-    now = _now()
+    now = utc_now()
     statement = insert(model).values(
         **{key_column: raw}, created_at=now, updated_at=now, **values
     )
@@ -551,7 +547,7 @@ def _charge_attempt(
 
     A row that already has a value is left alone: a missed redo must not mark a good
     value for review."""
-    now = _now()
+    now = utc_now()
     statement = insert(model).values(
         **{key_column: raw},
         created_at=now,

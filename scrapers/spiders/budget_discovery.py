@@ -1,11 +1,11 @@
 import re
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
 from typing import Any, override
 
 import logfire
 import scrapy
 from items.budget import BudgetDocumentItem
+from postgres import utc_now
 from scrapy.http import Request, Response
 
 INDEX_URL = "https://www.lebanonnh.gov/852/Approved-City-Budgets"
@@ -57,7 +57,7 @@ class BudgetDiscoverySpider(scrapy.Spider):
         self, response: Response, **kwargs: Any
     ) -> Iterator[BudgetDocumentItem]:
         """Year sub-page — extract PDF download links."""
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utc_now()
         fiscal_year = _extract_fiscal_year(response.url)
         if not fiscal_year:
             logfire.warning("could not extract fiscal year", url=response.url)

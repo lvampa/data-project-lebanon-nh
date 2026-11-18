@@ -10,7 +10,7 @@ from bootstrap import bootstrap
 from bs4 import BeautifulSoup
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
 from mongo.client import get_db
-from postgres import open_session
+from postgres import open_session, utc_now
 from postgres.models.llc import Llc
 from postgres.models.property import Property
 from sqlalchemy import Update, or_, select, update
@@ -196,12 +196,10 @@ async def run(limit: int) -> None:
     session = open_session()
     archive = RawArchive(archive_collection(get_db()))
     try:
-        queued = queue_new_owners(session, datetime.now(UTC).replace(tzinfo=None))
+        queued = queue_new_owners(session, utc_now())
         session.commit()
         logfire.info("queued new business owners", count=queued)
-        released = session.execute(
-            release_stale_claims(datetime.now(UTC).replace(tzinfo=None))
-        ).rowcount
+        released = session.execute(release_stale_claims(utc_now())).rowcount
         session.commit()
         if released:
             logfire.warning("released stale llc claims", count=released)
@@ -223,7 +221,7 @@ async def run(limit: int) -> None:
             .where(Llc.id.in_(ids))
             .values(
                 lookup_status="in_progress",
-                last_looked_up_at=datetime.now(UTC).replace(tzinfo=None),
+                last_looked_up_at=utc_now(),
             )
         )
         session.commit()
@@ -238,7 +236,7 @@ async def run(limit: int) -> None:
                 logfire.info("looking up llc", llc_id=llc.id, name=llc.name)
                 try:
                     _business_id, data = await scrape_llc(page, llc.name, archive)
-                    now = datetime.now(UTC).replace(tzinfo=None)
+                    now = utc_now()
                     save_lookup(session, llc.id, data, now)
                 except Exception as e:
                     session.rollback()
@@ -248,7 +246,7 @@ async def run(limit: int) -> None:
                         .values(
                             lookup_status="error",
                             error_message=str(e),
-                            last_looked_up_at=datetime.now(UTC).replace(tzinfo=None),
+                            last_looked_up_at=utc_now(),
                         )
                     )
                     session.commit()

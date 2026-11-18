@@ -1,17 +1,12 @@
 """Statements that move a PDF URL record to `error`, shared by the spider and pipeline."""
 
-from datetime import UTC, datetime
 from typing import Literal
 
+from postgres import utc_now
 from postgres.models.pdf_url import PdfUrl
 from sqlalchemy import Update, update
 
 ErrorKind = Literal["download", "parse", "save"]
-
-
-def utc_now() -> datetime:
-    # pdf_urls timestamps are naive columns that hold UTC, like the other tables.
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def mark_error(url_id: int, kind: ErrorKind, message: str) -> Update:

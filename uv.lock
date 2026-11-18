@@ -1563,12 +1563,14 @@ name = "mongo"
 version = "0.1.0"
 source = { editable = "shared/mongo" }
 dependencies = [
+    { name = "bootstrap" },
     { name = "pydantic-settings" },
     { name = "pymongo" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "bootstrap", editable = "shared/bootstrap" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "pymongo", specifier = ">=4.19.0" },
 ]

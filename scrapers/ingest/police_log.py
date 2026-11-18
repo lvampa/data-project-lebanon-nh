@@ -20,6 +20,7 @@ from parsers.police_log import (
     parse_log_date,
     parse_log_entries,
 )
+from postgres import utc_now
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
 from pydantic import ValidationError
@@ -87,7 +88,7 @@ def ingest_pdf_url(
 
 def ingest_log_text(session: Session, pdf_url: PdfUrl, text: str) -> IngestCounts:
     """Parse one PDF's text and upsert its entries by case number."""
-    now = _utc_now()
+    now = utc_now()
     log_date = pdf_url.log_date or parse_log_date(text)
     parsed_entries = parse_log_entries(text)
 
@@ -145,11 +146,6 @@ def archive_entry_texts(
         )
         archive.add(ENTRY_TEXT_SOURCE, text.case_number, version)
     archive.flush()
-
-
-def _utc_now() -> datetime:
-    # Timestamp columns are naive and hold UTC, like the other tables.
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _valid_records(
@@ -287,7 +283,7 @@ def _record_outcome(
     pdf_url.skipped_count = counts.skipped
     pdf_url.header_lines = counts.header_lines
     pdf_url.parser_version = PARSER_VERSION
-    pdf_url.completed_at = _utc_now()
+    pdf_url.completed_at = utc_now()
     if counts.stored:
         pdf_url.state = "complete"
         pdf_url.error_kind = None

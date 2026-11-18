@@ -232,7 +232,7 @@ def test_a_complete_backup_passes_and_its_restore_is_dropped(raw_sources, backup
     assert problems == []
     [command] = restore.commands
     assert command[0] == "mongorestore"
-    assert "--nsFrom=scraped_data_test.*" in command
+    assert f"--nsFrom={MongoDB().default_db}.*" in command
     assert f"--nsTo={RESTORE_DATABASE}.*" in command
     assert restored_databases(raw_sources) == []
 

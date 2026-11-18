@@ -45,15 +45,15 @@ Both read `POSTGRES_*` and `MONGO_*` from your shell, as the migration commands 
 
 Run every suite from the repo root with `uv run pytest`.
 A test that opens a database session has to ask for the `db_session` or `db_connection` fixture; without one the session has no database and the test fails.
-Database tests run against a Postgres database named `app_test`, never `app`.
-The test run creates `app_test` if it is missing and applies the migrations to it.
+Database tests run against a Postgres database named after the checkout folder, such as `app_my_worktree_test`, never `app`.
+Each worktree gets its own, so branches with different migrations do not collide.
+The test run creates it if it is missing and applies the migrations to it.
 Each test runs inside a transaction that is rolled back, so the database stays empty.
 Postgres has to be running: `docker compose up -d postgres`.
-MongoDB tests do the same with a database named `scraped_data_test`, never `scraped_data`; start it with `docker compose up -d mongo`, and set `TEST_MONGO_DB` to use another `_test` name.
+MongoDB tests do the same with a database such as `scraped_data_my_worktree_test`, never `scraped_data`; start it with `docker compose up -d mongo`, and set `TEST_MONGO_DB` to use another `_test` name.
 The pre-push hook runs the tests, so it needs Postgres up too.
 Set `TEST_POSTGRES_DB` to use another database; the run stops unless its name ends in `_test`.
-The run leaves `app_test` at the newest migration of the branch you tested.
-Before testing an older branch, drop `app_test` or point `TEST_POSTGRES_DB` at another `_test` database, or the upgrade fails on a revision that branch does not have.
+The run leaves that database at the newest migration of the branch you tested, and a worktree that is reused for an older branch should drop it first.
 
 ## Removing the old Elasticsearch data
 

@@ -70,7 +70,7 @@ Size is small: the police log PDFs are about 100 KB each, parcel pages about 19 
 
 ## Testing
 
-A pytest plugin in `shared/mongo` points tests at `scraped_data_test`, refuses any database name that does not end in `_test`, and drops the archive collection after each test.
+A pytest plugin in `shared/mongo` points tests at a database named for the checkout, such as `scraped_data_my_worktree_test`, refuses any database name that does not end in `_test`, and drops the archive collection after each test.
 Tests cover the archive class (new version, repeat, changed body, oversized body, failed batch, timeouts, a hung server), the middleware for both spiders, an unreachable MongoDB with the Postgres path still working, reads, the AI call log, and backup cleanup.
 
 ## Decisions

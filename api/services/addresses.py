@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
 from typing import Any, cast
 
 import logfire
 from locations.geocode import GeocodeUnavailable, geocode
+from postgres import utc_now
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import CursorResult, delete, func, select
@@ -73,7 +73,7 @@ def update_address(
     *,
     nominatim_contact: str | None,
 ) -> AddressResult:
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utc_now()
     # A human value has no prompt version. The AI call that came before it stays in
     # ai_call_id, so the AI's answer can be compared with this correction.
     changes = {

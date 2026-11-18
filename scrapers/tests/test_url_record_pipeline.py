@@ -61,7 +61,7 @@ def test_inserts_archive_url_and_log_date(db_session):
     assert url.state == "pending"
 
 
-@patch("pipelines.SessionLocal")
+@patch("pipelines.open_session")
 def test_passes_through_non_url_record_items(mock_session_local):
     pipeline = UrlRecordPipeline()
     pipeline.open_spider()
@@ -74,7 +74,7 @@ def test_passes_through_non_url_record_items(mock_session_local):
     mock_session_local.assert_not_called()
 
 
-@patch("pipelines.SessionLocal")
+@patch("pipelines.open_session")
 def test_opens_no_session_when_no_items(mock_session_local):
     run_pipeline()
 

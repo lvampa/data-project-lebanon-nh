@@ -19,7 +19,7 @@ NOW = datetime(2026, 11, 13)
 
 @pytest.fixture
 def real_client(db_connection):
-    """No mocked session: SessionLocal is bound to the test's rolled-back connection."""
+    """No mocked session: sessions are bound to the test's rolled-back connection."""
     with TestClient(app, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"}) as client:
         yield client
 

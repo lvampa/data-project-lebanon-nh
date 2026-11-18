@@ -1,5 +1,5 @@
 import pytest
-from postgres.client import SessionLocal, get_engine
+from postgres import get_engine, open_session
 from postgres.models.pdf_url import PdfUrl
 from postgres_testing.plugin import is_test_database
 from sqlalchemy import func, select, text
@@ -34,7 +34,7 @@ def _add_pdf_url(session) -> None:
 
 
 def test_committed_rows_are_visible_to_other_sessions_in_the_test(db_session):
-    with SessionLocal() as writer:
+    with open_session() as writer:
         _add_pdf_url(writer)
         writer.commit()
 
@@ -61,5 +61,5 @@ def test_rollback_in_code_under_test_keeps_earlier_commits(db_session):
 
 def test_session_without_the_fixture_has_no_database():
     # Last in the file on purpose: it also shows the fixture unbinds on teardown.
-    with SessionLocal() as session, pytest.raises(UnboundExecutionError):
-        session.execute(text("SELECT 1"))
+    with pytest.raises(UnboundExecutionError):
+        open_session()

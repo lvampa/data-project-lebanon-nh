@@ -1,13 +1,13 @@
 from functools import lru_cache
 from typing import Annotated
 
-from pydantic import field_validator
+from postgres import PostgresSettings, get_postgres_settings
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode
 
 
-# Postgres is not here because the shared postgres package builds its engine
-# from POSTGRES_* itself.
 class Settings(BaseSettings):
+    postgres: PostgresSettings = Field(default_factory=get_postgres_settings)
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3001"]
     admin_api_token: str | None = None
     nominatim_contact: str | None = None

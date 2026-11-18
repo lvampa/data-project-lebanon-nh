@@ -20,6 +20,7 @@ from pathlib import Path
 
 import logfire
 from bootstrap import bootstrap
+from postgres import get_engine
 from sqlalchemy import URL
 
 from maintenance.mongo_backup import BackupError, check_writable
@@ -93,7 +94,6 @@ def _run(command: Sequence[str], env: Mapping[str, str]) -> int:
 
 def main() -> int:
     bootstrap("postgres-backup")
-    from postgres.client import get_engine
 
     try:
         dest = back_up(BACKUP_DIR, get_engine().url, datetime.now(UTC), _run)

@@ -23,7 +23,7 @@ import logfire
 from bootstrap import bootstrap
 from mongo.ai_calls import AiCall, AiCallLog, Outcome, ai_calls_collection
 from mongo.client import MongoDB
-from postgres import SessionLocal, get_engine
+from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 
 from scripts.normalize.backends import (
@@ -92,7 +92,7 @@ def run(
     batch_size: int = BATCH_SIZE,
 ) -> RunResult:
     result = RunResult()
-    with SessionLocal() as session:
+    with open_session() as session:
         streets = load_street_list(session)
         every_field: dict[str, Field] = {
             "incident_type": IncidentTypes(),

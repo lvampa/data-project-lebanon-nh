@@ -18,14 +18,14 @@ import sys
 from collections.abc import Sequence
 
 from bootstrap import bootstrap
-from postgres import SessionLocal
+from postgres import open_session
 from postgres.models.log_entry import LogEntry
 from postgres.models.pdf_url import PdfUrl
 from sqlalchemy import select, update
 
 
 def list_errors() -> int:
-    with SessionLocal() as session:
+    with open_session() as session:
         rows = session.scalars(
             select(PdfUrl)
             .where(PdfUrl.state == "error")
@@ -46,7 +46,7 @@ def reset(urls: Sequence[str]) -> int:
     """Send URL records in error back to pending. Report any that cannot be reset."""
     problems = []
     reset_count = 0
-    with SessionLocal() as session:
+    with open_session() as session:
         for canonical_url in urls:
             state = session.scalar(
                 select(PdfUrl.state).where(PdfUrl.canonical_url == canonical_url)
@@ -77,7 +77,7 @@ def reset(urls: Sequence[str]) -> int:
 
 
 def list_unmatched_dispositions() -> int:
-    with SessionLocal() as session:
+    with open_session() as session:
         rows = session.execute(
             select(LogEntry.case_number, LogEntry.log_date, LogEntry.incident_type)
             .where(LogEntry.disposition_unmatched)

@@ -27,7 +27,7 @@ from ingest.pdf_text import extract_pdf_text
 from ingest.police_log import archive_entry_texts
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import MongoDB
-from postgres import SessionLocal, get_engine
+from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 from postgres.models.pdf_url import PdfUrl
 from pymongo.errors import PyMongoError
@@ -91,7 +91,7 @@ def _url_ids(date_from: date | None, date_to: date | None) -> list[int]:
     query = select(PdfUrl.id).where(PdfUrl.state.in_(REPROCESSED_STATES))
     if date_from is not None and date_to is not None:
         query = query.where(PdfUrl.log_date.between(date_from, date_to))
-    with SessionLocal() as session:
+    with open_session() as session:
         return list(
             session.scalars(
                 query.order_by(PdfUrl.log_date.asc().nulls_last(), PdfUrl.id)
@@ -101,7 +101,7 @@ def _url_ids(date_from: date | None, date_to: date | None) -> list[int]:
 
 def _reprocess_url(archive: RawArchive, url_id: int) -> ReprocessCounts:
     # One transaction per record, so a failure loses only that record's work.
-    with SessionLocal() as session:
+    with open_session() as session:
         url = session.get(PdfUrl, url_id)
         if url is None:
             return ReprocessCounts(urls=1, failed=1)

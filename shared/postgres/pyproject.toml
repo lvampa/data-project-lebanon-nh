@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.4",
     "psycopg2-binary>=2.9.12",
+    "pydantic-settings>=2.14.1",
     "sqlalchemy>=2.1.8",
 ]
 
@@ -16,8 +17,8 @@ dependencies = [
 requires = ["uv_build>=0.13.6,<0.14.0"]
 build-backend = "uv_build"
 
-# postgres_testing is its own top-level module so pytest can load it, and it can
-# point POSTGRES_DB at the test database, before anything imports postgres.client.
+# postgres_testing is its own top-level module so pytest can load it before any
+# test module imports postgres.
 [tool.uv.build-backend]
 module-name = ["postgres", "postgres_testing"]
 

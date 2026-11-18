@@ -13,6 +13,8 @@ import io
 from datetime import UTC, datetime
 
 import logfire
+from bootstrap import bootstrap
+from postgres import open_session
 from postgres.models.planning_document import PlanningDocument
 from postgres.models.planning_meeting import PlanningMeeting
 from pydantic import ValidationError
@@ -191,12 +193,9 @@ async def save_event(
 
 
 async def run(limit: int) -> None:
-    from bootstrap import bootstrap
-
     bootstrap("scrape-civicclerk")
 
     from playwright.async_api import async_playwright
-    from postgres import SessionLocal
 
     now = datetime.now(UTC).replace(tzinfo=None)
 
@@ -216,7 +215,7 @@ async def run(limit: int) -> None:
             raw_events = await fetch_events(request_ctx, group_id, limit)
             logfire.info("fetched events", count=len(raw_events))
 
-        session = SessionLocal()
+        session = open_session()
         try:
             # Commit per meeting so one bad event or a crash late in a full
             # run does not throw away the downloads that already finished.

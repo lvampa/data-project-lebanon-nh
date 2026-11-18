@@ -1977,6 +1977,7 @@ source = { editable = "shared/postgres" }
 dependencies = [
     { name = "alembic" },
     { name = "psycopg2-binary" },
+    { name = "pydantic-settings" },
     { name = "sqlalchemy" },
 ]
 
@@ -1984,6 +1985,7 @@ dependencies = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.18.4" },
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
+    { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "sqlalchemy", specifier = ">=2.1.8" },
 ]
 

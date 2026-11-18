@@ -24,7 +24,7 @@ from locations.geocode import (
     geocode,
     in_city_bounds,
 )
-from postgres import SessionLocal, get_engine
+from postgres import get_engine, open_session
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import ColumnElement, or_, select
@@ -55,7 +55,7 @@ def run(
     geocoder: Geocoder = geocode, *, max_requests: int = MAX_REQUESTS
 ) -> GeocodeCounts:
     counts = GeocodeCounts()
-    with SessionLocal() as session:
+    with open_session() as session:
         for row in _rows_to_place(session):
             if counts.requests >= max_requests:
                 counts.stopped_at_limit = True

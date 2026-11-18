@@ -16,7 +16,7 @@ from pathlib import Path
 
 import logfire
 from bootstrap import bootstrap
-from postgres import SessionLocal
+from postgres import open_session
 from postgres.models.budget_capital_project import BudgetCapitalProject
 from postgres.models.budget_line_item import BudgetLineItem
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -97,7 +97,7 @@ def main() -> None:
     # does not leave a partial import behind.
     years = [validate_year_entry(entry) for entry in parse_budget_data(text)]
 
-    with SessionLocal() as session:
+    with open_session() as session:
         for year in years:
             fiscal_year = year.fiscal_year
             with logfire.span("import budget year", fiscal_year=fiscal_year):

@@ -18,7 +18,7 @@ import pypdf
 from bootstrap import bootstrap
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
 from mongo.client import MongoDB
-from postgres import SessionLocal
+from postgres import open_session
 from postgres.models.budget_document import BudgetDocument
 from sqlalchemy import select
 
@@ -94,7 +94,7 @@ def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     archive = RawArchive(archive_collection(MongoDB()))
-    with SessionLocal() as session, make_client() as client:
+    with open_session() as session, make_client() as client:
         all_docs = session.execute(select(BudgetDocument)).scalars().all()
         docs = documents_needing_text(all_docs)
 

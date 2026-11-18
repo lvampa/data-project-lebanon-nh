@@ -9,7 +9,7 @@ from ingest.pdf_urls import ErrorKind, mark_error, utc_now
 from items import PoliceLogPdfItem
 from models import PdfUrlClaim
 from mongo.archive import content_hash
-from postgres import SessionLocal
+from postgres import open_session
 from postgres.models.pdf_url import PdfUrl
 from scrapy.http import Request, Response
 from sqlalchemy import CursorResult, Update, select, update
@@ -101,7 +101,7 @@ class ProcessUrlsSpider(scrapy.Spider):
         now = utc_now()
         with (
             logfire.span("claim pdf urls", limit=self.limit),
-            SessionLocal() as session,
+            open_session() as session,
         ):
             # UPDATEs return a CursorResult; Session.execute is typed for SELECTs.
             expired = cast(
@@ -189,6 +189,6 @@ class ProcessUrlsSpider(scrapy.Spider):
         )
 
     def _mark_error(self, pdf_url: PdfUrlClaim, kind: ErrorKind, message: str) -> None:
-        with SessionLocal() as session:
+        with open_session() as session:
             session.execute(mark_error(pdf_url.id, kind, message))
             session.commit()

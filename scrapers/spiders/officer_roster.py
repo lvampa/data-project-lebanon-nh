@@ -13,6 +13,13 @@ ROSTER_URL = "https://www.lebanonnh.gov/287/Divisions-Roster"
 class OfficerRosterSpider(scrapy.Spider):
     name = "officer_roster"
     allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov"]
+    archive_source = "officer_roster_page"
+
+    def archive_key(self, response: Response) -> str | None:
+        # The roster index only links to the division pages, which are the originals.
+        if response.url == ROSTER_URL:
+            return None
+        return response.url
 
     @override
     async def start(self) -> AsyncIterator[Request]:

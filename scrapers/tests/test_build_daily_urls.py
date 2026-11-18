@@ -137,3 +137,12 @@ def test_parse_no_matches():
         )
         == []
     )
+
+
+def test_the_index_page_is_archived_by_its_url():
+    spider = BuildDailyUrlsSpider()
+    index = HtmlResponse(
+        "https://www.lebanonnh.gov/232/Daily-Police-Log", body=b"<html/>"
+    )
+
+    assert spider.archive_key(index) == index.url

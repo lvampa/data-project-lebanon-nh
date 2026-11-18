@@ -15,6 +15,11 @@ _LOG_DATE_RE = re.compile(r"/(\d{4}-\d{2}-\d{2})(?:[/?#]|$)")
 
 class BuildDailyUrlsSpider(Spider):
     name = "build_daily_urls"
+    # The only record of which police log PDFs the city listed, and when.
+    archive_source = "police_log_index"
+
+    def archive_key(self, response: Response) -> str | None:
+        return response.url
 
     def __init__(
         self,

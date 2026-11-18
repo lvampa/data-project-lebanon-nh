@@ -67,6 +67,7 @@ def test_bootstrap_loads_dotenv_before_configuring_logfire(bootstrap_mocks):
             send_to_logfire=False,
             token=None,
             environment=None,
+            console=None,
         ),
     ]
 

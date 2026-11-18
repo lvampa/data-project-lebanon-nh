@@ -67,8 +67,9 @@ def test_triggered_dags_have_no_schedule():
         assert SPECS_BY_ID[dag_id].schedule is None, dag_id
 
 
-def test_llc_lookup_runs_after_vgsi_property():
-    assert "llc_lookup" in SPECS_BY_ID["vgsi_property"].triggers
+def test_the_property_jobs_run_in_order():
+    assert "build_properties" in SPECS_BY_ID["vgsi_property"].triggers
+    assert "llc_lookup" in SPECS_BY_ID["build_properties"].triggers
 
 
 def test_the_police_log_reprocess_is_run_by_hand_and_nothing_triggers_it():

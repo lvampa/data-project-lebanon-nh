@@ -7,26 +7,17 @@ from maintenance.raw_sources import (
     CheckReport,
     check,
     main,
-    replay_parcels,
     report_lines,
     restore_check,
     version_lines,
 )
 from mongo.archive import ArchivedResponse, RawArchive
 from mongo.client import MongoDB
-from pipelines import PropertyPipeline
-from postgres.models.llc import Llc, PropertyLlc
+from postgres.models.crawl_run import CrawlRun
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
-from postgres.models.property_sale import PropertySale
-from scrapy.http import HtmlResponse
-from spiders.vgsi_property import VgsiPropertySpider
-from sqlalchemy import delete, select, update
 
-# The tests folder is not a package pyrefly can follow; pytest imports it from scrapers/.
-# pyrefly: ignore[missing-import]
-from tests.test_vgsi_property_spider import PARCEL_HTML
-
+PARCEL_HTML = b"<html>a parcel page</html>"
 PARCEL_URL = "https://gis.vgsi.com/LebanonNH/Parcel.aspx?pid=10001"
 
 
@@ -44,174 +35,6 @@ def archive_parcel(archive: RawArchive, body: bytes = PARCEL_HTML, day: int = 1)
         ),
     )
     archive.flush()
-
-
-def stored_parcel(session) -> tuple:
-    session.expire_all()
-    row = session.scalars(select(Property)).one()
-    sales = session.execute(
-        select(PropertySale.sale_date, PropertySale.sale_price, PropertySale.owner)
-    ).all()
-    return (row.parcel_id, row.location, row.owner, row.assessed_total, sales)
-
-
-def ingest_live(session) -> tuple:
-    pipeline = PropertyPipeline()
-    pipeline.open_spider()
-    response = HtmlResponse(url=PARCEL_URL, body=PARCEL_HTML)
-    for item in VgsiPropertySpider().parse_parcel(response):
-        pipeline.process_item(item)
-    pipeline.close_spider()
-    return stored_parcel(session)
-
-
-def clear_parcels(session) -> None:
-    session.execute(delete(PropertyLlc))
-    session.execute(delete(PropertySale))
-    session.execute(delete(Property))
-    session.execute(delete(Llc))
-    session.commit()
-
-
-def test_a_replayed_parcel_matches_a_normal_ingest(db_session, raw_sources):
-    from_download = ingest_live(db_session)
-    clear_parcels(db_session)
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-
-    counts = replay_parcels(archive)
-
-    assert stored_parcel(db_session) == from_download
-    assert (counts.replayed, counts.inserted) == (1, 1)
-
-
-def test_a_replay_fills_the_columns_the_parser_added(db_session, raw_sources):
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-
-    replay_parcels(archive)
-
-    row = db_session.scalars(select(Property)).one()
-    assert row.owner_address == "PO BOX 1325 LEBANON, NH 03766"
-    assert row.appraised_total == 1502200
-    assert row.buildings is not None
-    sale = db_session.scalars(select(PropertySale).order_by(PropertySale.id)).first()
-    assert sale is not None
-    assert sale.book_page == "4446/0736"
-
-
-def test_replaying_again_leaves_the_parcel_unchanged(db_session, raw_sources):
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-    replay_parcels(archive)
-
-    counts = replay_parcels(archive)
-
-    assert (counts.updated, counts.unchanged) == (0, 1)
-
-
-def test_a_newer_page_updates_the_parcel(db_session, raw_sources):
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-    replay_parcels(archive)
-    archive_parcel(
-        archive,
-        PARCEL_HTML.replace(b"ONE MECHANIC STREET LLC</span>", b"DOE</span>"),
-        2,
-    )
-
-    counts = replay_parcels(archive)
-
-    assert counts.updated == 1
-    assert stored_parcel(db_session)[2] == "DOE"
-
-
-def set_stored(session, **columns) -> None:
-    session.execute(update(Property).values(**columns))
-    session.commit()
-
-
-def stored_property(session) -> Property:
-    session.expire_all()
-    return session.scalars(select(Property)).one()
-
-
-def test_a_parcel_stored_after_the_archived_page_is_not_overwritten(
-    db_session, raw_sources
-):
-    # The archive was down for the newer scrape, so its newest page is older than
-    # the row. Replaying it would put old data over new.
-    ingest_live(db_session)
-    set_stored(db_session, owner="NEWER OWNER")
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-
-    counts = replay_parcels(archive)
-
-    assert stored_property(db_session).owner == "NEWER OWNER"
-    assert (counts.replayed, counts.skipped_newer) == (0, 1)
-
-
-def test_a_parcel_scraped_just_after_its_page_was_archived_is_still_replayed(
-    db_session, raw_sources
-):
-    # A normal scrape archives the page, then the pipeline writes the row a moment later.
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-    replay_parcels(archive)
-    set_stored(db_session, owner="OLD OWNER", updated_at=datetime(2026, 11, 1, 0, 5))
-
-    counts = replay_parcels(archive)
-
-    assert stored_property(db_session).owner != "OLD OWNER"
-    assert (counts.updated, counts.skipped_newer) == (1, 0)
-
-
-def test_replay_stamps_the_row_with_the_pages_own_time(db_session, raw_sources):
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-
-    replay_parcels(archive)
-
-    row = stored_property(db_session)
-    assert (row.created_at, row.updated_at) == (datetime(2026, 11, 1),) * 2
-
-
-def test_a_second_replay_is_not_skipped_by_the_first(db_session, raw_sources):
-    # Replay must be repeatable after each parser fix, so its own write cannot make
-    # the row look newer than the page.
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-    replay_parcels(archive)
-    set_stored(db_session, owner="CHANGED SINCE")
-
-    counts = replay_parcels(archive)
-
-    assert stored_property(db_session).owner != "CHANGED SINCE"
-    assert (counts.updated, counts.skipped_newer) == (1, 0)
-
-
-def test_replay_does_not_write_the_archive(db_session, raw_sources):
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-    before = list(raw_sources.find())
-
-    replay_parcels(archive)
-
-    assert list(raw_sources.find()) == before
-
-
-def test_missing_and_truncated_versions_have_no_usable_body(
-    db_session, raw_sources, monkeypatch
-):
-    monkeypatch.setattr("mongo.archive.MAX_COMPRESSED_BYTES", 10)
-    archive = RawArchive(raw_sources)
-    archive_parcel(archive)
-
-    counts = replay_parcels(archive, ["10001", "99999"])
-
-    assert (counts.replayed, counts.no_body) == (0, 2)
-    assert db_session.scalars(select(Property)).all() == []
 
 
 def test_versions_are_listed_newest_first(raw_sources, capsys, monkeypatch):
@@ -284,20 +107,18 @@ def mixed_archive(db_session, raw_sources) -> RawArchive:
         add_pdf_url(db_session, url, state)
     archive_version(archive, "police_log_pdf", "https://x/body", b"%PDF body")
     archive_parcel(archive)
-    db_session.add(
-        Property(
-            parcel_id="10001",
-            created_at=datetime(2026, 11, 1),
-            updated_at=datetime(2026, 11, 1),
+    run = CrawlRun(source="vgsi_property", started_at=datetime(2026, 11, 1))
+    db_session.add(run)
+    db_session.flush()
+    for pid in ("10001", "20002"):
+        db_session.add(
+            Property(
+                vgsi_pid=pid,
+                mblu=f"{pid}///",
+                crawl_run_id=run.id,
+                fetched_at=datetime(2026, 11, 1),
+            )
         )
-    )
-    db_session.add(
-        Property(
-            parcel_id="20002",
-            created_at=datetime(2026, 11, 1),
-            updated_at=datetime(2026, 11, 1),
-        )
-    )
     db_session.commit()
     return archive
 

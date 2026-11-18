@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pytest
 from locations.canonical import RULES_VERSION, canonical_address
+from postgres.models.crawl_run import CrawlRun
 from postgres.models.property import Property
 
 from scripts.normalize.rules import (
@@ -58,19 +59,19 @@ def test_the_street_list_is_distinct_and_sorted():
 
 def test_the_street_list_is_built_from_the_properties_table(db_session):
     now = datetime(2026, 11, 13)
+    run = CrawlRun(source="vgsi_property", started_at=now)
+    db_session.add(run)
+    db_session.flush()
+    locations = ["12 Main Street", "14 Main St", None, "7 Elm St"]
     db_session.add_all(
-        [
-            Property(
-                parcel_id="1", location="12 Main Street", created_at=now, updated_at=now
-            ),
-            Property(
-                parcel_id="2", location="14 Main St", created_at=now, updated_at=now
-            ),
-            Property(parcel_id="3", location=None, created_at=now, updated_at=now),
-            Property(
-                parcel_id="4", location="7 Elm St", created_at=now, updated_at=now
-            ),
-        ]
+        Property(
+            mblu=f"{number}/1///",
+            vgsi_pid=str(number),
+            location=location,
+            crawl_run_id=run.id,
+            fetched_at=now,
+        )
+        for number, location in enumerate(locations)
     )
     db_session.commit()
 

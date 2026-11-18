@@ -1,5 +1,3 @@
-import re
-from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Self, cast
 
@@ -11,31 +9,21 @@ from items import PoliceLogPdfItem, UrlRecordItem
 from items.budget import BudgetDocumentItem
 from items.city_staff import CityStaffItem
 from items.officer import OfficerItem
-from items.property import PropertyItem
 from models.budget_document import BudgetDocumentRecord
 from models.city_staff import CityStaffRecord
 from models.officer import OfficerRecord
-from models.property import PropertyRecord
 from models.url_record import UrlRecord
 from mongo.archive import RawArchive, archive_collection
 from mongo.client import get_db
 from postgres import open_session
 from postgres.models.budget_document import BudgetDocument
 from postgres.models.city_staff import CityStaff
-from postgres.models.llc import Llc, PropertyLlc
 from postgres.models.officer import Officer
 from postgres.models.pdf_url import PdfUrl
-from postgres.models.property import Property
-from postgres.models.property_sale import PropertySale
 from scrapy import Item
 from scrapy.crawler import Crawler
-from sqlalchemy import CursorResult, delete, select
+from sqlalchemy import CursorResult
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-_LLC_PATTERN = re.compile(
-    r"\b(LLC|L\.L\.C|INC|CORP|CORPORATION|TRUST|LP|LLP|PLLC)\b",
-    re.IGNORECASE,
-)
 
 
 class UrlRecordPipeline:
@@ -139,82 +127,6 @@ class PoliceLogPipeline:
 
 def _utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
-
-
-class PropertyPipeline:
-    def __init__(self, clock: Callable[[], datetime] = _utc_now) -> None:
-        # Replay swaps it, so a row is stamped with its page's own time and not the
-        # time of the replay.
-        self.clock = clock
-
-    def open_spider(self) -> None:
-        self._session = open_session()
-
-    def process_item(self, item: Item) -> Item:
-        if not isinstance(item, PropertyItem):
-            return item
-
-        record = PropertyRecord.model_validate(dict(item))
-
-        try:
-            now = self.clock()
-
-            with logfire.span("save property", parcel_id=record.parcel_id):
-                # Every record field but the sales is a column of the same name.
-                columns = record.model_dump(exclude={"sales"})
-                property_id = self._session.execute(
-                    pg_insert(Property)
-                    .values(**columns, created_at=now, updated_at=now)
-                    .on_conflict_do_update(
-                        index_elements=["parcel_id"],
-                        set_={**columns, "updated_at": now},
-                    )
-                    .returning(Property.id)
-                ).scalar_one()
-
-                # Queue LLC lookup if owner looks like a business entity
-                if record.owner and _LLC_PATTERN.search(record.owner):
-                    normalized = record.owner.strip().upper()
-                    self._session.execute(
-                        pg_insert(Llc)
-                        .values(
-                            name=normalized,
-                            raw_owner_name=record.owner,
-                            lookup_status="pending",
-                            created_at=now,
-                        )
-                        .on_conflict_do_nothing(index_elements=["name"])
-                    )
-                    llc_id = self._session.execute(
-                        select(Llc.id).where(Llc.name == normalized)
-                    ).scalar_one()
-                    self._session.execute(
-                        pg_insert(PropertyLlc)
-                        .values(property_id=property_id, llc_id=llc_id)
-                        .on_conflict_do_nothing()
-                    )
-
-                # Replace sales
-                self._session.execute(
-                    delete(PropertySale).where(PropertySale.property_id == property_id)
-                )
-                for sale in record.sales:
-                    self._session.execute(
-                        pg_insert(PropertySale).values(
-                            property_id=property_id,
-                            **sale.model_dump(),
-                            created_at=now,
-                        )
-                    )
-            self._session.commit()
-        except Exception:
-            self._session.rollback()
-            raise
-
-        return item
-
-    def close_spider(self) -> None:
-        self._session.close()
 
 
 class CityStaffPipeline:

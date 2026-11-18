@@ -75,15 +75,14 @@ uv run pytest
 Every original the scrapers download is kept in the MongoDB `raw_sources` collection, as it was downloaded.
 These commands read it; run them from `scrapers/`.
 
-Rebuild parcels from their newest archived pages, without downloading anything:
+Build the property tables from the archived parcel pages, without downloading anything.
+Run it from `scrapers/`:
 ```bash
-uv run python -m maintenance.raw_sources replay --source vgsi_parcel
-uv run python -m maintenance.raw_sources replay --source vgsi_parcel --parcel 1000 --parcel 1001
+uv run python -m maintenance.build_properties
 ```
-It prints how many parcels it inserted, updated, and left unchanged, and how many had no usable body.
-A parcel whose stored row is more than an hour newer than its newest archived page is skipped and counted, because a scrape the archive missed has already updated it.
-Replay stamps each row with its page's own time, so you can run it again after the next parser fix.
-It never writes to the archive.
+It parses the newest archived page of each parcel seen in the latest finished `vgsi_property` crawl, runs the quality checks, and replaces `properties` and `property_sales` in one transaction.
+When a check fails it writes nothing, logs why, and exits 1.
+Run it again after any parser fix.
 
 List every version of one source key, newest first, with its fetch time, content hash, size, and seen count:
 ```bash

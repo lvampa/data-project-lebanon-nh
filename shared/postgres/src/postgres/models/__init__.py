@@ -3,8 +3,9 @@ from .budget_capital_project import BudgetCapitalProject
 from .budget_document import BudgetDocument
 from .budget_line_item import BudgetLineItem
 from .city_staff import CityStaff
+from .crawl_run import CrawlRun
 from .incident_type_category import IncidentTypeCategory
-from .llc import Llc, PropertyLlc
+from .llc import Llc
 from .log_entry import LogEntry
 from .officer import Officer
 from .pdf_url import PdfUrl
@@ -19,9 +20,9 @@ __all__ = [
     "BudgetDocument",
     "BudgetLineItem",
     "CityStaff",
+    "CrawlRun",
     "IncidentTypeCategory",
     "Llc",
-    "PropertyLlc",
     "LogEntry",
     "Officer",
     "PdfUrl",

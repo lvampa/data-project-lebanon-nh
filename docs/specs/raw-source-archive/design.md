@@ -21,7 +21,7 @@ process spider ─┐                         ┌─► callbacks ─► pipelin
 VGSI spider ────┘                         └─► RawArchiveMiddleware ─► buffer ─► bulk upsert ─► MongoDB raw_sources
 
 police reprocess ─► raw_sources ─► pypdf ─► ingest_pdf_url ─► Postgres
-replay command ───► raw_sources ─► HtmlResponse ─► parse_parcel ─► PropertyPipeline ─► Postgres
+build_properties ─► raw_sources ─► parse_parcel ─► checks ─► Postgres
 normalize job ────► AiCallLog ─► MongoDB ai_calls          (Postgres keeps ai_call_id)
 backup script ────► mongodump ─► one dated file per run
 ```
@@ -44,7 +44,7 @@ It is never the source of truth for a curated value.
   After a timeout the archive marks itself down, drops later writes for the run, and counts them as failed.
 - **Scripts outside Scrapy** (LLC lookup, budget downloader) call `RawArchive` directly after each download.
 - **Reads** go through `RawArchive.newest`, `by_hash` and `versions`, and raise on a MongoDB error, because they serve operator commands, not the crawl.
-- **Commands** in `scrapers/maintenance/raw_sources.py`: `replay` (parcel pages through the parser, read-only), `check` (sizes, log PDFs with no usable body, AI normalizations with no call record), `versions`, and `restore-check`.
+- **Commands** in `scrapers/maintenance/raw_sources.py`: `check` (sizes, log PDFs with no usable body, AI normalizations with no call record), `versions`, and `restore-check`.
 - **AI call log:** `AiCallLog` writes one `ai_calls` document per AI call and returns its ID, or `None` on failure, so Postgres never points at a record that does not exist.
 - **Backup:** `python maintenance/mongo_backup.py`, run by hand in the Airflow container, writes a dated `mongodump` file to a bind-mounted host folder.
   It never overwrites a backup and deletes its own partial file on failure.
@@ -66,12 +66,12 @@ Size is small: the police log PDFs are about 100 KB each, parcel pages about 19 
 
 - MongoDB down at start: the first batch times out, the archive marks itself down, and the Postgres path is unaffected.
 - A crash with a partly full buffer loses up to 49 parcel bodies whose Postgres rows are saved; the check command lists them.
-- A truncated or missing version is skipped by replay and counted as having no usable body.
+- A truncated or missing version is skipped by the property build, which only reads usable bodies.
 
 ## Testing
 
 A pytest plugin in `shared/mongo` points tests at `scraped_data_test`, refuses any database name that does not end in `_test`, and drops the archive collection after each test.
-Tests cover the archive class (new version, repeat, changed body, oversized body, failed batch, timeouts, a hung server), the middleware for both spiders, an unreachable MongoDB with the Postgres path still working, reads, replay, the AI call log, and backup cleanup.
+Tests cover the archive class (new version, repeat, changed body, oversized body, failed batch, timeouts, a hung server), the middleware for both spiders, an unreachable MongoDB with the Postgres path still working, reads, the AI call log, and backup cleanup.
 
 ## Decisions
 

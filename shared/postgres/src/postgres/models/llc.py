@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Integer, Text
+from sqlalchemy import CheckConstraint, Date, DateTime, Index, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,15 +34,3 @@ class Llc(Base):
     last_looked_up_at: Mapped[datetime | None] = mapped_column(DateTime)
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-
-
-class PropertyLlc(Base):
-    __tablename__ = "property_llcs"
-    __table_args__ = (Index("idx_property_llcs_llc_id", "llc_id"),)
-
-    property_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("properties.id"), primary_key=True
-    )
-    llc_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("llcs.id"), primary_key=True
-    )

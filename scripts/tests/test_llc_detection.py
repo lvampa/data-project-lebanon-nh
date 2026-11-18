@@ -1,5 +1,6 @@
 import pytest
-from pipelines import _LLC_PATTERN as LLC_PATTERN
+
+from scripts.scrape.scrape_llcs import LLC_PATTERN
 
 
 @pytest.mark.parametrize(

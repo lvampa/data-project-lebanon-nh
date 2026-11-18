@@ -1,5 +1,6 @@
 import logfire
 from bootstrap import bootstrap
+from crawl_runs import finish_run, start_run
 from scrapy import Item, Spider, signals
 from scrapy.crawler import Crawler
 from scrapy.http import Response
@@ -58,3 +59,27 @@ class LogfireExtension:
             url=response.url if response else None,
             error=str(failure),
         )
+
+
+class CrawlRunExtension:
+    """Records one crawl_runs row per spider run, for any spider."""
+
+    def __init__(self, stats: StatsCollector) -> None:
+        self.stats = stats
+        self.run_id: int | None = None
+
+    @classmethod
+    def from_crawler(cls, crawler: Crawler) -> "CrawlRunExtension":
+        ext = cls(crawler.stats)
+        crawler.signals.connect(ext.spider_opened, signal=signals.spider_opened)
+        crawler.signals.connect(ext.spider_closed, signal=signals.spider_closed)
+        return ext
+
+    def spider_opened(self, spider: Spider) -> None:
+        self.run_id = start_run(spider.name)
+
+    def spider_closed(self, spider: Spider, reason: str) -> None:
+        # Only a crawl that ran to the end counts. A stopped one stays unfinished.
+        if reason == "finished" and self.run_id is not None:
+            stats = self.stats.get_stats(spider)
+            finish_run(self.run_id, stats.get("downloader/response_count", 0))

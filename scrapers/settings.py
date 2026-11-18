@@ -57,6 +57,7 @@ RAW_ARCHIVE_ENABLED = True
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
 EXTENSIONS = {
     "extensions.LogfireExtension": 100,
+    "extensions.CrawlRunExtension": 200,
 }
 
 # Configure item pipelines
@@ -64,7 +65,6 @@ EXTENSIONS = {
 ITEM_PIPELINES = {
     "pipelines.UrlRecordPipeline": 100,
     "pipelines.PoliceLogPipeline": 300,
-    "pipelines.PropertyPipeline": 400,
     "pipelines.CityStaffPipeline": 500,
     "pipelines.OfficerPipeline": 600,
     "pipelines.BudgetDocumentPipeline": 700,

@@ -71,11 +71,15 @@ class ProcessUrlsSpider(scrapy.Spider):
     # One at a time, so each PDF's callback knows whether its original was kept.
     archive_batch_size = 1
 
-    def archive_key(self, request: Request, response: Response) -> str | None:
+    def archive_key(self, response: Response) -> str | None:
         # The city sometimes answers 200 with an HTML page; that is not the original.
         if not response.body.startswith(b"%PDF"):
             return None
         # Keyed by the city URL, even when the PDF came from its Wayback copy.
+        request = response.request
+        assert request is not None, (
+            "spider middlewares run after the request is attached"
+        )
         pdf_url: PdfUrlClaim = request.cb_kwargs["pdf_url"]
         return pdf_url.canonical_url
 

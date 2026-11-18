@@ -42,18 +42,11 @@ DEFAULT_REQUEST_HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
-# Enable or disable spider middlewares
-# See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-# SPIDER_MIDDLEWARES = {
-#    "middlewares.ScrapersSpiderMiddleware": 543,
-# }
-
-# Enable or disable downloader middlewares
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-# The raw archive runs after decompression (590) and redirects (600), because
-# Scrapy calls process_response from the highest number to the lowest.
-DOWNLOADER_MIDDLEWARES = {
-    "middlewares.raw_archive.RawArchiveMiddleware": 50,
+# The raw archive is a spider middleware, so it runs after Scrapy attaches the request
+# to the response, and after the built-in HttpErrorMiddleware (50), which stops non-2xx
+# responses before the callback. process_spider_input runs from the lowest number up.
+SPIDER_MIDDLEWARES = {
+    "middlewares.raw_archive.RawArchiveMiddleware": 100,
 }
 
 # Spiders with archive_source keep their originals in MongoDB. Turn it off for a

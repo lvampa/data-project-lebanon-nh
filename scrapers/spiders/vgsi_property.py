@@ -47,7 +47,7 @@ class VgsiPropertySpider(scrapy.Spider):
     allowed_domains = ["gis.vgsi.com"]
     archive_source = "vgsi_parcel"
 
-    def archive_key(self, request: Request, response: Response) -> str | None:
+    def archive_key(self, response: Response) -> str | None:
         # Street index pages only list parcels; the parcel pages are the originals.
         if "Parcel.aspx" not in response.url:
             return None

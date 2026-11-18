@@ -1,22 +1,20 @@
 """Copies each original a spider downloads into the raw source archive.
 
-It sits in the downloader middleware chain, so it sees the body before any callback
-and the Postgres path never carries bodies around.
+It is a spider middleware, so it runs after Scrapy has attached the request to the
+response and before the callback. It sits behind the built-in HttpErrorMiddleware
+(priority 50), so it only sees responses that reach the callback, after
+decompression and redirects.
 
 A spider opts in with two attributes:
 
     archive_source = "police_log_pdf"
 
-    def archive_key(self, request: Request, response: Response) -> str | None:
+    def archive_key(self, response: Response) -> str | None:
         # The source key, or None for a response that is not an original.
 
 A spider may also set `archive_batch_size`, which defaults to 50. At 1, each original
 is written before its callback runs, and `response.meta["archived"]` says whether
 the write worked.
-
-This runs before Scrapy attaches the request to the response, so the middleware's
-`request` is passed on and the flag goes on `request.meta`, which the callback's
-`response.meta` reads.
 """
 
 from datetime import UTC, datetime
@@ -28,14 +26,14 @@ from mongo.client import get_db
 from scrapy import Spider, signals
 from scrapy.crawler import Crawler
 from scrapy.exceptions import NotConfigured
-from scrapy.http import Request, Response
+from scrapy.http import Response
 
 
 class ArchivedSpider(Protocol):
     name: str
     archive_source: str
 
-    def archive_key(self, request: Request, response: Response) -> str | None: ...
+    def archive_key(self, response: Response) -> str | None: ...
 
 
 class RawArchiveMiddleware:
@@ -53,12 +51,12 @@ class RawArchiveMiddleware:
         crawler.signals.connect(middleware.spider_closed, signal=signals.spider_closed)
         return middleware
 
-    def process_response(self, request: Request, response: Response) -> Response:
+    def process_spider_input(self, response: Response) -> None:
         spider = self._crawler.spider
         if spider is None or not _is_archived(spider, response):
-            return response
+            return
         archived_spider = cast(ArchivedSpider, spider)
-        source_key = archived_spider.archive_key(request, response)
+        source_key = archived_spider.archive_key(response)
         if source_key is not None:
             written = self._archive.add(
                 archived_spider.archive_source,
@@ -66,8 +64,7 @@ class RawArchiveMiddleware:
                 _archived(archived_spider, response),
             )
             if written is not None:
-                request.meta["archived"] = written
-        return response
+                response.meta["archived"] = written
 
     def spider_closed(self) -> None:
         counts = self._archive.flush()

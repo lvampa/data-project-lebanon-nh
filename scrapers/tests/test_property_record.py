@@ -32,6 +32,26 @@ def test_property_record_shape():
     assert record.sales == []
 
 
+def test_property_record_converts_the_text_a_page_prints():
+    record = PropertyRecord.model_validate(
+        make_property(
+            lot_size_acres="0.30",
+            year_built="1900",
+            building_sqft="6,848",
+            assessed_total="$285,900",
+            appraised_total="$1,502,200",
+            assessment_year="",
+        )
+    )
+
+    assert record.lot_size_acres == 0.30
+    assert record.year_built == 1900
+    assert record.building_sqft == 6848
+    assert record.assessed_total == 285900
+    assert record.appraised_total == 1502200
+    assert record.assessment_year is None
+
+
 def test_property_record_strips_whitespace():
     record = PropertyRecord.model_validate(make_property(location="  123 MAIN ST  "))
     assert record.location == "123 MAIN ST"
@@ -73,10 +93,12 @@ def test_property_record_sales_parsed():
         make_property(
             sales=[
                 {
+                    "owner": "JONES",
                     "sale_date": "01/01/2020",
-                    "sale_price": 200000,
-                    "grantee": "JONES",
-                    "grantor": "SMITH",
+                    "sale_price": "$200,000",
+                    "certificate": "",
+                    "book_page": "4446/0736",
+                    "instrument": "44",
                 }
             ]
         )
@@ -84,6 +106,8 @@ def test_property_record_sales_parsed():
     assert len(record.sales) == 1
     assert record.sales[0].sale_date == date(2020, 1, 1)
     assert record.sales[0].sale_price == 200000
+    assert record.sales[0].certificate is None
+    assert record.sales[0].book_page == "4446/0736"
 
 
 def test_property_record_blank_parcel_id_raises():

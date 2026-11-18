@@ -24,9 +24,9 @@ SAMPLE_ITEM = PropertyItem(
     sales=[
         {
             "sale_date": "01/15/2019",
-            "sale_price": 320000,
-            "grantee": "SMITH, JOHN",
-            "grantor": "JONES, BOB",
+            "sale_price": "$320,000",
+            "owner": "SMITH, JOHN",
+            "book_page": "1234/0567",
         }
     ],
 )
@@ -36,7 +36,7 @@ SAMPLE_ITEM = PropertyItem(
 def pipeline():
     pl = PropertyPipeline()
     pl._session = MagicMock()
-    # Mock the property_id lookup after upsert
+    # Mock the property id the upsert returns
     pl._session.execute.return_value.scalar_one.return_value = 42
     return pl
 
@@ -61,7 +61,7 @@ def test_upserts_property(pipeline):
 
 def test_inserts_sale_after_delete(pipeline):
     pipeline.process_item(SAMPLE_ITEM)
-    # Multiple execute calls: upsert + id lookup + delete + sale insert
+    # Upsert, sales delete and one sale insert.
     assert pipeline._session.execute.call_count >= 3
 
 
@@ -78,9 +78,9 @@ def test_close_spider_closes_session(pipeline):
 def test_first_property_stays_committed_when_second_fails(db_session, fail_on_execute):
     pipeline = PropertyPipeline()
     pipeline.open_spider()
-    # SAMPLE_ITEM runs upsert, id lookup, sales delete, one sale insert.
-    # Failing on call 8 breaks the second run's sale insert, after its delete.
-    fail_on_execute(pipeline._session, 8)
+    # SAMPLE_ITEM runs upsert, sales delete, one sale insert.
+    # Failing on call 6 breaks the second run's sale insert, after its delete.
+    fail_on_execute(pipeline._session, 6)
     rescrape = PropertyItem(SAMPLE_ITEM, owner="NEW OWNER")
 
     pipeline.process_item(SAMPLE_ITEM)
@@ -90,4 +90,4 @@ def test_first_property_stays_committed_when_second_fails(db_session, fail_on_ex
 
     # The failed rescrape is rolled back whole: the owner and the sale are the first run's.
     assert db_session.scalars(select(Property.owner)).all() == ["SMITH, JOHN"]
-    assert db_session.scalars(select(PropertySale.grantor)).all() == ["JONES, BOB"]
+    assert db_session.scalars(select(PropertySale.book_page)).all() == ["1234/0567"]

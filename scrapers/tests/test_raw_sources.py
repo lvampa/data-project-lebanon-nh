@@ -15,6 +15,7 @@ from maintenance.raw_sources import (
 from mongo.archive import ArchivedResponse, RawArchive
 from mongo.client import MongoDB
 from pipelines import PropertyPipeline
+from postgres.models.llc import Llc, PropertyLlc
 from postgres.models.pdf_url import PdfUrl
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
@@ -49,7 +50,7 @@ def stored_parcel(session) -> tuple:
     session.expire_all()
     row = session.scalars(select(Property)).one()
     sales = session.execute(
-        select(PropertySale.sale_date, PropertySale.sale_price, PropertySale.grantee)
+        select(PropertySale.sale_date, PropertySale.sale_price, PropertySale.owner)
     ).all()
     return (row.parcel_id, row.location, row.owner, row.assessed_total, sales)
 
@@ -65,8 +66,10 @@ def ingest_live(session) -> tuple:
 
 
 def clear_parcels(session) -> None:
+    session.execute(delete(PropertyLlc))
     session.execute(delete(PropertySale))
     session.execute(delete(Property))
+    session.execute(delete(Llc))
     session.commit()
 
 
@@ -97,7 +100,9 @@ def test_a_newer_page_updates_the_parcel(db_session, raw_sources):
     archive_parcel(archive)
     replay_parcels(archive)
     archive_parcel(
-        archive, PARCEL_HTML.replace(b"SMITH, JOHN</span>", b"DOE</span>"), 2
+        archive,
+        PARCEL_HTML.replace(b"ONE MECHANIC STREET LLC</span>", b"DOE</span>"),
+        2,
     )
 
     counts = replay_parcels(archive)

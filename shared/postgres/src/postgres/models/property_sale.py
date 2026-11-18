@@ -15,6 +15,9 @@ class PropertySale(Base):
     )
     sale_date: Mapped[date | None] = mapped_column(Date)
     sale_price: Mapped[int | None] = mapped_column(Integer)  # dollars
-    grantor: Mapped[str | None] = mapped_column(Text)  # seller
-    grantee: Mapped[str | None] = mapped_column(Text)  # buyer
+    # The owner the sale made. The seller is the owner in the next row down.
+    owner: Mapped[str | None] = mapped_column(Text)
+    certificate: Mapped[str | None] = mapped_column(Text)
+    book_page: Mapped[str | None] = mapped_column(Text)
+    instrument: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

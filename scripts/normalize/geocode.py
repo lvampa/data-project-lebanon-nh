@@ -80,10 +80,11 @@ def run(
                 last_reported = counts.requests
                 logfire.info(
                     "geocode: {requests}/{max_requests} requests, "
-                    "{placed} placed, {missed} missed",
+                    "{placed} placed, {reused} reused, {missed} missed",
                     requests=counts.requests,
                     max_requests=max_requests,
                     placed=counts.placed,
+                    reused=counts.reused,
                     missed=counts.missed,
                 )
     logfire.info(

@@ -99,6 +99,10 @@ class Field(Protocol):
 
     def waiting(self, session: Session) -> int: ...
 
+    def entries(self, session: Session, raws: Sequence[str]) -> int:
+        """How many log entries carry any of these raw values."""
+        ...
+
 
 # --- incident types ---
 
@@ -209,6 +213,9 @@ class IncidentTypes:
                 session, IncidentTypeCategory, "raw_incident_type", "category", raw
             )
         return len(group.raws)
+
+    def entries(self, session: Session, raws: Sequence[str]) -> int:
+        return _entries_with(session, LogEntry.incident_type, raws)
 
     def waiting(self, session: Session) -> int:
         rows = {
@@ -392,6 +399,9 @@ class Locations:
             )
         return len(group.raws)
 
+    def entries(self, session: Session, raws: Sequence[str]) -> int:
+        return _entries_with(session, LogEntry.location, raws)
+
     def waiting(self, session: Session) -> int:
         rows = {
             row.raw_address: row
@@ -419,6 +429,15 @@ class Locations:
 
 
 # --- shared helpers ---
+
+
+def _entries_with(session: Session, column: Any, raws: Sequence[str]) -> int:
+    return (
+        session.scalar(
+            select(func.count()).select_from(LogEntry).where(column.in_(raws))
+        )
+        or 0
+    )
 
 
 def _distinct(session: Session, column: Any) -> list[str]:

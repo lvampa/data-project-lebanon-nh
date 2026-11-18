@@ -145,12 +145,13 @@ def run(
                 written[chosen_field.name] += outcome.stored
                 discarded[chosen_field.name] += outcome.discarded
                 logfire.info(
-                    "{field}: batch {number}/{total}, {stored} stored, "
-                    "{discarded} discarded",
+                    "{field}: batch {number}/{total}, {stored} values stored "
+                    "({entries} entries), {discarded} discarded",
                     field=chosen_field.name,
                     number=number,
                     total=len(this_run),
                     stored=outcome.stored,
+                    entries=outcome.entries,
                     discarded=outcome.discarded,
                 )
 
@@ -178,6 +179,8 @@ def run(
 @dataclass(frozen=True)
 class _BatchOutcome:
     stored: int = 0
+    # Log entries that carry the stored values.
+    entries: int = 0
     discarded: int = 0
 
 
@@ -241,15 +244,18 @@ def _call(
         return _BatchOutcome()
 
     stored = discarded = 0
+    stored_raws: list[str] = []
     for entry in checked.accepted:
         stored += chosen.store(session, by_sent[entry.item.raw], entry, call_id)
+        stored_raws.extend(by_sent[entry.item.raw].raws)
     # Only values whose own item was discarded or missing are charged.
     for discard in checked.discarded:
         discarded += chosen.fail(session, by_sent[discard.raw])
     for raw in checked.missing:
         discarded += chosen.fail(session, by_sent[raw])
+    entries = chosen.entries(session, stored_raws) if stored_raws else 0
     session.commit()
-    return _BatchOutcome(stored, discarded)
+    return _BatchOutcome(stored, entries, discarded)
 
 
 def _chunks(groups: Sequence[Group], size: int) -> list[list[Group]]:

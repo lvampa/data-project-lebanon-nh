@@ -7,9 +7,9 @@ from api.auth import require_admin
 from api.deps import (
     NormalizationFilter,
     Paging,
-    get_db,
     get_normalization_filter,
     get_paging,
+    get_session,
 )
 from api.schemas import CategoryRecord, CategoryResult, CategoryUpdate, Page
 from api.services import categories
@@ -19,7 +19,7 @@ router = APIRouter()
 
 @router.get("", response_model=Page[CategoryRecord])
 def list_categories(
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[Session, Depends(get_session)],
     paging: Annotated[Paging, Depends(get_paging)],
     filters: Annotated[NormalizationFilter, Depends(get_normalization_filter)],
 ) -> Page[CategoryRecord]:
@@ -34,7 +34,7 @@ def list_categories(
 def update_category(
     raw_incident_type: str,
     body: CategoryUpdate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[Session, Depends(get_session)],
 ) -> CategoryResult:
     return categories.update_category(db, raw_incident_type, body)
 
@@ -45,7 +45,7 @@ def update_category(
     dependencies=[Depends(require_admin)],
 )
 def delete_category(
-    raw_incident_type: str, db: Annotated[Session, Depends(get_db)]
+    raw_incident_type: str, db: Annotated[Session, Depends(get_session)]
 ) -> Response:
     if not categories.delete_category(db, raw_incident_type):
         raise HTTPException(

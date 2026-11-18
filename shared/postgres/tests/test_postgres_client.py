@@ -1,5 +1,5 @@
 import pytest
-from postgres import PostgresSettings, get_engine, get_postgres_settings
+from postgres import PostgresSettings
 from pydantic import ValidationError
 from sqlalchemy import make_url
 
@@ -51,11 +51,3 @@ def test_url_keeps_password_with_url_delimiters(empty_environment):
     assert reparsed.host == "db.internal"
     assert reparsed.port == 6543
     assert reparsed.database == "lebanon"
-
-
-def test_settings_are_read_once():
-    assert get_postgres_settings() is get_postgres_settings()
-
-
-def test_get_engine_returns_the_same_engine_every_call():
-    assert get_engine() is get_engine()

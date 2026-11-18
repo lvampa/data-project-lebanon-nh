@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from mongo import get_db
+from mongo import get_db, get_mongo_settings
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -38,6 +38,7 @@ def pytest_configure(config: pytest.Config) -> None:
     # The client is built on first use, which is after this point.
     os.environ["MONGO_DB"] = TEST_DATABASE
     os.environ.setdefault("MONGO_PASSWORD", TEST_PASSWORD)
+    get_mongo_settings.cache_clear()
     get_db.cache_clear()
 
 
@@ -57,7 +58,7 @@ def mongo_test_db() -> Database[dict[str, Any]]:
         host=db.host,
         port=db.port,
         username=db.username,
-        password=db.password,
+        password=db.password.get_secret_value(),
         serverSelectionTimeoutMS=2000,
     )
     try:

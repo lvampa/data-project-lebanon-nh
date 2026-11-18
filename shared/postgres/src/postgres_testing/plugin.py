@@ -36,7 +36,7 @@ def pytest_configure(config: pytest.Config) -> None:
             returncode=pytest.ExitCode.USAGE_ERROR,
         )
     # Settings and the engine are read on first use, which is after this point.
-    # The cache clears cover a module that asked for them during collection.
+    # The cache clears cover a conftest or plugin that asked for them while importing.
     os.environ["POSTGRES_DB"] = TEST_DATABASE
     os.environ.setdefault("POSTGRES_PASSWORD", TEST_PASSWORD)
     get_postgres_settings.cache_clear()

@@ -1,4 +1,7 @@
 import ast
+import os
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from unittest.mock import Mock, call
@@ -57,7 +60,10 @@ def test_bootstrap_loads_dotenv_before_configuring_logfire(bootstrap_mocks):
 
     bootstrap.bootstrap("demo")
 
-    assert order.mock_calls == [call.load_dotenv(), call.configure(service_name="demo")]
+    assert order.mock_calls == [
+        call.load_dotenv(),
+        call.configure(service_name="demo", send_to_logfire="if-token-present"),
+    ]
 
 
 def test_second_call_does_nothing(bootstrap_mocks):
@@ -65,7 +71,39 @@ def test_second_call_does_nothing(bootstrap_mocks):
     bootstrap.bootstrap("second")
 
     bootstrap_mocks.load_dotenv.assert_called_once()
-    bootstrap_mocks.configure.assert_called_once_with(service_name="first")
+    bootstrap_mocks.configure.assert_called_once_with(
+        service_name="first", send_to_logfire="if-token-present"
+    )
+
+
+def test_a_failed_call_can_be_retried(bootstrap_mocks):
+    bootstrap_mocks.configure.side_effect = [RuntimeError("no config"), None]
+
+    with pytest.raises(RuntimeError):
+        bootstrap.bootstrap("first")
+    bootstrap.bootstrap("second")
+
+    assert bootstrap_mocks.configure.call_count == 2
+
+
+def test_bootstrap_works_with_no_logfire_token(tmp_path):
+    # A subprocess, because the real logfire.configure changes process-wide state.
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("LOGFIRE_")
+    }
+    environment["LOGFIRE_CREDENTIALS_DIR"] = str(tmp_path)
+    result = subprocess.run(
+        [sys.executable, "-c", "from bootstrap import bootstrap; bootstrap('probe')"],
+        env=environment,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def _calls_bootstrap(tree: ast.Module) -> bool:

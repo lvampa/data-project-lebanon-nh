@@ -1,4 +1,8 @@
-"""Entry point setup, in its own package so the other shared packages stay free of Logfire."""
+"""Entry point setup: load .env, then configure Logfire.
+
+Library code never imports this. Entry points call it first, and so does Alembic's
+env.py when it runs from the CLI.
+"""
 
 import logfire
 from dotenv import load_dotenv
@@ -7,14 +11,16 @@ _done = False
 
 
 def bootstrap(service_name: str) -> None:
-    """Load .env, then configure Logfire. The first call wins and later calls do nothing.
+    """The first successful call wins and later calls do nothing.
 
     Some entry points start a framework that bootstraps again, and the entry point
-    should keep its own service name.
+    should keep its own service name. A call that raises can be retried.
     """
     global _done
     if _done:
         return
-    _done = True
     load_dotenv()
-    logfire.configure(service_name=service_name)
+    # Without a token, nothing is sent: a local run, a hand run or a test works
+    # without Logfire credentials.
+    logfire.configure(service_name=service_name, send_to_logfire="if-token-present")
+    _done = True

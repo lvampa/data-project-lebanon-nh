@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from api.schemas import Source
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_session() -> Generator[Session, None, None]:
     db = open_session()
     try:
         yield db

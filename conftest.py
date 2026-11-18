@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import bootstrap
 import pytest
-from mongo import get_db
+from mongo import get_db, get_mongo_settings
 
 
 def _silence_bootstrap(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
@@ -43,9 +43,15 @@ def bootstrap_mocks(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     return _silence_bootstrap(monkeypatch)
 
 
+def _forget_mongo() -> None:
+    # No disconnect: the session-scoped mongo_test_db fixture holds the first client.
+    get_db.cache_clear()
+    get_mongo_settings.cache_clear()
+
+
 @pytest.fixture(autouse=True)
 def _fresh_mongo_client() -> Iterator[None]:
     """A test that changes MONGO_* gets a client built from them, not a cached one."""
-    get_db.cache_clear()
+    _forget_mongo()
     yield
-    get_db.cache_clear()
+    _forget_mongo()

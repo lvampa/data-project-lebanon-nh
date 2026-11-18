@@ -60,7 +60,7 @@ def run_tool(
     with tempfile.NamedTemporaryFile("w", suffix=".yaml") as config:
         os.chmod(config.name, 0o600)
         # JSON quoting is valid YAML, so any password survives.
-        config.write(f"password: {json.dumps(settings.password)}\n")
+        config.write(f"password: {json.dumps(settings.password.get_secret_value())}\n")
         config.flush()
         return run(
             [

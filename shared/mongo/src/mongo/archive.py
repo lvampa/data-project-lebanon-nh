@@ -74,7 +74,7 @@ def quick_collection(settings: MongoDB, name: str) -> RawCollection:
         host=settings.host,
         port=settings.port,
         username=settings.username,
-        password=settings.password,
+        password=settings.password.get_secret_value(),
         serverSelectionTimeoutMS=2000,
         connectTimeoutMS=2000,
         socketTimeoutMS=5000,

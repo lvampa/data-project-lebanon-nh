@@ -4,17 +4,17 @@ from typing import Any
 from pymongo import MongoClient
 from pymongo.collection import Collection
 
-from .settings import MongoSettings
+from .settings import MongoSettings, get_mongo_settings
 
 
 class MongoDB:
-    def __init__(self) -> None:
+    def __init__(self, settings: MongoSettings | None = None) -> None:
         self._client: MongoClient[dict[str, Any]] | None = None
-        settings = MongoSettings()
+        settings = settings or get_mongo_settings()
         self.host = settings.host
         self.port = settings.port
         self.username = settings.user
-        self.password = settings.password.get_secret_value()
+        self.password = settings.password
         self.default_db = settings.db
 
     def _connect(self) -> MongoClient[dict[str, Any]]:
@@ -23,7 +23,7 @@ class MongoDB:
                 host=self.host,
                 port=self.port,
                 username=self.username,
-                password=self.password,
+                password=self.password.get_secret_value(),
             )
         return self._client
 

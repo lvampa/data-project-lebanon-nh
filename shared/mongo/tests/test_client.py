@@ -3,7 +3,7 @@ import sys
 from unittest.mock import patch
 
 import pytest
-from mongo import get_db
+from mongo import get_db, get_mongo_settings
 from mongo.client import MongoDB
 from pydantic import ValidationError
 
@@ -31,7 +31,7 @@ def test_defaults_cover_everything_but_the_password(db):
     assert db.host == "localhost"
     assert db.port == 27017
     assert db.username == "admin"
-    assert db.password == "secret"
+    assert db.password.get_secret_value() == "secret"
     assert db.default_db == "scraped_data"
 
 
@@ -74,11 +74,12 @@ def test_env_vars(monkeypatch, db):
     monkeypatch.setenv("MONGO_USER", "user")
     monkeypatch.setenv("MONGO_PASSWORD", "secret")
     monkeypatch.setenv("MONGO_DB", "mydb")
+    get_mongo_settings.cache_clear()
     db2 = MongoDB()
     assert db2.host == "myhost"
     assert db2.port == 1234
     assert db2.username == "user"
-    assert db2.password == "secret"
+    assert db2.password.get_secret_value() == "secret"
     assert db2.default_db == "mydb"
 
 

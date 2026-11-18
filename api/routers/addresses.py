@@ -8,9 +8,9 @@ from api.config import Settings, get_settings
 from api.deps import (
     NormalizationFilter,
     Paging,
-    get_db,
     get_normalization_filter,
     get_paging,
+    get_session,
 )
 from api.schemas import AddressRecord, AddressResult, AddressUpdate, Page
 from api.services import addresses
@@ -20,7 +20,7 @@ router = APIRouter()
 
 @router.get("", response_model=Page[AddressRecord])
 def list_addresses(
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[Session, Depends(get_session)],
     paging: Annotated[Paging, Depends(get_paging)],
     filters: Annotated[NormalizationFilter, Depends(get_normalization_filter)],
 ) -> Page[AddressRecord]:
@@ -35,7 +35,7 @@ def list_addresses(
 def update_address(
     raw_address: str,
     body: AddressUpdate,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AddressResult:
     return addresses.update_address(
@@ -49,7 +49,7 @@ def update_address(
     dependencies=[Depends(require_admin)],
 )
 def delete_address(
-    raw_address: str, db: Annotated[Session, Depends(get_db)]
+    raw_address: str, db: Annotated[Session, Depends(get_session)]
 ) -> Response:
     if not addresses.delete_address(db, raw_address):
         raise HTTPException(

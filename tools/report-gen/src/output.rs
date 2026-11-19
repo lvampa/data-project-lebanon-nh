@@ -10,6 +10,15 @@ pub fn write_json<T: Serialize>(dir: &Path, filename: &str, data: &T) -> Result<
     Ok(())
 }
 
+/// Empties a directory the exporter owns, so a file for a place that is gone is not left.
+pub fn reset_dir(dir: &Path) -> Result<()> {
+    if dir.exists() {
+        std::fs::remove_dir_all(dir)?;
+    }
+    std::fs::create_dir_all(dir)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -34,5 +43,17 @@ mod tests {
         let data = json!({"x": 1});
         write_json(&nested, "out.json", &data).unwrap();
         assert!(nested.join("out.json").exists());
+    }
+
+    #[test]
+    fn reset_dir_removes_old_files_and_keeps_the_directory() {
+        let dir = tempdir().unwrap();
+        let places = dir.path().join("places");
+        write_json(&places, "old.json", &json!({"x": 1})).unwrap();
+
+        reset_dir(&places).unwrap();
+
+        assert!(places.is_dir());
+        assert!(!places.join("old.json").exists());
     }
 }

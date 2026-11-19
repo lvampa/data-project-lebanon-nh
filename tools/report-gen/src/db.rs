@@ -51,13 +51,25 @@ pub struct Incident {
 #[derive(Debug, Serialize, sqlx::FromRow)]
 #[allow(clippy::struct_field_names)]
 pub struct Address {
+    // A slug of the normalized address, and the name of the place's card file.
+    pub id: String,
+    // "place", or "road" for a bare street, an intersection or a highway.
+    pub kind: String,
     pub raw_address: String,
     pub normalized_address: Option<String>,
-    // Entries at the place that are not road traffic.
+    // A place counts every call except road traffic, and a road counts every call.
     pub count: i64,
     pub traffic_count: i64,
     pub lat: f64,
     pub lng: f64,
+}
+
+// A pin with its report card, which is JSON text that goes into places/<id>.json.
+#[derive(Debug, sqlx::FromRow)]
+pub struct PlaceRow {
+    #[sqlx(flatten)]
+    pub address: Address,
+    pub card: String,
 }
 
 // ---- Staff ----
@@ -146,8 +158,8 @@ pub async fn fetch_incidents(pool: &PgPool, since: NaiveDate) -> Result<Vec<Inci
         .map_err(Into::into)
 }
 
-pub async fn fetch_addresses(pool: &PgPool, since: NaiveDate) -> Result<Vec<Address>> {
-    sqlx::query_as::<_, Address>(include_str!("sql/addresses.sql"))
+pub async fn fetch_places(pool: &PgPool, since: NaiveDate) -> Result<Vec<PlaceRow>> {
+    sqlx::query_as::<_, PlaceRow>(include_str!("sql/places.sql"))
         .bind(since)
         .fetch_all(pool)
         .await

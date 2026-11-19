@@ -12,7 +12,7 @@ import run_process_urls
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
 from mongo.client import MongoDB
 from postgres import utc_now
-from postgres.lock import police_log_lock
+from postgres.lock import POLICE_LOG_PARSE, advisory_lock
 from postgres.models.pdf_url import PdfUrl
 
 ARCHIVED_PDF = ArchivedResponse(
@@ -84,13 +84,13 @@ def test_exits_non_zero_when_a_url_moved_to_error_during_the_run(
 def test_does_not_crawl_while_another_police_log_job_holds_the_lock(
     test_engine, crawl, capsys
 ):
-    with police_log_lock(test_engine) as acquired:
+    with advisory_lock(test_engine, POLICE_LOG_PARSE) as acquired:
         assert acquired
 
         assert run_process_urls.main(limit=25) == 1
 
     assert crawl.limits == []
-    assert "Another police log job" in capsys.readouterr().err
+    assert "Another process or reprocess job is running" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

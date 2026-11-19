@@ -50,7 +50,9 @@ pub struct Incident {
 pub struct Address {
     pub raw_address: String,
     pub normalized_address: Option<String>,
+    // Entries at the place that are not road traffic.
     pub count: i64,
+    pub traffic_count: i64,
     pub lat: f64,
     pub lng: f64,
 }
@@ -164,27 +166,10 @@ pub async fn fetch_incidents(pool: &PgPool) -> Result<Vec<Incident>> {
 }
 
 pub async fn fetch_addresses(pool: &PgPool) -> Result<Vec<Address>> {
-    sqlx::query_as::<_, Address>(
-        r"
-        SELECT
-            le.location         AS raw_address,
-            an.normalized_address,
-            COUNT(*)            AS count,
-            an.lat,
-            an.lng
-        FROM log_entries le
-        JOIN address_normalizations an
-            ON le.location = an.raw_address
-        WHERE le.parse_error = false
-          AND an.lat IS NOT NULL
-          AND an.lng IS NOT NULL
-        GROUP BY le.location, an.normalized_address, an.lat, an.lng
-        ORDER BY count DESC
-        ",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(Into::into)
+    sqlx::query_as::<_, Address>(include_str!("sql/addresses.sql"))
+        .fetch_all(pool)
+        .await
+        .map_err(Into::into)
 }
 
 pub async fn fetch_staff(pool: &PgPool) -> Result<Vec<Staff>> {

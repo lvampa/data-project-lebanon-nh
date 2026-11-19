@@ -24,7 +24,7 @@ from bootstrap import bootstrap
 from mongo.ai_calls import AiCall, AiCallLog, Outcome, ai_calls_collection
 from mongo.client import get_db
 from postgres import get_engine, open_session
-from postgres.lock import police_log_lock
+from postgres.lock import NORMALIZE, advisory_lock
 
 from scripts.normalize.backends import (
     AiBackend,
@@ -277,11 +277,10 @@ def main(argv: Sequence[str] | None = None, backend_factory=backend_from_env) ->
         print(f"Cannot run: {exc}", file=sys.stderr)
         return 1
 
-    with police_log_lock(get_engine()) as acquired:
+    with advisory_lock(get_engine(), NORMALIZE) as acquired:
         if not acquired:
             print(
-                "Another police log job is running (process, reprocess, or geocode). "
-                "Try again when it finishes.",
+                "Another normalize run is in progress. Try again when it finishes.",
                 file=sys.stderr,
             )
             return 1

@@ -41,7 +41,7 @@ There is no Elasticsearch and no dbt.
 - **Process job:** the spider downloads and extracts text.
   The archive middleware stores the PDF bytes in MongoDB first and tells the pipeline whether it worked.
   If it did not, a parse or save error becomes a `download` error, so the PDF is fetched and archived again.
-  `run_process_urls.py` starts the crawl, holds the police log advisory lock, and exits non-zero if any URL moved to `error`.
+  `run_process_urls.py` starts the crawl, holds the `police_log_parse` advisory lock, and exits non-zero if any URL moved to `error`.
 - **One ingest function:** `ingest_pdf_url` in `scrapers/ingest/police_log.py` wraps `ingest_log_text`, the only place that parses and writes entries.
   The process job and the reprocess job both call it.
   Entries are validated with `PoliceLogRecord`, then upserted on `case_number`.
@@ -54,7 +54,7 @@ There is no Elasticsearch and no dbt.
   Parser fixtures are cut from real city PDFs.
 - **Reprocess:** `scrapers/maintenance/reprocess_police_logs.py` re-extracts text from the newest archived PDF and re-ingests it.
   A record with no archived original goes back to `pending`.
-  It takes the same advisory lock as the process runner.
+  It takes the same `police_log_parse` advisory lock as the process runner, so an old parse never overwrites a new one.
 
 ## Stage 3: normalize and geocode
 
@@ -78,13 +78,16 @@ There is no Elasticsearch and no dbt.
   An item the model is unsure about, or a street not on the list, is stored with `needs_review`.
 - **Failure handling:** a call that fails or returns a bad item costs that value a failed attempt, and a value gets 3.
   A login or usage-limit error stops the run.
-  The job prints a summary, and it takes the police log lock so it never overlaps ingestion.
+  The job prints a summary, and it takes the `normalize` lock so two runs never spend the same AI calls.
+  The geocode job takes its own `geocode` lock, so two runs never double the Nominatim rate.
 - **Geocode job:** it takes `ai` and `rule` addresses with a normalized address and no coordinates, and never a `human` row.
   Before calling Nominatim it reuses coordinates from another row with the same place code, or the same normalized address and kind.
   A hand-placed donor is used too, so two spellings of one address never land on different spots; the copy keeps its `source`, and `geocoded_via` says how the pin was found.
   Otherwise it tries the geocode query, then the street alone (an `approximate` result).
   It runs at 1 request per second, stops at 600 requests, and discards a result outside the city: state New Hampshire, city Lebanon or West Lebanon, and a coarse bounding box.
   After 3 misses a row is marked for review.
+  A transient failure (a timeout, a connection error or a 5xx) skips the row without charging an attempt, and the next run tries it again.
+  A 403 or 429 stops the run at once, and so do 5 transient failures in a row.
   A bare highway with no cross street, exit or landmark is marked for review and never looked up.
 - **Admin API:** `api/services/categories.py` and `addresses.py` list rows and let the operator correct them.
   A correction sets `source = 'human'` and clears the review mark; typed coordinates get `geocoded_via = 'manual'`.

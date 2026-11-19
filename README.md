@@ -37,7 +37,8 @@ The job takes `--field incident_type` or `--field location` to do one field, and
 A value goes to the AI once, so running it again only sends what is new, or what failed.
 Each run makes at most 10 AI calls of up to 50 values.
 
-Both commands refuse to run while another police log job holds the lock, and say so.
+Each command refuses to run while another run of the same command is going, and says so.
+The two take different locks, so normalize and geocode can run together.
 The job refuses to run when `ANTHROPIC_API_KEY` is set, because the CLI would bill that key instead of your plan.
 Both read `POSTGRES_*` and `MONGO_*` from your shell, as the migration commands do.
 

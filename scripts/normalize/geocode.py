@@ -8,6 +8,11 @@ has, or the coordinates of another spelling of the same address. Otherwise it as
 geocoder for the row's query and then for its street alone, and drops a result outside
 the city. A row that misses three times is marked for review. It stops
 after 600 requests, and leaves the rest for the next run.
+
+A row whose lookup times out, cannot connect or gets a 5xx is skipped and not charged
+an attempt, so the next run tries it again. A 403 or 429 stops the run at once, and so
+do 5 skipped rows in a row. The exit code stays 0 when rows were only skipped, and the
+summary says how many.
 """
 
 import argparse
@@ -19,13 +24,14 @@ from dataclasses import dataclass
 import logfire
 from bootstrap import bootstrap
 from locations.geocode import (
+    GeocodeBackOff,
     GeocodeResult,
     GeocodeUnavailable,
     geocode,
     in_city_bounds,
 )
 from postgres import get_engine, open_session
-from postgres.lock import police_log_lock
+from postgres.lock import GEOCODE, advisory_lock
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import ColumnElement, func, or_, select
@@ -33,6 +39,9 @@ from sqlalchemy.orm import Session
 
 MAX_ATTEMPTS = 3
 MAX_REQUESTS = 600
+# Rows in a row that fail with a timeout, a connection error or a 5xx before the run
+# assumes the service, or our network, is down.
+MAX_CONSECUTIVE_FAILURES = 5
 PROGRESS_EVERY = 50
 
 Geocoder = Callable[[str], GeocodeResult | None]
@@ -49,8 +58,12 @@ class GeocodeCounts:
     missed: int = 0
     bare_highways: int = 0
     requests: int = 0
+    # Rows that timed out or could not connect, left for the next run.
+    skipped: int = 0
     stopped_at_limit: bool = False
     geocoder_unavailable: bool = False
+    # Why the geocoder stopped the run, as the geocoder worded it.
+    geocoder_error: str = ""
 
 
 def run(
@@ -62,6 +75,7 @@ def run(
         logfire.info("geocode: {waiting} rows waiting", waiting=len(rows))
         last_reported = 0
         with_coordinates: list[str] = []
+        failures_in_a_row = 0
         for row in rows:
             if counts.requests >= max_requests:
                 counts.stopped_at_limit = True
@@ -69,14 +83,27 @@ def run(
             if not _still_ours_to_place(session, row):
                 session.rollback()
                 continue
+            requests_before = counts.requests
             try:
                 _place(session, row, geocoder, counts, max_requests)
+            except GeocodeBackOff as exc:
+                # Nominatim said to stop, and asking again risks a ban.
+                session.rollback()
+                counts.skipped += 1
+                _stop(counts, exc)
+                break
             except GeocodeUnavailable as exc:
                 # Nothing is known about the row, so it is not charged an attempt.
                 session.rollback()
-                counts.geocoder_unavailable = True
-                logfire.error("geocoder unavailable; stopping the run", error=str(exc))
-                break
+                counts.skipped += 1
+                failures_in_a_row += 1
+                if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
+                    _stop(counts, exc)
+                    break
+                logfire.warning("geocoder failed; skipping the row", error=str(exc))
+                continue
+            if counts.requests > requests_before:
+                failures_in_a_row = 0
             session.commit()
             if row.lat is not None:
                 with_coordinates.append(row.raw_address)
@@ -111,6 +138,12 @@ def _entries_at(session: Session, raw_addresses: list[str]) -> int:
         )
         or 0
     )
+
+
+def _stop(counts: GeocodeCounts, exc: GeocodeUnavailable) -> None:
+    counts.geocoder_unavailable = True
+    counts.geocoder_error = str(exc)
+    logfire.error("geocoder unavailable; stopping the run", error=str(exc))
 
 
 def _rows_to_place(session: Session) -> list[AddressNormalization]:
@@ -261,24 +294,27 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    with police_log_lock(get_engine()) as acquired:
+    with advisory_lock(get_engine(), GEOCODE) as acquired:
         if not acquired:
             print(
-                "Another police log job is running (process, reprocess, or "
-                "normalize). Try again when it finishes.",
+                "Another geocode run is in progress. Try again when it finishes.",
                 file=sys.stderr,
             )
             return 1
         counts = run(geocoder)
     print(
         f"Geocoding: {counts.placed} placed, {counts.reused} reused from another row, "
-        f"{counts.missed} missed, {counts.bare_highways} bare highways left for review. "
+        f"{counts.missed} missed, {counts.bare_highways} bare highways left for review, "
+        f"{counts.skipped} skipped (will retry next run). "
         f"{counts.requests} requests."
     )
     if counts.stopped_at_limit:
         print(f"Stopped at {MAX_REQUESTS} requests. Run it again for the rest.")
     if counts.geocoder_unavailable:
-        print("Nominatim is unavailable or refused the request. Stopped early.")
+        print(
+            "Nominatim is unavailable or refused the request "
+            f"({counts.geocoder_error}). Stopped early."
+        )
         return 1
     return 0
 

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 from locations.geocode import (
+    GeocodeBackOff,
     GeocodeResult,
     GeocodeUnavailable,
     RateLimiter,
@@ -148,6 +149,47 @@ def test_a_bad_http_status_is_unavailable_not_a_miss(code):
         pytest.raises(GeocodeUnavailable),
     ):
         look_up()
+
+
+# --- back off, or skip ---
+
+
+@pytest.mark.parametrize("code", [403, 429])
+def test_a_403_or_429_says_to_back_off_at_once_with_no_retry(code):
+    reply = MagicMock()
+    reply.raise_for_status.side_effect = _status_error(code)
+    limiter = NoWait()
+    with (
+        patch("locations.geocode.httpx.get", return_value=reply) as get,
+        pytest.raises(GeocodeBackOff),
+    ):
+        geocode("12 Main St, Lebanon, NH", limiter=limiter)
+
+    assert get.call_count == 1
+    assert limiter.waits == 1
+
+
+@pytest.mark.parametrize("code", [500, 503])
+def test_a_server_error_is_transient_not_a_back_off(code):
+    reply = MagicMock()
+    reply.raise_for_status.side_effect = _status_error(code)
+    with (
+        patch("locations.geocode.httpx.get", return_value=reply),
+        pytest.raises(GeocodeUnavailable) as caught,
+    ):
+        look_up()
+
+    assert not isinstance(caught.value, GeocodeBackOff)
+
+
+def test_a_timeout_is_transient_not_a_back_off():
+    with (
+        patch("locations.geocode.httpx.get", side_effect=httpx.ReadTimeout("slow")),
+        pytest.raises(GeocodeUnavailable) as caught,
+    ):
+        look_up()
+
+    assert not isinstance(caught.value, GeocodeBackOff)
 
 
 # --- the user agent ---

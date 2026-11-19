@@ -3,7 +3,7 @@
 from datetime import date, datetime
 
 import pytest
-from postgres.lock import police_log_lock
+from postgres.lock import NORMALIZE, advisory_lock
 from postgres.models.log_entry import LogEntry
 
 from scripts.normalize import job
@@ -105,25 +105,25 @@ def test_a_logged_out_backend_stops_the_run_and_exits_non_zero(
     assert "logged out or at its limit" in capsys.readouterr().out
 
 
-def test_another_police_log_job_running_stops_the_run_before_any_call(
+def test_another_normalize_run_stops_the_run_before_any_call(
     db_session, ai_calls, test_engine, capsys
 ):
     add_type(db_session, "NOISE")
     backend = FakeBackend(replies=[answer("NOISE")])
 
-    with police_log_lock(test_engine) as acquired:
+    with advisory_lock(test_engine, NORMALIZE) as acquired:
         assert acquired
         status = job.main(["--field", "incident_type"], backend_factory=lambda: backend)
 
     assert status == 1
     assert backend.calls == []
-    assert "Another police log job is running" in capsys.readouterr().err
+    assert "Another normalize run is in progress" in capsys.readouterr().err
 
 
 def test_the_lock_is_released_when_the_run_ends(db_session, ai_calls, test_engine):
     job.main([], backend_factory=lambda: FakeBackend(replies=[]))
 
-    with police_log_lock(test_engine) as acquired:
+    with advisory_lock(test_engine, NORMALIZE) as acquired:
         assert acquired
 
 

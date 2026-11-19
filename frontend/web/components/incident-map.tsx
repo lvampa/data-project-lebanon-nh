@@ -6,7 +6,7 @@ import { MapControls } from '@project/ui/components/map/MapControls'
 import { MapErrorState } from '@project/ui/components/map/MapErrorState'
 import { MapLoadingState } from '@project/ui/components/map/MapLoadingState'
 import { LEBANON_CENTER, LEBANON_ZOOM } from '@project/ui/lib/constants'
-import { callWord, nameOf, trafficNearby } from '@/lib/police-map/format'
+import { callWord, clusterHolds, nameOf, trafficNearby } from '@/lib/police-map/format'
 import { NO_PIN, pinLayers, streetLayer } from '@/lib/police-map/layers'
 import {
   CLUSTER_MAX_ZOOM,
@@ -101,12 +101,16 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
           calls?: number
           t?: number
           w?: number
+          weight?: number
         }
         const label = document.createElement('div')
         const strong = document.createElement('strong')
         if (props.point_count) {
           strong.textContent = `${props.point_count} places`
-          label.append(strong, ` · ${callWord(props.calls ?? 0)} · zoom in to see them`)
+          label.append(
+            strong,
+            ` · ${clusterHolds(props.calls ?? 0, props.weight ?? 0)} · zoom in to see them`,
+          )
         } else {
           strong.textContent = nameOf(props.name ?? '')
           label.append(

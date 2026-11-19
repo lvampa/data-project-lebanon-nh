@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   callWord,
+  clusterHolds,
   nameOf,
   sinceLabel,
   streetOf,
@@ -51,6 +52,13 @@ describe('windowLabel', () => {
 describe('updatedLabel', () => {
   it('is a short date', () => {
     expect(updatedLabel('2026-11-19T21:00:00Z')).toBe('Nov 19, 2026')
+  })
+})
+
+describe('clusterHolds', () => {
+  it('counts the calls of a group, and never says 0 calls', () => {
+    expect(clusterHolds(40, 52)).toBe('40 calls')
+    expect(clusterHolds(0, 62)).toBe('62 traffic calls nearby')
   })
 })
 

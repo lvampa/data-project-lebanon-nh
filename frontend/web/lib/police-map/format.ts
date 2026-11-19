@@ -37,6 +37,12 @@ export function trafficNearby(count: number): string {
   return `${count.toLocaleString('en-US')} traffic ${count === 1 ? 'call' : 'calls'} nearby`
 }
 
+// What a group of pins holds, for its tooltip. A group with no calls of its own has only
+// traffic, and its weight is exactly the sum of that traffic.
+export function clusterHolds(calls: number, weight: number): string {
+  return calls === 0 ? trafficNearby(weight) : callWord(calls)
+}
+
 // "Jan to Nov 2026" for a window that starts in January 2026 and was generated in November.
 export function windowLabel(since: string, generatedAt: string): string {
   const [year, month] = since.split('-').map(Number)

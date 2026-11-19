@@ -3,7 +3,12 @@
 from datetime import datetime
 
 import pytest
-from locations.geocode import GeocodeResult, GeocodeUnavailable, Precision
+from locations.geocode import (
+    GeocodeBackOff,
+    GeocodeResult,
+    GeocodeUnavailable,
+    Precision,
+)
 from postgres.lock import police_log_lock
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select, update
@@ -392,47 +397,92 @@ def test_a_miss_is_not_charged_when_the_street_fallback_was_skipped_for_the_budg
     assert counts.missed == 0
 
 
-class UnavailableAfter(FakeGeocoder):
-    """Answers `good` lookups, then raises GeocodeUnavailable, as a 429 would."""
+TIMEOUT = GeocodeUnavailable("geocode('X'): The read operation timed out")
+BACK_OFF = GeocodeBackOff("geocode('X'): Client error '429 Too Many Requests'")
 
-    def __init__(self, good: int) -> None:
+
+class Scripted(FakeGeocoder):
+    """Plays one step per query: a result, a miss, or an exception to raise."""
+
+    def __init__(self, *steps: GeocodeResult | Exception | None) -> None:
         super().__init__({})
-        self.good = good
+        self.steps = list(steps)
 
     def __call__(self, query: str) -> GeocodeResult | None:
         self.queries.append(query)
-        if len(self.queries) > self.good:
-            raise GeocodeUnavailable("geocode('X'): The read operation timed out")
-        return hit()
+        step = self.steps[min(len(self.queries), len(self.steps)) - 1]
+        if isinstance(step, Exception):
+            raise step
+        return step
 
 
-def test_an_unavailable_geocoder_stops_the_run_and_charges_no_attempt(db_session):
-    for number in range(4):
-        add_row(db_session, f"ROW {number}")
-    geocoder = UnavailableAfter(good=1)
+def add_rows(session, count: int) -> None:
+    for number in range(count):
+        add_row(session, f"ROW {number}")
+
+
+def test_a_timeout_on_one_row_skips_it_and_the_next_row_is_still_geocoded(db_session):
+    add_rows(db_session, 2)
+    geocoder = Scripted(TIMEOUT, hit())
+
+    counts = geocode_job.run(geocoder)
+
+    assert (counts.skipped, counts.placed) == (1, 1)
+    assert counts.geocoder_unavailable is False
+    skipped, placed = the_row(db_session, "ROW 0"), the_row(db_session, "ROW 1")
+    assert (skipped.lat, skipped.geocode_attempts) == (None, 0)
+    assert placed.lat == IN_CITY[0]
+
+
+def test_a_back_off_stops_the_run_at_once_and_charges_no_attempt(db_session):
+    add_rows(db_session, 4)
+    geocoder = Scripted(hit(), BACK_OFF)
 
     counts = geocode_job.run(geocoder)
 
     assert counts.placed == 1
     assert counts.geocoder_unavailable is True
-    assert "read operation timed out" in counts.geocoder_error
+    assert "429" in counts.geocoder_error
     assert len(geocoder.queries) == 2
     attempts = [the_row(db_session, f"ROW {n}").geocode_attempts for n in range(4)]
     assert attempts == [0, 0, 0, 0]
 
 
-def test_the_command_exits_non_zero_and_says_so_when_the_geocoder_is_unavailable(
-    db_session, capsys
-):
-    add_row(db_session, "12 MAIN ST")
+def test_five_timeouts_in_a_row_stop_the_run(db_session):
+    add_rows(db_session, 8)
+    geocoder = Scripted(TIMEOUT)
 
-    status = geocode_job.main([], geocoder=UnavailableAfter(good=0))
+    counts = geocode_job.run(geocoder)
 
+    assert geocode_job.MAX_CONSECUTIVE_FAILURES == 5
+    assert len(geocoder.queries) == 5
+    assert (counts.skipped, counts.geocoder_unavailable) == (5, True)
+    assert "read operation timed out" in counts.geocoder_error
+
+
+def test_a_success_starts_the_count_of_failures_over(db_session):
+    add_rows(db_session, 9)
+    geocoder = Scripted(*[TIMEOUT] * 4, hit(), *[TIMEOUT] * 4)
+
+    counts = geocode_job.run(geocoder)
+
+    assert len(geocoder.queries) == 9
+    assert (counts.skipped, counts.placed) == (8, 1)
+    assert counts.geocoder_unavailable is False
+
+
+def test_the_command_says_how_many_were_skipped_and_why_it_stopped(db_session, capsys):
+    add_rows(db_session, 5)
+
+    status = geocode_job.main([], geocoder=Scripted(TIMEOUT))
+
+    out = capsys.readouterr().out
     assert status == 1
+    assert "5 skipped (will retry next run)" in out
     assert (
         "Nominatim is unavailable or refused the request "
         "(geocode('X'): The read operation timed out). Stopped early."
-    ) in capsys.readouterr().out
+    ) in out
 
 
 def test_a_place_does_not_inherit_the_coordinates_of_an_address(db_session):

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import logfire
 from bootstrap import bootstrap
 from locations.geocode import (
+    GeocodeBackOff,
     GeocodeResult,
     GeocodeUnavailable,
     geocode,
@@ -33,6 +34,9 @@ from sqlalchemy.orm import Session
 
 MAX_ATTEMPTS = 3
 MAX_REQUESTS = 600
+# Rows in a row that fail with a timeout or a connection error before the run assumes
+# the service, or our network, is down.
+MAX_CONSECUTIVE_FAILURES = 5
 PROGRESS_EVERY = 50
 
 Geocoder = Callable[[str], GeocodeResult | None]
@@ -49,6 +53,8 @@ class GeocodeCounts:
     missed: int = 0
     bare_highways: int = 0
     requests: int = 0
+    # Rows that timed out or could not connect, left for the next run.
+    skipped: int = 0
     stopped_at_limit: bool = False
     geocoder_unavailable: bool = False
     # Why the geocoder stopped the run, as the geocoder worded it.
@@ -64,6 +70,7 @@ def run(
         logfire.info("geocode: {waiting} rows waiting", waiting=len(rows))
         last_reported = 0
         with_coordinates: list[str] = []
+        failures_in_a_row = 0
         for row in rows:
             if counts.requests >= max_requests:
                 counts.stopped_at_limit = True
@@ -71,15 +78,28 @@ def run(
             if not _still_ours_to_place(session, row):
                 session.rollback()
                 continue
+            requests_before = counts.requests
             try:
                 _place(session, row, geocoder, counts, max_requests)
             except GeocodeUnavailable as exc:
                 # Nothing is known about the row, so it is not charged an attempt.
                 session.rollback()
-                counts.geocoder_unavailable = True
-                counts.geocoder_error = str(exc)
-                logfire.error("geocoder unavailable; stopping the run", error=str(exc))
-                break
+                failures_in_a_row += 1
+                counts.skipped += 1
+                if (
+                    isinstance(exc, GeocodeBackOff)
+                    or failures_in_a_row >= MAX_CONSECUTIVE_FAILURES
+                ):
+                    counts.geocoder_unavailable = True
+                    counts.geocoder_error = str(exc)
+                    logfire.error(
+                        "geocoder unavailable; stopping the run", error=str(exc)
+                    )
+                    break
+                logfire.warning("geocoder failed; skipping the row", error=str(exc))
+                continue
+            if counts.requests > requests_before:
+                failures_in_a_row = 0
             session.commit()
             if row.lat is not None:
                 with_coordinates.append(row.raw_address)
@@ -275,7 +295,8 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
         counts = run(geocoder)
     print(
         f"Geocoding: {counts.placed} placed, {counts.reused} reused from another row, "
-        f"{counts.missed} missed, {counts.bare_highways} bare highways left for review. "
+        f"{counts.missed} missed, {counts.bare_highways} bare highways left for review, "
+        f"{counts.skipped} skipped (will retry next run). "
         f"{counts.requests} requests."
     )
     if counts.stopped_at_limit:

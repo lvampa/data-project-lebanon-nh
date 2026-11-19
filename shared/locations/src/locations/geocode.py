@@ -3,7 +3,8 @@
 No match, or a reply that cannot be read, is a miss and returns None. A transport
 failure or a refusal raises GeocodeUnavailable, which is not a miss. Nominatim's
 usage policy allows one request per second, so every lookup goes through a limiter.
-A timeout is tried again, up to twice, through the limiter. A 403 or 429 is not.
+A timeout is tried again, up to twice, through the limiter. A 403 or 429 is not: it
+raises GeocodeBackOff, which a caller must stop on.
 """
 
 import logging
@@ -22,6 +23,8 @@ _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 # how long the client waits, only how often it asks.
 _TIMEOUT_S = 30
 _TIMEOUT_RETRIES = 2
+# Nominatim is telling the client to stop.
+_BACK_OFF_STATUSES = (403, 429)
 
 Precision = Literal["exact", "approximate"]
 
@@ -38,6 +41,11 @@ _AREA_NAMES = frozenset({"Lebanon", "West Lebanon"})
 class GeocodeUnavailable(Exception):
     """Nominatim could not be reached or refused the request, so nothing is known about
     the query. That is not a miss: a caller must not count it against the address."""
+
+
+class GeocodeBackOff(GeocodeUnavailable):
+    """Nominatim answered 403 or 429. Asking again risks a ban, so a caller stops. Any
+    other GeocodeUnavailable is transient, and a caller may skip that query."""
 
 
 @dataclass(frozen=True)
@@ -123,8 +131,13 @@ def _get(query: str, contact: str | None, limiter: Waiter) -> httpx.Response:
             if timeouts > _TIMEOUT_RETRIES:
                 raise GeocodeUnavailable(f"geocode({query!r}): {exc}") from exc
             logger.warning("geocode(%r) timed out, trying again: %s", query, exc)
+        except httpx.HTTPStatusError as exc:
+            message = f"geocode({query!r}): {exc}"
+            if exc.response.status_code in _BACK_OFF_STATUSES:
+                raise GeocodeBackOff(message) from exc
+            raise GeocodeUnavailable(message) from exc
         except httpx.HTTPError as exc:
-            # Covers DNS and connection failures, and a 403 or 429 status.
+            # Covers DNS and connection failures.
             raise GeocodeUnavailable(f"geocode({query!r}): {exc}") from exc
 
 

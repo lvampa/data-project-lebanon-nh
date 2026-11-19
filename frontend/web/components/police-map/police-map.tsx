@@ -6,6 +6,7 @@ import { PlaceSearch } from '@/components/police-map/place-search'
 import { SidePanel } from '@/components/police-map/side-panel'
 import { streetsToLight } from '@/lib/police-map/streets'
 import { updatedLabel, windowLabel } from '@/lib/police-map/format'
+import { idFromHash } from '@/lib/police-map/hash'
 import { PIN_COLOR } from '@/lib/police-map/map-style'
 import type { Address, StatsData } from '@/lib/types'
 
@@ -16,19 +17,13 @@ interface Props {
 
 const NOTHING: Selection = { id: null, fly: false }
 
-// The URL carries the selected place as #<id>, so a card can be shared.
-function idFromHash(known: Map<string, Address>): string | null {
-  const id = decodeURIComponent(window.location.hash.slice(1))
-  return known.has(id) ? id : null
-}
-
 export function PoliceMap({ addresses, stats }: Props) {
   const [selection, setSelection] = useState<Selection>(NOTHING)
   const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
 
   useEffect(() => {
     const read = () => {
-      const id = idFromHash(places)
+      const id = idFromHash(window.location.hash, places)
       setSelection(id ? { id, fly: true } : NOTHING)
     }
     read()

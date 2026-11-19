@@ -151,31 +151,7 @@ def test_a_bad_http_status_is_unavailable_not_a_miss(code):
         look_up()
 
 
-# --- timeouts are tried again, nothing else is ---
-
-
-def test_a_timeout_then_a_reply_gives_the_result():
-    limiter = NoWait()
-    replies = [httpx.ReadTimeout("The read operation timed out"), nominatim_reply()]
-    with patch("locations.geocode.httpx.get", side_effect=replies) as get:
-        result = geocode("12 Main St, Lebanon, NH", limiter=limiter)
-
-    assert result is not None
-    assert get.call_count == 2
-    assert limiter.waits == 2
-
-
-def test_three_timeouts_are_unavailable_and_each_try_waits_for_the_limiter():
-    limiter = NoWait()
-    timeout = httpx.ReadTimeout("The read operation timed out")
-    with (
-        patch("locations.geocode.httpx.get", side_effect=timeout) as get,
-        pytest.raises(GeocodeUnavailable, match="read operation timed out"),
-    ):
-        geocode("12 Main St, Lebanon, NH", limiter=limiter)
-
-    assert get.call_count == 3
-    assert limiter.waits == 3
+# --- back off, or skip ---
 
 
 @pytest.mark.parametrize("code", [403, 429])

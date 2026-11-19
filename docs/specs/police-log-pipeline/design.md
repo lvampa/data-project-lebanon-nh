@@ -85,6 +85,8 @@ There is no Elasticsearch and no dbt.
   Otherwise it tries the geocode query, then the street alone (an `approximate` result).
   It runs at 1 request per second, stops at 600 requests, and discards a result outside the city: state New Hampshire, city Lebanon or West Lebanon, and a coarse bounding box.
   After 3 misses a row is marked for review.
+  A transient failure (a timeout, a connection error or a 5xx) skips the row without charging an attempt, and the next run tries it again.
+  A 403 or 429 stops the run at once, and so do 5 transient failures in a row.
   A bare highway with no cross street, exit or landmark is marked for review and never looked up.
 - **Admin API:** `api/services/categories.py` and `addresses.py` list rows and let the operator correct them.
   A correction sets `source = 'human'` and clears the review mark; typed coordinates get `geocoded_via = 'manual'`.

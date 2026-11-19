@@ -3,8 +3,8 @@
 No match, or a reply that cannot be read, is a miss and returns None. A transport
 failure or a refusal raises GeocodeUnavailable, which is not a miss. Nominatim's
 usage policy allows one request per second, so every lookup goes through a limiter.
-A timeout is tried again, up to twice, through the limiter. A 403 or 429 is not: it
-raises GeocodeBackOff, which a caller must stop on.
+A 403 or 429 raises GeocodeBackOff, which a caller must stop on. Any other failure is
+transient, and a caller may skip the query. Nothing is tried again here.
 """
 
 import logging
@@ -22,7 +22,6 @@ _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 # Nominatim sometimes holds one request for over 10 seconds. Its policy does not mind
 # how long the client waits, only how often it asks.
 _TIMEOUT_S = 30
-_TIMEOUT_RETRIES = 2
 # Nominatim is telling the client to stop.
 _BACK_OFF_STATUSES = (403, 429)
 
@@ -107,38 +106,31 @@ def geocode(
 
 
 def _get(query: str, contact: str | None, limiter: Waiter) -> httpx.Response:
-    """The reply to one search. A timeout is retried, and any other failure is not."""
-    timeouts = 0
-    while True:
-        limiter.wait()
-        try:
-            reply = httpx.get(
-                _NOMINATIM_URL,
-                params={
-                    "q": query,
-                    "format": "json",
-                    "limit": 1,
-                    "countrycodes": "us",
-                    "addressdetails": 1,
-                },
-                headers={"User-Agent": _user_agent(contact)},
-                timeout=_TIMEOUT_S,
-            )
-            reply.raise_for_status()
-            return reply
-        except httpx.TimeoutException as exc:
-            timeouts += 1
-            if timeouts > _TIMEOUT_RETRIES:
-                raise GeocodeUnavailable(f"geocode({query!r}): {exc}") from exc
-            logger.warning("geocode(%r) timed out, trying again: %s", query, exc)
-        except httpx.HTTPStatusError as exc:
-            message = f"geocode({query!r}): {exc}"
-            if exc.response.status_code in _BACK_OFF_STATUSES:
-                raise GeocodeBackOff(message) from exc
-            raise GeocodeUnavailable(message) from exc
-        except httpx.HTTPError as exc:
-            # Covers DNS and connection failures.
-            raise GeocodeUnavailable(f"geocode({query!r}): {exc}") from exc
+    """The reply to one search. Any failure raises, and nothing is tried again here."""
+    limiter.wait()
+    try:
+        reply = httpx.get(
+            _NOMINATIM_URL,
+            params={
+                "q": query,
+                "format": "json",
+                "limit": 1,
+                "countrycodes": "us",
+                "addressdetails": 1,
+            },
+            headers={"User-Agent": _user_agent(contact)},
+            timeout=_TIMEOUT_S,
+        )
+        reply.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        message = f"geocode({query!r}): {exc}"
+        if exc.response.status_code in _BACK_OFF_STATUSES:
+            raise GeocodeBackOff(message) from exc
+        raise GeocodeUnavailable(message) from exc
+    except httpx.HTTPError as exc:
+        # Covers timeouts, DNS and connection failures.
+        raise GeocodeUnavailable(f"geocode({query!r}): {exc}") from exc
+    return reply
 
 
 def _is_in_lebanon(match: dict[str, Any]) -> bool:

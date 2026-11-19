@@ -8,6 +8,11 @@ has, or the coordinates of another spelling of the same address. Otherwise it as
 geocoder for the row's query and then for its street alone, and drops a result outside
 the city. A row that misses three times is marked for review. It stops
 after 600 requests, and leaves the rest for the next run.
+
+A row whose lookup times out, cannot connect or gets a 5xx is skipped and not charged
+an attempt, so the next run tries it again. A 403 or 429 stops the run at once, and so
+do 5 skipped rows in a row. The exit code stays 0 when rows were only skipped, and the
+summary says how many.
 """
 
 import argparse
@@ -34,8 +39,8 @@ from sqlalchemy.orm import Session
 
 MAX_ATTEMPTS = 3
 MAX_REQUESTS = 600
-# Rows in a row that fail with a timeout or a connection error before the run assumes
-# the service, or our network, is down.
+# Rows in a row that fail with a timeout, a connection error or a 5xx before the run
+# assumes the service, or our network, is down.
 MAX_CONSECUTIVE_FAILURES = 5
 PROGRESS_EVERY = 50
 
@@ -81,20 +86,19 @@ def run(
             requests_before = counts.requests
             try:
                 _place(session, row, geocoder, counts, max_requests)
+            except GeocodeBackOff as exc:
+                # Nominatim said to stop, and asking again risks a ban.
+                session.rollback()
+                counts.skipped += 1
+                _stop(counts, exc)
+                break
             except GeocodeUnavailable as exc:
                 # Nothing is known about the row, so it is not charged an attempt.
                 session.rollback()
-                failures_in_a_row += 1
                 counts.skipped += 1
-                if (
-                    isinstance(exc, GeocodeBackOff)
-                    or failures_in_a_row >= MAX_CONSECUTIVE_FAILURES
-                ):
-                    counts.geocoder_unavailable = True
-                    counts.geocoder_error = str(exc)
-                    logfire.error(
-                        "geocoder unavailable; stopping the run", error=str(exc)
-                    )
+                failures_in_a_row += 1
+                if failures_in_a_row >= MAX_CONSECUTIVE_FAILURES:
+                    _stop(counts, exc)
                     break
                 logfire.warning("geocoder failed; skipping the row", error=str(exc))
                 continue
@@ -134,6 +138,12 @@ def _entries_at(session: Session, raw_addresses: list[str]) -> int:
         )
         or 0
     )
+
+
+def _stop(counts: GeocodeCounts, exc: GeocodeUnavailable) -> None:
+    counts.geocoder_unavailable = True
+    counts.geocoder_error = str(exc)
+    logfire.error("geocoder unavailable; stopping the run", error=str(exc))
 
 
 def _rows_to_place(session: Session) -> list[AddressNormalization]:

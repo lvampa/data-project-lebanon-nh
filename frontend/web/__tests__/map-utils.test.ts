@@ -6,6 +6,7 @@ const ADDR: Address = {
   raw_address: '1 Main St',
   normalized_address: '1 Main Street, Lebanon, NH',
   count: 5,
+  traffic_count: 0,
   lat: 43.642,
   lng: -72.252,
 }

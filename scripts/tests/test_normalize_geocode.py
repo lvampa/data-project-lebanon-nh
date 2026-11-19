@@ -9,7 +9,7 @@ from locations.geocode import (
     GeocodeUnavailable,
     Precision,
 )
-from postgres.lock import police_log_lock
+from postgres.lock import GEOCODE, advisory_lock
 from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select, update
 
@@ -298,25 +298,23 @@ def test_the_command_places_rows_and_exits_zero(db_session, capsys):
     assert "1 placed" in capsys.readouterr().out
 
 
-def test_another_police_log_job_running_stops_the_command(
-    db_session, test_engine, capsys
-):
+def test_another_geocode_run_stops_the_command(db_session, test_engine, capsys):
     add_row(db_session, "12 MAIN ST")
     geocoder = FakeGeocoder({"12 MAIN ST, Lebanon, NH": hit()})
 
-    with police_log_lock(test_engine) as acquired:
+    with advisory_lock(test_engine, GEOCODE) as acquired:
         assert acquired
         status = geocode_job.main([], geocoder=geocoder)
 
     assert status == 1
     assert geocoder.queries == []
-    assert "Another police log job is running" in capsys.readouterr().err
+    assert "Another geocode run is in progress" in capsys.readouterr().err
 
 
 def test_the_lock_is_released_when_the_command_ends(db_session, test_engine):
     geocode_job.main([], geocoder=FakeGeocoder())
 
-    with police_log_lock(test_engine) as acquired:
+    with advisory_lock(test_engine, GEOCODE) as acquired:
         assert acquired
 
 

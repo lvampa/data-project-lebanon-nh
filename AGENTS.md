@@ -94,7 +94,7 @@ scripts/                  generate_report.sh, deploy.sh
 - **Item → Model boundary:** Scrapy Items are untyped dicts. Always validate at the pipeline with `Model.model_validate(dict(item))` before writing to a database.
 - **Idempotent writes:** Use `on_conflict_do_update` (log entries, properties, city staff). Never assume a record doesn't exist.
 - **Atomic URL claiming:** an `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)` moves `pending → in_progress`, so concurrent runs never claim the same URL.
-- **One police log job at a time:** the process runner, the reprocess job, the normalization job and the geocode job take the advisory lock in `shared/postgres/src/postgres/lock.py`.
+- **One run of a job at a time:** advisory locks in `shared/postgres/src/postgres/lock.py`, one per conflict. `police_log_parse` is shared by the process runner and the reprocess job, so an old parse cannot overwrite a new one. `normalize` stops two runs spending the same AI calls, and `geocode` stops two runs doubling the Nominatim rate. Jobs on different locks run together.
 - **Observability:** Use `logfire.span()` for database writes and PDF processing. Use `logfire.info/warning/error` at key decision points (not every line).
 - **Migrations:** Schema changes go through Alembic in `shared/postgres/migrations/`. Never modify tables directly.
 

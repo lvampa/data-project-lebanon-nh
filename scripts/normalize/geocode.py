@@ -31,7 +31,7 @@ from locations.geocode import (
     in_city_bounds,
 )
 from postgres import get_engine, open_session
-from postgres.lock import police_log_lock
+from postgres.lock import GEOCODE, advisory_lock
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import ColumnElement, func, or_, select
@@ -294,11 +294,10 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    with police_log_lock(get_engine()) as acquired:
+    with advisory_lock(get_engine(), GEOCODE) as acquired:
         if not acquired:
             print(
-                "Another police log job is running (process, reprocess, or "
-                "normalize). Try again when it finishes.",
+                "Another geocode run is in progress. Try again when it finishes.",
                 file=sys.stderr,
             )
             return 1

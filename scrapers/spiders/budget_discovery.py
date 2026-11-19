@@ -31,6 +31,13 @@ def _extract_fiscal_year(url: str) -> int | None:
 class BudgetDiscoverySpider(scrapy.Spider):
     name = "budget_discovery"
     allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov"]
+    archive_source = "budget_page"
+
+    def archive_key(self, response: Response) -> str | None:
+        # The index only links to the year pages, which are the originals.
+        if response.url == INDEX_URL:
+            return None
+        return response.url
 
     @override
     async def start(self) -> AsyncIterator[Request]:

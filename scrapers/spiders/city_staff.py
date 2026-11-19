@@ -31,6 +31,13 @@ def _clean(text: str | None) -> str | None:
 class CityStaffSpider(scrapy.Spider):
     name = "city_staff"
     allowed_domains = ["www.lebanonnh.gov", "lebanonnh.gov", "flyleb.com"]
+    archive_source = "city_staff_page"
+
+    def archive_key(self, response: Response) -> str | None:
+        # The council index only links to the member pages, which are the originals.
+        if response.url == COUNCIL_INDEX_URL:
+            return None
+        return response.url
 
     @override
     async def start(self) -> AsyncIterator[Request]:

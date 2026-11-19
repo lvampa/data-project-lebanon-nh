@@ -1,7 +1,7 @@
 import pytest
 from items.city_staff import CityStaffItem
 from scrapy.http import HtmlResponse
-from spiders.city_staff import DIRECTORY_SOURCES, CityStaffSpider
+from spiders.city_staff import COUNCIL_INDEX_URL, DIRECTORY_SOURCES, CityStaffSpider
 
 ROSTER_HTML = b"""
 <html><body>
@@ -176,3 +176,14 @@ def test_parse_council_member_extracts_fields(spider):
     assert item["name"] == "Kellen Appleton"
     assert item["department"] == "City Council"
     assert item["email"] == "Kellen.Appleton@lebanonnh.gov"
+
+
+def test_roster_pages_are_archived_by_url_and_the_council_index_is_not():
+    spider = CityStaffSpider()
+    roster = HtmlResponse(
+        "https://www.lebanonnh.gov/796/Department-Roster", body=b"<html/>"
+    )
+    index = HtmlResponse(COUNCIL_INDEX_URL, body=b"<html/>")
+
+    assert spider.archive_key(roster) == roster.url
+    assert spider.archive_key(index) is None

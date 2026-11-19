@@ -2,12 +2,18 @@ import type { TypeStat, WeekdayStat } from '@project/ui/lib/types'
 
 export type { Incident, TypeStat, WeekdayStat } from '@project/ui/lib/types'
 
+export interface HourStat {
+  hour: number
+  count: number
+}
+
 export interface StatsData {
   total: number
   generated_at: string
   since: string
   by_type: TypeStat[]
   by_weekday: WeekdayStat[]
+  by_hour: HourStat[]
 }
 
 export interface Address {

@@ -21,6 +21,12 @@ pub struct ByWeekday {
 }
 
 #[derive(Debug, Serialize)]
+pub struct ByHour {
+    pub hour: i32,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct Stats {
     pub total: i64,
     pub generated_at: String,
@@ -28,6 +34,8 @@ pub struct Stats {
     pub since: String,
     pub by_type: Vec<ByType>,
     pub by_weekday: Vec<ByWeekday>,
+    // Calls by the hour of the day, 0 to 23, for the hours that had any.
+    pub by_hour: Vec<ByHour>,
 }
 
 // ---- Incident ----
@@ -127,6 +135,11 @@ pub async fn fetch_stats(pool: &PgPool, since: NaiveDate) -> Result<Stats> {
         .fetch_all(pool)
         .await?;
 
+    let by_hour_rows = sqlx::query_as::<_, (i32, i64)>(include_str!("sql/stats_by_hour.sql"))
+        .bind(since)
+        .fetch_all(pool)
+        .await?;
+
     Ok(Stats {
         total,
         generated_at: Utc::now().to_rfc3339(),
@@ -145,6 +158,10 @@ pub async fn fetch_stats(pool: &PgPool, since: NaiveDate) -> Result<Stats> {
                 day: DAYS[dow as usize].to_string(),
                 count: c,
             })
+            .collect(),
+        by_hour: by_hour_rows
+            .into_iter()
+            .map(|(hour, count)| ByHour { hour, count })
             .collect(),
     })
 }

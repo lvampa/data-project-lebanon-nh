@@ -23,6 +23,32 @@ export interface Address {
   lng: number
 }
 
+// One call on a place's card.
+export interface PlaceCall {
+  reported_at: string | null
+  incident_type: string | null
+  disposition: string | null
+  call_source: string | null
+  category: string
+  source_url: string
+}
+
+// data/places/<id>.json: the report card for one pin.
+export interface PlaceCard {
+  name: string
+  kind: 'place' | 'road'
+  lat: number
+  lng: number
+  count: number
+  categories: Record<'premises' | 'traffic' | 'alarms' | 'checks' | 'admin', number>
+  // [incident type, calls]. A road lists every type, and a place only what happened there.
+  types: [string, number][]
+  // [disposition, calls], for the calls at the place itself.
+  outcomes: [string, number][]
+  false_alarms: number
+  calls: PlaceCall[]
+}
+
 export interface StaffMember {
   id: number
   name: string

@@ -1,32 +1,33 @@
 'use client'
-import { callWord, nameOf } from '@/lib/police-map/format'
-import { pinName } from '@/lib/police-map/map-style'
+import { useState } from 'react'
+import { ReportCard } from '@/components/police-map/report-card'
+import { usePlaceCard } from '@/components/police-map/use-place-card'
 import type { Address } from '@/lib/types'
 
 interface Props {
   place: Address | undefined
+  counts: number[]
+  year: string
   onClose: () => void
 }
 
-// The panel beside the map. The report card replaces the body of this.
-export function SidePanel({ place, onClose }: Props) {
-  if (!place) {
+// The panel beside the map: the report card of the selected place.
+export function SidePanel({ place, counts, year, onClose }: Props) {
+  const [attempt, setAttempt] = useState(0)
+  const state = usePlaceCard(place?.id ?? null, attempt)
+
+  if (!place || !state) {
     return <p className="text-sm text-muted-foreground">Click a pin to see what happens there.</p>
   }
   return (
-    <div>
-      <div className="flex items-start justify-between gap-2">
-        <h2 className="text-display-3">{nameOf(pinName(place))}</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close and go back to the town summary"
-          className="h-7 w-7 rounded-md border border-border text-lg leading-none text-muted-foreground hover:bg-secondary"
-        >
-          ×
-        </button>
-      </div>
-      <p className="mt-2 text-sm text-muted-foreground">{callWord(place.count)}</p>
-    </div>
+    <ReportCard
+      key={place.id}
+      address={place}
+      state={state}
+      counts={counts}
+      year={year}
+      onClose={onClose}
+      onRetry={() => setAttempt((n) => n + 1)}
+    />
   )
 }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapLegend } from '@project/ui/components/map/MapLegend'
 import { IncidentMap, type Selection } from '@/components/incident-map'
 import { SidePanel } from '@/components/police-map/side-panel'
+import { streetsToLight } from '@/lib/police-map/streets'
 import { updatedLabel, windowLabel } from '@/lib/police-map/format'
 import { PIN_COLOR } from '@/lib/police-map/map-style'
 import type { Address, StatsData } from '@/lib/types'
@@ -45,6 +46,8 @@ export function PoliceMap({ addresses, stats }: Props) {
   }, [])
 
   const selected = selection.id ? places.get(selection.id) : undefined
+  const streets = useMemo(() => (selected ? streetsToLight(selected) : []), [selected])
+  const counts = useMemo(() => addresses.map((a) => a.count), [addresses])
 
   return (
     <div className="police-map-stage overflow-hidden rounded-lg border border-border bg-card">
@@ -52,6 +55,7 @@ export function PoliceMap({ addresses, stats }: Props) {
         <IncidentMap
           addresses={addresses}
           selection={selection}
+          streets={streets}
           onSelect={(id) => select(id, false)}
         />
         <div className="pointer-events-none absolute bottom-7 left-3.5 z-10">
@@ -67,7 +71,12 @@ export function PoliceMap({ addresses, stats }: Props) {
         className="overflow-y-auto border-t border-border p-5 lg:border-l lg:border-t-0"
         aria-live="polite"
       >
-        <SidePanel place={selected} onClose={clear} />
+        <SidePanel
+          place={selected}
+          counts={counts}
+          year={stats.since.slice(0, 4)}
+          onClose={clear}
+        />
       </aside>
     </div>
   )

@@ -19,6 +19,7 @@ import {
   selectedRadius,
   sortByCalls,
 } from '@/lib/police-map/map-style'
+import { streetFilter } from '@/lib/police-map/streets'
 import type { Address } from '@/lib/types'
 
 export interface Selection {
@@ -30,6 +31,8 @@ export interface Selection {
 interface Props {
   addresses: Address[]
   selection: Selection
+  // Streets to light up, spelled as the map tiles spell them. None lights nothing.
+  streets: string[]
   onSelect: (id: string) => void
 }
 
@@ -37,7 +40,7 @@ type Status = 'loading' | 'ready' | 'error'
 
 const NO_PIN = ''
 
-export function IncidentMap({ addresses, selection, onSelect }: Props) {
+export function IncidentMap({ addresses, selection, streets, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const onSelectRef = useRef(onSelect)
@@ -82,6 +85,24 @@ export function IncidentMap({ addresses, selection, onSelect }: Props) {
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
         clusterProperties: { calls: ['+', ['get', 'n']] },
       })
+
+      // Under the pins, so a lit street never covers a circle. A style without the
+      // tiles' road names simply has nothing to light.
+      if (map.getSource('openmaptiles')) {
+        map.addLayer({
+          id: 'street',
+          type: 'line',
+          source: 'openmaptiles',
+          'source-layer': 'transportation_name',
+          filter: streetFilter([]),
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': SELECTED_COLOR,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 12, 4, 16, 8],
+            'line-opacity': 0.35,
+          },
+        })
+      }
 
       // One kind of circle, for a place and for a group of places alike. Its size and
       // opacity follow the calls it holds.
@@ -178,6 +199,7 @@ export function IncidentMap({ addresses, selection, onSelect }: Props) {
     const map = mapRef.current
     if (!map || status !== 'ready') return
     map.setFilter('selected', ['==', ['get', 'id'], selection.id ?? NO_PIN])
+    if (map.getLayer('street')) map.setFilter('street', streetFilter(streets))
     const place = selection.id ? places.get(selection.id) : undefined
     if (place && selection.fly) {
       map.flyTo({
@@ -186,7 +208,7 @@ export function IncidentMap({ addresses, selection, onSelect }: Props) {
         duration: 600,
       })
     }
-  }, [selection, status, places])
+  }, [selection, streets, status, places])
 
   return (
     <div className="relative h-full w-full">

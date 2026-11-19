@@ -32,6 +32,17 @@ export function windowLabel(since: string, generatedAt: string): string {
   return `${start} ${year} to ${end} ${endYear}`
 }
 
+// A call's time as the log printed it, in Lebanon's own time: "Nov 18, 2:05 pm". The log has
+// no zone, so the text is read as it is and never shifted.
+export function formatCallTime(reportedAt: string | null): string {
+  const match = reportedAt?.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!match) return 'Time not recorded'
+  const [, , month, day, hour, minute] = match
+  const h = Number(hour)
+  const clock = `${h % 12 === 0 ? 12 : h % 12}:${minute} ${h < 12 ? 'am' : 'pm'}`
+  return `${MONTHS[Number(month) - 1]} ${Number(day)}, ${clock}`
+}
+
 // "Nov 19, 2026"
 export function updatedLabel(generatedAt: string): string {
   return inNewHampshire(generatedAt, { month: 'short', day: 'numeric', year: 'numeric' })

@@ -377,7 +377,8 @@ def test_a_places_card_holds_its_counts_types_outcomes_and_latest_calls(db_sessi
     }
     # Only the calls at the place itself, so no alarm, check or traffic type.
     assert result["types"] == [["Welfare Check", 2], ["Suspicious Incident", 1]]
-    assert result["outcomes"] == [["Services Rendered", 3]]
+    # Every call counted here, so the false alarm shows, and the traffic stops do not.
+    assert result["outcomes"] == [["Services Rendered", 3], ["False Alarm", 1]]
     assert result["false_alarms"] == 1
     assert len(result["calls"]) == 5
     assert "traffic" not in {call["category"] for call in result["calls"]}

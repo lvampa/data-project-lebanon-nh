@@ -34,5 +34,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 echo "→ Generating report..."
+# The first day of police data the public site covers.
 cargo run -p report-gen --release -- \
+  --since 2026-01-01 \
   --output-dir "$REPO_ROOT/frontend/web/public/data"

@@ -26,6 +26,7 @@ QUERY = (
 )
 NOW = datetime(2026, 11, 19)
 SINCE = date(2026, 1, 1)
+LOGGED = date(2026, 6, 1)
 REPORTED = datetime(2026, 6, 1, 12)
 MIRACLE_MILE = ("43.6400", "-72.2500")
 
@@ -49,14 +50,18 @@ def add_place(session, normalized: str, coordinates, *raw_spellings: str) -> Non
 
 
 def add_entries(
-    session, location: str, *incident_types: str, reported_at: datetime = REPORTED
+    session,
+    location: str,
+    *incident_types: str,
+    log_date: date = LOGGED,
+    reported_at: datetime | None = REPORTED,
 ) -> None:
     for number, incident_type in enumerate(incident_types):
         session.add(
             LogEntry(
-                case_number=f"{location}-{incident_type}-{number}-{reported_at:%Y%m%d%H%M}",
+                case_number=f"{location}-{incident_type}-{number}-{log_date}",
                 source_url="https://example.com/log.pdf",
-                log_date=date(2026, 11, 1),
+                log_date=log_date,
                 reported_at=reported_at,
                 location=location,
                 incident_type=incident_type,
@@ -180,20 +185,25 @@ def test_pins_are_sorted_by_count_then_by_traffic_count(db_session):
 
 def test_an_entry_before_since_is_left_out_and_one_on_the_day_is_kept(db_session):
     add_place(db_session, "Mall", MIRACLE_MILE, "THE MALL")
-    add_entries(
-        db_session, "THE MALL", "Alarm", reported_at=datetime(2025, 12, 31, 23, 59)
-    )
-    add_entries(
-        db_session, "THE MALL", "Alarm", "Alarm", reported_at=datetime(2026, 1, 1)
-    )
+    add_entries(db_session, "THE MALL", "Alarm", log_date=date(2025, 12, 31))
+    add_entries(db_session, "THE MALL", "Alarm", "Alarm", log_date=date(2026, 1, 1))
 
     [pin] = rows(db_session)
 
     assert pin["count"] == 2
 
 
+def test_an_entry_with_no_reported_time_counts_by_its_log_date(db_session):
+    add_place(db_session, "Mall", MIRACLE_MILE, "THE MALL")
+    add_entries(db_session, "THE MALL", "Alarm", reported_at=None)
+
+    [pin] = rows(db_session)
+
+    assert pin["count"] == 1
+
+
 def test_a_place_with_only_entries_before_since_has_no_pin(db_session):
     add_place(db_session, "Old", MIRACLE_MILE, "OLD PLACE")
-    add_entries(db_session, "OLD PLACE", "Alarm", reported_at=datetime(2025, 12, 1))
+    add_entries(db_session, "OLD PLACE", "Alarm", log_date=date(2025, 12, 1))
 
     assert rows(db_session) == []

@@ -385,7 +385,6 @@ def test_a_places_card_holds_its_counts_types_outcomes_and_latest_calls(db_sessi
     # The incidents and the alarms, so the false alarm shows. A business check ending in
     # "Log Information" does not, and neither do the traffic stops.
     assert result["outcomes"] == [["Services Rendered", 3], ["False Alarm", 1]]
-    assert result["false_alarms"] == 1
     assert len(result["calls"]) == 5
     assert "traffic" not in {call["category"] for call in result["calls"]}
 
@@ -492,4 +491,3 @@ def test_a_card_with_nothing_to_list_has_empty_lists(db_session):
     result = card(db_session, "lebanon-ford-90-miracle-mile")
 
     assert (result["types"], result["outcomes"], result["calls"]) == ([], [], [])
-    assert result["false_alarms"] == 0

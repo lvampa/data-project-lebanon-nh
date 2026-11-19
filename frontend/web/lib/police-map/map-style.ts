@@ -10,10 +10,19 @@ export const CLUSTER_MAX_ZOOM = 15
 // A click lands anywhere within this many pixels of a pin's center.
 export const MIN_HIT_RADIUS = 20
 
+// What a group of pins adds up: the calls its pins hold, and the weight that sizes it.
+export const CLUSTER_PROPERTIES = {
+  calls: ['+', ['get', 'n']],
+  weight: ['+', ['get', 'w']],
+}
+
 export interface PinProperties {
   id: string
   name: string
+  // Its own calls, which a group sums for "N calls".
   n: number
+  // What sizes and shades it: its calls, or its traffic when it has no calls of its own.
+  w: number
   // 1 for a place with no calls of its own, only traffic on its street.
   t: 0 | 1
 }
@@ -51,7 +60,8 @@ export function pinsGeoJson(addresses: Address[]): PinCollection {
       properties: {
         id: address.id,
         name: pinName(address),
-        n: pinCalls(address),
+        n: address.count,
+        w: pinCalls(address),
         t: isTrafficOnly(address) ? 1 : 0,
       },
       geometry: { type: 'Point', coordinates: [address.lng, address.lat] },
@@ -59,11 +69,12 @@ export function pinsGeoJson(addresses: Address[]): PinCollection {
   }
 }
 
-// A single pin holds `n` calls, and a group of pins holds the sum of theirs. Both are
-// capped, and both are drawn as the same circle.
+// A single pin is sized by its weight, and a group of pins by the sum of theirs, so a group
+// of traffic-only pins does not shrink to the minimum. Both are capped, and both are drawn
+// as the same circle.
 const calls: ExpressionSpecification = [
   'min',
-  ['case', ['has', 'point_count'], ['get', 'calls'], ['get', 'n']],
+  ['case', ['has', 'point_count'], ['get', 'weight'], ['get', 'w']],
   CALLS_CAP,
 ]
 

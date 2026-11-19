@@ -56,7 +56,6 @@ export interface PlaceCard {
   types: [string, number][]
   // [disposition, calls], for the calls at the place itself.
   outcomes: [string, number][]
-  false_alarms: number
   calls: PlaceCall[]
 }
 

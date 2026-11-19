@@ -34,6 +34,7 @@ describe('pinsGeoJson', () => {
       id: 'lebanon-ford-90-miracle-mile',
       name: 'Lebanon Ford, 90 Miracle Mile',
       n: 12,
+      w: 12,
       t: 0,
     })
   })
@@ -58,7 +59,8 @@ describe('a place with traffic on its street and no calls of its own', () => {
     expect(isTrafficOnly(corner)).toBe(true)
     expect(pinCalls(corner)).toBe(7)
     const [feature] = pinsGeoJson([corner]).features
-    expect(feature.properties.n).toBe(7)
+    expect(feature.properties.n).toBe(0)
+    expect(feature.properties.w).toBe(7)
     expect(feature.properties.t).toBe(1)
   })
 

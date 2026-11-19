@@ -168,8 +168,8 @@ function CardDetails({
       ))}
       {!road && address.count > 0 && address.traffic_count > 0 && (
         <p className="mt-3 border-l-4 border-highlight pl-3 text-sm text-muted-foreground">
-          Not counted here: {address.traffic_count.toLocaleString('en-US')} traffic stops and
-          crashes{street ? ` on ${street}` : ''}, highlighted on the map.
+          Not counted here: {address.traffic_count.toLocaleString('en-US')} traffic calls
+          {street ? ` on ${street}` : ''}, highlighted on the map.
         </p>
       )}
 

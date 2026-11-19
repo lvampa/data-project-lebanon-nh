@@ -8,7 +8,12 @@ import { MapLoadingState } from '@project/ui/components/map/MapLoadingState'
 import { LEBANON_CENTER, LEBANON_ZOOM } from '@project/ui/lib/constants'
 import { callWord, nameOf, trafficNearby } from '@/lib/police-map/format'
 import { NO_PIN, pinLayers, streetLayer } from '@/lib/police-map/layers'
-import { CLUSTER_MAX_ZOOM, CLUSTER_RADIUS, pinsGeoJson } from '@/lib/police-map/map-style'
+import {
+  CLUSTER_MAX_ZOOM,
+  CLUSTER_PROPERTIES,
+  CLUSTER_RADIUS,
+  pinsGeoJson,
+} from '@/lib/police-map/map-style'
 import { streetFilter } from '@/lib/police-map/streets'
 import type { Address } from '@/lib/types'
 
@@ -71,7 +76,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
         cluster: true,
         clusterRadius: CLUSTER_RADIUS,
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
-        clusterProperties: { calls: ['+', ['get', 'n']] },
+        clusterProperties: CLUSTER_PROPERTIES,
       })
 
       // A style without the tiles' road names has no street to light.
@@ -95,6 +100,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
           point_count?: number
           calls?: number
           t?: number
+          w?: number
         }
         const label = document.createElement('div')
         const strong = document.createElement('strong')
@@ -105,7 +111,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
           strong.textContent = nameOf(props.name ?? '')
           label.append(
             strong,
-            ` · ${props.t ? trafficNearby(props.n ?? 0) : callWord(props.n ?? 0)}`,
+            ` · ${props.t ? trafficNearby(props.w ?? 0) : callWord(props.n ?? 0)}`,
           )
         }
         tip

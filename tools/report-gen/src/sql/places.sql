@@ -147,14 +147,6 @@ SELECT
                 LIMIT 5
             ) top_outcomes
         ),
-        -- False alarms are alarm calls, so they are counted over every call counted here.
-        'false_alarms', (
-            SELECT COUNT(*)
-            FROM tagged
-            WHERE pin_id = pins.id
-              AND disposition ILIKE 'False Alarm'
-              AND (kind = 'road' OR category <> 'traffic')
-        ),
         'calls', (
             SELECT COALESCE(jsonb_agg(jsonb_build_object(
                 'reported_at', reported_at,

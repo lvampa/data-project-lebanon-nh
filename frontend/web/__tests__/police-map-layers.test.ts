@@ -1,7 +1,7 @@
 import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec'
 import { describe, expect, it } from 'vitest'
 import { NO_PIN, pinLayers, streetLayer } from '@/lib/police-map/layers'
-import { CLUSTER_MAX_ZOOM, CLUSTER_RADIUS } from '@/lib/police-map/map-style'
+import { CLUSTER_MAX_ZOOM, CLUSTER_PROPERTIES, CLUSTER_RADIUS } from '@/lib/police-map/map-style'
 
 // The map refuses a layer the style spec rejects, and then nothing on it works. So every
 // layer the page adds is checked here, in a minimal style that has its sources.
@@ -15,7 +15,7 @@ function styleWith(layers: ReturnType<typeof pinLayers>) {
         cluster: true,
         clusterRadius: CLUSTER_RADIUS,
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
-        clusterProperties: { calls: ['+', ['get', 'n']] },
+        clusterProperties: CLUSTER_PROPERTIES,
       },
       openmaptiles: { type: 'vector' as const, url: 'https://example.com/tiles.json' },
     },

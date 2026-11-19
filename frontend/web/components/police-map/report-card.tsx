@@ -136,7 +136,10 @@ function CardDetails({
   const kinds = categoriesFor(address.kind, card.categories)
   // A place lists the incidents at the place, and a street lists every call.
   const otherTypes = remainder(card.types, road ? address.count : card.categories.premises)
-  const otherOutcomes = remainder(card.outcomes, address.count)
+  const otherOutcomes = remainder(
+    card.outcomes,
+    road ? address.count : card.categories.premises + card.categories.alarms,
+  )
 
   return (
     <>

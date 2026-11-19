@@ -359,7 +359,12 @@ def test_a_places_card_holds_its_counts_types_outcomes_and_latest_calls(db_sessi
     add_entries(
         db_session, "LEBANON FORD", "FD Alarm Work/Test", disposition="False Alarm"
     )
-    add_entries(db_session, "LEBANON FORD", "BUSINESS CHECK - CLOSED")
+    add_entries(
+        db_session,
+        "LEBANON FORD",
+        "BUSINESS CHECK - CLOSED",
+        disposition="Log Information",
+    )
     add_entries(db_session, "LEBANON FORD", "Motor Vehicle Stop", "Motor Vehicle Stop")
 
     result = card(db_session, "lebanon-ford-90-miracle-mile")
@@ -377,7 +382,8 @@ def test_a_places_card_holds_its_counts_types_outcomes_and_latest_calls(db_sessi
     }
     # Only the calls at the place itself, so no alarm, check or traffic type.
     assert result["types"] == [["Welfare Check", 2], ["Suspicious Incident", 1]]
-    # Every call counted here, so the false alarm shows, and the traffic stops do not.
+    # The incidents and the alarms, so the false alarm shows. A business check ending in
+    # "Log Information" does not, and neither do the traffic stops.
     assert result["outcomes"] == [["Services Rendered", 3], ["False Alarm", 1]]
     assert result["false_alarms"] == 1
     assert len(result["calls"]) == 5

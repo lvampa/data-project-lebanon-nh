@@ -2,7 +2,7 @@
 import { useId, useMemo, useState, type KeyboardEvent } from 'react'
 import { nameOf } from '@/lib/police-map/format'
 import { pinName } from '@/lib/police-map/map-style'
-import { searchPlaces } from '@/lib/police-map/search'
+import { resultCount, searchPlaces } from '@/lib/police-map/search'
 import type { Address } from '@/lib/types'
 
 interface Props {
@@ -85,9 +85,7 @@ export function PlaceSearch({ addresses, onChoose }: Props) {
               className="flex cursor-pointer justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm aria-selected:bg-secondary"
             >
               {pinName(place)}
-              <span className="font-mono text-xs text-muted-foreground">
-                {place.count.toLocaleString('en-US')}
-              </span>
+              <span className="font-mono text-xs text-muted-foreground">{resultCount(place)}</span>
             </li>
           ))}
         </ul>

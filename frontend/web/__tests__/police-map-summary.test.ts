@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { searchPlaces } from '@/lib/police-map/search'
+import { resultCount, searchPlaces } from '@/lib/police-map/search'
 import { busiestDay, busiestHour, busiestPlaces, hourLabel } from '@/lib/police-map/summary'
 import type { Address } from '@/lib/types'
 
@@ -66,6 +66,20 @@ describe('busiestPlaces', () => {
   it('does not reorder the list it is given', () => {
     busiestPlaces(PLACES, 2)
     expect(PLACES.map((p) => p.id)).toEqual(['a', 'b', 'c', 'd'])
+  })
+})
+
+describe('a traffic-only place in search', () => {
+  const corner = { ...place('t', 'Corner Shop, Glen Rd', 0), traffic_count: 62 }
+
+  it('shows its traffic count with a label', () => {
+    expect(resultCount(corner)).toBe('62 traffic')
+    expect(resultCount(place('a', 'Mall', 1200))).toBe('1,200')
+  })
+
+  it('sorts by that count', () => {
+    const found = searchPlaces([place('p', 'Glen Rd Shop', 10), corner], 'glen')
+    expect(found.map((p) => p.id)).toEqual(['t', 'p'])
   })
 })
 

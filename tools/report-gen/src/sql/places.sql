@@ -141,7 +141,7 @@ SELECT
                 FROM tagged
                 WHERE pin_id = pins.id
                   AND disposition IS NOT NULL
-                  AND (kind = 'road' OR category <> 'traffic')
+                  AND (kind = 'road' OR category IN ('premises', 'alarms'))
                 GROUP BY disposition
                 ORDER BY n DESC, disposition
                 LIMIT 5

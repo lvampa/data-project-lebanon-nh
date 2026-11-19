@@ -53,7 +53,8 @@ Everything else is a place.
 - **A place with only traffic keeps its pin.**
   It is sized and shaded by its traffic calls, its tooltip and card say "traffic calls nearby", and it has no rank.
 - **The lists on a card add up.**
-  Outcomes cover every call counted at the pin, and the incident list covers the calls at the place itself.
+  For a place, outcomes and incidents cover the calls at the place itself, with alarms in the outcomes so false alarms show.
+  For a street, both cover every call.
   What the top rows leave out is shown as "Other".
 - **Plain words, with the log's words on hover.**
   Common incident types and outcomes get a plain label, and the original text shows on hover.

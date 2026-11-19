@@ -16,6 +16,12 @@ export function IncidentMap({ addresses }: Props) {
   useEffect(() => {
     if (!containerRef.current) return
 
+    // MapLibre 6 finds its worker next to its own script, which breaks once Next bundles
+    // it. This lets the bundler emit the worker and hand MapLibre the real URL.
+    maplibregl.setWorkerUrl(
+      new URL('maplibre-gl/dist/maplibre-gl-worker.mjs', import.meta.url).href,
+    )
+
     const map = new maplibregl.Map({
       container: containerRef.current,
       style:

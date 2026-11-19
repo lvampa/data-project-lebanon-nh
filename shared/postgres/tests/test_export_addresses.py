@@ -131,6 +131,26 @@ def test_the_road_traffic_prefix_ignores_case_and_matches_the_start_only(db_sess
     assert (pin["count"], pin["traffic_count"]) == (1, 2)
 
 
+def test_an_entry_with_no_incident_type_counts_with_the_place(db_session):
+    add_place(db_session, "Mall", MIRACLE_MILE, "THE MALL")
+    db_session.add(
+        LogEntry(
+            case_number="no-type",
+            source_url="https://example.com/log.pdf",
+            log_date=date(2026, 11, 1),
+            location="THE MALL",
+            incident_type=None,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+    )
+    db_session.flush()
+
+    [pin] = rows(db_session)
+
+    assert (pin["count"], pin["traffic_count"]) == (1, 0)
+
+
 def test_pins_are_sorted_by_count_then_by_traffic_count(db_session):
     add_place(db_session, "Quiet", ("43.61", "-72.21"), "QUIET")
     add_place(db_session, "Busy", ("43.62", "-72.22"), "BUSY")

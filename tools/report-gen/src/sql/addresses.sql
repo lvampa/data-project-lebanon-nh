@@ -1,20 +1,19 @@
 -- One row per place: log entries are grouped by the place's normalized address and
 -- coordinates, so two spellings of one place make one pin.
-WITH road_traffic (prefix) AS (
-    -- The location names a landmark, such as "LEBANON FORD - MIRACLE MILE", but these
-    -- events happened on the road, so they are not counted against the place. Parking
-    -- lot types (MVA Parking Lot/Private, Parking in Parking Lot) stay with the place
-    -- on purpose. A type matches when it starts with one of these, in any case.
-    VALUES
-        ('Motor Vehicle Stop'),
-        ('MV Complaint'),
-        ('Assist Motorist'),
-        ('MVA Roadway'),
-        ('Equip Failure Traffic Light'),
-        ('Road Hazard'),
-        ('Parking in Roadway'),
-        ('Detail Crosswalk'),
-        ('Detail Traffic Control')
+WITH road_traffic AS (
+    -- The location names a landmark, but these events happened on the road. Each is a
+    -- prefix, matched in any case. None holds a _ or %, which ILIKE reads as wildcards.
+    SELECT ARRAY[
+        'Motor Vehicle Stop%',
+        'MV Complaint%',
+        'Assist Motorist%',
+        'MVA Roadway%',
+        'Equip Failure Traffic Light%',
+        'Road Hazard%',
+        'Parking in Roadway%',
+        'Detail Crosswalk%',
+        'Detail Traffic Control%'
+    ] AS patterns
 ),
 entries AS (
     SELECT
@@ -22,20 +21,17 @@ entries AS (
         an.normalized_address,
         an.lat,
         an.lng,
-        EXISTS (
-            SELECT 1
-            FROM road_traffic rt
-            WHERE starts_with(lower(le.incident_type), lower(rt.prefix))
-        ) AS is_road_traffic
+        COALESCE(le.incident_type ILIKE ANY (rt.patterns), false) AS is_road_traffic
     FROM log_entries le
     JOIN address_normalizations an
         ON le.location = an.raw_address
+    CROSS JOIN road_traffic rt
     WHERE le.parse_error = false
       AND an.lat IS NOT NULL
       AND an.lng IS NOT NULL
 )
 SELECT
-    -- The most common spelling of the place, the first alphabetically on a tie.
+    -- The most common spelling of the place, the first in sort order on a tie.
     MODE() WITHIN GROUP (ORDER BY location)     AS raw_address,
     normalized_address,
     COUNT(*) FILTER (WHERE NOT is_road_traffic) AS count,
@@ -44,4 +40,4 @@ SELECT
     lng
 FROM entries
 GROUP BY normalized_address, lat, lng
-ORDER BY count DESC, traffic_count DESC
+ORDER BY count DESC, traffic_count DESC, normalized_address

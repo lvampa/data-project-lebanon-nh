@@ -166,7 +166,6 @@ pub async fn fetch_incidents(pool: &PgPool) -> Result<Vec<Incident>> {
 }
 
 pub async fn fetch_addresses(pool: &PgPool) -> Result<Vec<Address>> {
-    // The query is a file so a Python test can run it against a test database.
     sqlx::query_as::<_, Address>(include_str!("sql/addresses.sql"))
         .fetch_all(pool)
         .await

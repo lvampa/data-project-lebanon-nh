@@ -16,7 +16,7 @@ import logfire
 from bootstrap import bootstrap
 from ingest.pdf_urls import utc_now
 from postgres import get_engine, open_session
-from postgres.lock import police_log_lock
+from postgres.lock import POLICE_LOG_PARSE, advisory_lock
 from postgres.models.pdf_url import PdfUrl
 from scrapy.crawler import CrawlerProcess
 from scrapy.utils.project import get_project_settings
@@ -57,10 +57,10 @@ def count_errors_since(session: Session, started_at: datetime) -> int:
 def main(limit: int) -> int:
     # The crawl's LogfireExtension bootstraps again, and the first call wins.
     bootstrap("process-urls")
-    with police_log_lock(get_engine()) as acquired:
+    with advisory_lock(get_engine(), POLICE_LOG_PARSE) as acquired:
         if not acquired:
             print(
-                "Another police log job (process or reprocess) is running. "
+                "Another process or reprocess job is running. "
                 "Wait for it to finish, then run this again.",
                 file=sys.stderr,
             )

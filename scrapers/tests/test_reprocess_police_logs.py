@@ -8,7 +8,7 @@ from maintenance import reprocess_police_logs
 from maintenance.reprocess_police_logs import ReprocessCounts, reprocess
 from mongo.archive import ArchivedResponse, RawArchive, content_hash
 from parsers.police_log import EXTRACTOR_VERSION, PARSER_VERSION
-from postgres.lock import police_log_lock
+from postgres.lock import POLICE_LOG_PARSE, advisory_lock
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
@@ -482,10 +482,10 @@ def test_main_does_not_run_while_another_police_log_job_holds_the_lock(
     add_url(db_session, URL_A, day=date(2026, 5, 11))
     archive_pdf(RawArchive(raw_sources, batch_size=1), URL_A, log_text(HARASSMENT))
 
-    with police_log_lock(test_engine) as acquired:
+    with advisory_lock(test_engine, POLICE_LOG_PARSE) as acquired:
         assert acquired
 
         assert reprocess_police_logs.main(["--all"]) == 1
 
     assert stored(db_session) == {}
-    assert "Another police log job" in capsys.readouterr().err
+    assert "Another process or reprocess job is running" in capsys.readouterr().err

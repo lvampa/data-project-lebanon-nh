@@ -28,7 +28,7 @@ from ingest.police_log import archive_entry_texts
 from mongo.archive import RawArchive, RawCollection, archive_collection, stored_body
 from mongo.client import get_db
 from postgres import get_engine, open_session
-from postgres.lock import police_log_lock
+from postgres.lock import POLICE_LOG_PARSE, advisory_lock
 from postgres.models.pdf_url import PdfUrl
 from pymongo.errors import PyMongoError
 from sqlalchemy import select
@@ -186,10 +186,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    with police_log_lock(get_engine()) as acquired:
+    with advisory_lock(get_engine(), POLICE_LOG_PARSE) as acquired:
         if not acquired:
             print(
-                "Another police log job (process or reprocess) is running. "
+                "Another process or reprocess job is running. "
                 "Wait for it to finish, then run this again.",
                 file=sys.stderr,
             )

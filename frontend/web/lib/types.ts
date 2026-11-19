@@ -37,6 +37,11 @@ export interface PlaceCall {
   call_source: string | null
   category: string
   source_url: string
+  case_number: string
+  dispatched_at: string | null
+  arrived_at: string | null
+  cleared_at: string | null
+  officer: string | null
 }
 
 // data/places/<id>.json: the report card for one pin.

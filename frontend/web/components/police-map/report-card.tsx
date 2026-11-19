@@ -1,13 +1,14 @@
 'use client'
 import { useState } from 'react'
 import { HowWeCount } from '@/components/police-map/how-we-count'
+import { CallRow } from '@/components/police-map/call-row'
 import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
 import type { CardState } from '@/components/police-map/use-place-card'
-import { categoriesFor, categoryOf } from '@/lib/police-map/categories'
-import { formatCallTime, nameOf, streetOf } from '@/lib/police-map/format'
+import { categoriesFor } from '@/lib/police-map/categories'
+import { nameOf, streetOf } from '@/lib/police-map/format'
 import { pinName } from '@/lib/police-map/map-style'
 import { rankLine } from '@/lib/police-map/rank'
-import type { Address, PlaceCall, PlaceCard } from '@/lib/types'
+import type { Address, PlaceCard } from '@/lib/types'
 
 interface Props {
   address: Address
@@ -181,44 +182,11 @@ function CardDetails({
           <h3 className={SECTION_HEADING}>Latest calls</h3>
           <ol>
             {card.calls.map((call) => (
-              <CallRow
-                key={`${call.source_url}-${call.reported_at}-${call.incident_type}`}
-                call={call}
-              />
+              <CallRow key={call.case_number} call={call} />
             ))}
           </ol>
         </>
       )}
     </>
-  )
-}
-
-function CallRow({ call }: { call: PlaceCall }) {
-  const kind = categoryOf(call.category)
-  return (
-    <li className="flex gap-2.5 border-b border-border py-2 text-sm">
-      <span
-        className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm"
-        style={{ background: kind.color }}
-        title={kind.label}
-      />
-      <time className="w-24 shrink-0 font-mono text-xs text-muted-foreground">
-        {formatCallTime(call.reported_at)}
-      </time>
-      <div>
-        <a
-          href={call.source_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-primary hover:underline"
-        >
-          <TypeLabel type={call.incident_type} />
-        </a>
-        <small className="mt-px block text-xs text-muted-foreground">
-          <OutcomeLabel disposition={call.disposition} />
-          {call.call_source ? ` · ${call.call_source}` : ''}
-        </small>
-      </div>
-    </li>
   )
 }

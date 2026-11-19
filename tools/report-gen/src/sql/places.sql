@@ -10,6 +10,11 @@ WITH entries AS (
         le.disposition,
         le.call_source,
         le.source_url,
+        le.case_number,
+        le.dispatched_at,
+        le.arrived_at,
+        le.cleared_at,
+        le.officer,
         an.normalized_address,
         an.lat,
         an.lng,
@@ -147,11 +152,17 @@ SELECT
                 'disposition', disposition,
                 'call_source', call_source,
                 'category', category,
-                'source_url', source_url
+                'source_url', source_url,
+                'case_number', case_number,
+                'dispatched_at', dispatched_at,
+                'arrived_at', arrived_at,
+                'cleared_at', cleared_at,
+                'officer', officer
             ) ORDER BY reported_at DESC NULLS LAST), '[]')
             FROM (
                 SELECT reported_at, incident_type, disposition, call_source, category,
-                       source_url
+                       source_url, case_number, dispatched_at, arrived_at, cleared_at,
+                       officer
                 FROM tagged
                 WHERE pin_id = pins.id
                   AND (kind = 'road' OR category <> 'traffic')

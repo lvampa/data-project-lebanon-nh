@@ -322,6 +322,57 @@ def test_a_places_card_holds_its_counts_types_outcomes_and_latest_calls(db_sessi
     assert "traffic" not in {call["category"] for call in result["calls"]}
 
 
+def test_a_call_carries_its_case_times_and_officer(db_session):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
+    add_entries(db_session, "LEBANON FORD", "Welfare Check")
+    entry = db_session.query(LogEntry).one()
+    entry.dispatched_at = datetime(2026, 6, 1, 12, 2)
+    entry.arrived_at = datetime(2026, 6, 1, 12, 9)
+    entry.cleared_at = datetime(2026, 6, 1, 12, 40)
+    entry.officer = "C. Day"
+    db_session.flush()
+
+    [call] = card(db_session, "lebanon-ford-90-miracle-mile")["calls"]
+
+    assert call["case_number"] == entry.case_number
+    assert call["dispatched_at"] == "2026-06-01T12:02:00"
+    assert call["arrived_at"] == "2026-06-01T12:09:00"
+    assert call["cleared_at"] == "2026-06-01T12:40:00"
+    assert call["officer"] == "C. Day"
+
+
+def test_a_call_with_no_times_or_officer_has_nulls(db_session):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
+    add_entries(db_session, "LEBANON FORD", "Welfare Check")
+
+    [call] = card(db_session, "lebanon-ford-90-miracle-mile")["calls"]
+
+    assert call["dispatched_at"] is None
+    assert call["arrived_at"] is None
+    assert call["cleared_at"] is None
+    assert call["officer"] is None
+
+
+def test_ids_do_not_depend_on_counts(db_session):
+    add_place(db_session, "Main St, Lebanon", ("43.60", "-72.20"), "MAIN A")
+    add_place(db_session, "Main St, Lebanon", ("43.61", "-72.21"), "MAIN B")
+    add_entries(db_session, "MAIN A", "Alarm")
+    add_entries(db_session, "MAIN B", "Alarm")
+    before = {pin["id"]: pin["lat"] for pin in rows(db_session)}
+
+    add_entries(
+        db_session,
+        "MAIN B",
+        "Alarm",
+        "Alarm",
+        "Alarm",
+        reported_at=datetime(2026, 7, 1),
+    )
+    after = {pin["id"]: pin["lat"] for pin in rows(db_session)}
+
+    assert before == after
+
+
 def test_a_places_card_lists_ten_latest_calls_newest_first(db_session):
     add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
     for day in range(1, 13):
@@ -345,6 +396,11 @@ def test_a_places_card_lists_ten_latest_calls_newest_first(db_session):
         "call_source",
         "category",
         "source_url",
+        "case_number",
+        "dispatched_at",
+        "arrived_at",
+        "cleared_at",
+        "officer",
     }
 
 

@@ -7,18 +7,8 @@ import { MapErrorState } from '@project/ui/components/map/MapErrorState'
 import { MapLoadingState } from '@project/ui/components/map/MapLoadingState'
 import { LEBANON_CENTER, LEBANON_ZOOM } from '@project/ui/lib/constants'
 import { callWord, nameOf } from '@/lib/police-map/format'
-import {
-  CLUSTER_MAX_ZOOM,
-  CLUSTER_RADIUS,
-  PIN_COLOR,
-  SELECTED_COLOR,
-  hitRadius,
-  pinOpacity,
-  pinRadius,
-  pinsGeoJson,
-  selectedRadius,
-  sortByCalls,
-} from '@/lib/police-map/map-style'
+import { NO_PIN, pinLayers, streetLayer } from '@/lib/police-map/layers'
+import { CLUSTER_MAX_ZOOM, CLUSTER_RADIUS, pinsGeoJson } from '@/lib/police-map/map-style'
 import { streetFilter } from '@/lib/police-map/streets'
 import type { Address } from '@/lib/types'
 
@@ -37,8 +27,6 @@ interface Props {
 }
 
 type Status = 'loading' | 'ready' | 'error'
-
-const NO_PIN = ''
 
 export function IncidentMap({ addresses, selection, streets, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -86,56 +74,9 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
         clusterProperties: { calls: ['+', ['get', 'n']] },
       })
 
-      // Under the pins, so a lit street never covers a circle. A style without the
-      // tiles' road names simply has nothing to light.
-      if (map.getSource('openmaptiles')) {
-        map.addLayer({
-          id: 'street',
-          type: 'line',
-          source: 'openmaptiles',
-          'source-layer': 'transportation_name',
-          filter: streetFilter([]),
-          layout: { 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': SELECTED_COLOR,
-            'line-width': ['interpolate', ['linear'], ['zoom'], 12, 4, 16, 8],
-            'line-opacity': 0.35,
-          },
-        })
-      }
-
-      // One kind of circle, for a place and for a group of places alike. Its size and
-      // opacity follow the calls it holds.
-      map.addLayer({
-        id: 'pins',
-        type: 'circle',
-        source: 'pins',
-        layout: { 'circle-sort-key': sortByCalls },
-        paint: {
-          'circle-radius': pinRadius,
-          'circle-color': PIN_COLOR,
-          'circle-opacity': pinOpacity,
-          'circle-blur': 0.28,
-        },
-      })
-      map.addLayer({
-        id: 'selected',
-        type: 'circle',
-        source: 'pins',
-        filter: ['==', ['get', 'id'], NO_PIN],
-        paint: {
-          'circle-radius': selectedRadius,
-          'circle-color': 'rgba(0,0,0,0)',
-          'circle-stroke-color': SELECTED_COLOR,
-          'circle-stroke-width': 2.5,
-        },
-      })
-      map.addLayer({
-        id: 'hit',
-        type: 'circle',
-        source: 'pins',
-        paint: { 'circle-radius': hitRadius, 'circle-opacity': 0 },
-      })
+      // A style without the tiles' road names has no street to light.
+      if (map.getSource('openmaptiles')) map.addLayer(streetLayer('openmaptiles'))
+      pinLayers('pins').forEach((layer) => map.addLayer(layer))
 
       const tip = new maplibregl.Popup({
         closeButton: false,
@@ -143,7 +84,8 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
         className: 'map-tip',
         offset: 10,
       })
-      map.on('mouseenter', 'hit', (event) => {
+      // On every move, so the tip follows the pin under the cursor when pins overlap.
+      map.on('mousemove', 'hit', (event) => {
         map.getCanvas().style.cursor = 'pointer'
         const feature = event.features?.[0]
         if (!feature || feature.geometry.type !== 'Point') return

@@ -57,17 +57,25 @@ const baseRadius: ExpressionSpecification = [
   ...[1, 7, 2, 8.5, 5, 12, 10, 17, 20, 25, 40, 36, 55, 46],
 ]
 
-export const pinRadius: ExpressionSpecification = [
-  'interpolate',
-  ['linear'],
-  ['zoom'],
-  11,
-  ['*', 0.8, baseRadius],
-  14,
-  baseRadius,
-  17,
-  ['*', 1.2, baseRadius],
-]
+// A zoom expression may only be the input of a top-level interpolate, so every radius is
+// one interpolate over zoom with its arithmetic inside each stop.
+function radiusByZoom(
+  stop: (radius: ExpressionSpecification) => ExpressionSpecification,
+): ExpressionSpecification {
+  return [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    11,
+    stop(['*', 0.8, baseRadius]),
+    14,
+    stop(baseRadius),
+    17,
+    stop(['*', 1.2, baseRadius]),
+  ]
+}
+
+export const pinRadius = radiusByZoom((radius) => radius)
 
 export const pinOpacity: ExpressionSpecification = [
   'interpolate',
@@ -78,6 +86,6 @@ export const pinOpacity: ExpressionSpecification = [
 
 export const sortByCalls: ExpressionSpecification = ['-', calls]
 
-export const selectedRadius: ExpressionSpecification = ['+', 4, pinRadius]
+export const selectedRadius = radiusByZoom((radius) => ['+', 4, radius])
 
-export const hitRadius: ExpressionSpecification = ['max', pinRadius, MIN_HIT_RADIUS]
+export const hitRadius = radiusByZoom((radius) => ['max', radius, MIN_HIT_RADIUS])

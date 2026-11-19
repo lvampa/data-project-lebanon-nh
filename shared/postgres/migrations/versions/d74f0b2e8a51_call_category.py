@@ -43,7 +43,7 @@ LANGUAGE sql IMMUTABLE AS $$
             'Directed Patrol%',
             'FOOT PATROL%'
         ]) THEN 'checks'
-        WHEN incident_type ILIKE '%alarm%' OR call_source = 'Alarm System'
+        WHEN incident_type ILIKE '%alarm%' OR call_source ILIKE 'Alarm System'
             THEN 'alarms'
         WHEN incident_type ILIKE ANY (ARRAY[
             'Paperwork%',

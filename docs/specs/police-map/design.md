@@ -44,6 +44,10 @@ Everything else is a place.
   The map needs every pin's position and count at once, and a card needs far more detail for one pin.
 - **The category lives in one SQL function.**
   Every query that needs a category calls it, so the traffic prefix list exists once.
+  Editing a category list means a new migration that replaces the function.
+- **A road is a bare street, an intersection or a highway.**
+  The AI's kind alone is not trusted, since it sometimes calls a bare street a place, so the text is checked too: no ", " and no leading house number.
+  Pin ids that share a slug get a suffix after "--", which no slug contains, so ids stay unique and keep pointing at the same pin as counts change.
 - **Plain words, with the log's words on hover.**
   Common incident types and outcomes get a plain label, and the original text shows on hover.
 - **The URL carries the selection**, so a card can be shared.

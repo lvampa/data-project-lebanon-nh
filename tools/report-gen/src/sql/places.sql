@@ -1,6 +1,8 @@
 -- One row per pin, with its report card as JSON. Calls are grouped by the place's
 -- normalized address and coordinates, so two spellings of one place make one pin.
--- A road has no ", " in its address, such as "Miracle Mile" or "Main St and Elm St".
+-- A road is an intersection or a highway, or a bare street name: no ", " and no house
+-- number. "12 Main St" and "Lebanon Ford, Miracle Mile" are places. The AI's own kind
+-- is not trusted alone, since it sometimes calls a bare street a place.
 -- A road counts every call. A place leaves out traffic, which happened on the road.
 WITH entries AS (
     SELECT
@@ -16,6 +18,7 @@ WITH entries AS (
         le.cleared_at,
         le.officer,
         an.normalized_address,
+        an.kind AS address_kind,
         an.lat,
         an.lng,
         call_category(le.incident_type, le.call_source) AS category
@@ -35,9 +38,12 @@ groups AS (
         -- The most common spelling of the place, the first in sort order on a tie.
         MODE() WITHIN GROUP (ORDER BY location) AS raw_address,
         CASE
-            WHEN normalized_address IS NULL OR strpos(normalized_address, ', ') > 0
-                THEN 'place'
-            ELSE 'road'
+            WHEN bool_or(address_kind IN ('intersection', 'highway'))
+                OR (normalized_address IS NOT NULL
+                    AND strpos(normalized_address, ', ') = 0
+                    AND normalized_address !~ '^\d')
+                THEN 'road'
+            ELSE 'place'
         END AS kind
     FROM entries
     GROUP BY normalized_address, lat, lng
@@ -57,14 +63,17 @@ slugs AS (
     FROM groups
 ),
 pins AS (
-    -- The slug is the id. Two pins that share one get a number, so ids stay unique.
+    -- The slug is the id. Pins that share one get a number after "--", which a slug
+    -- never holds, so a suffixed id cannot equal another pin's slug. The order is by
+    -- place and not by count, so a shared link keeps pointing at the same pin.
     SELECT
         slugs.*,
         CASE
-            WHEN row_number() OVER (PARTITION BY slug ORDER BY lat, lng) = 1 THEN slug
-            ELSE slug || '-' || row_number() OVER (PARTITION BY slug ORDER BY lat, lng)
+            WHEN row_number() OVER w = 1 THEN slug
+            ELSE slug || '--' || row_number() OVER w
         END AS id
     FROM slugs
+    WINDOW w AS (PARTITION BY slug ORDER BY lat, lng, normalized_address)
 ),
 tagged AS (
     SELECT entries.*, pins.id AS pin_id, pins.kind
@@ -131,7 +140,7 @@ SELECT
                 FROM tagged
                 WHERE pin_id = pins.id
                   AND disposition IS NOT NULL
-                  AND category = 'premises'
+                  AND (kind = 'road' OR category = 'premises')
                 GROUP BY disposition
                 ORDER BY n DESC, disposition
                 LIMIT 5
@@ -142,7 +151,7 @@ SELECT
             SELECT COUNT(*)
             FROM tagged
             WHERE pin_id = pins.id
-              AND disposition = 'False Alarm'
+              AND disposition ILIKE 'False Alarm'
               AND (kind = 'road' OR category <> 'traffic')
         ),
         'calls', (

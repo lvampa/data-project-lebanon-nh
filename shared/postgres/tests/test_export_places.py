@@ -33,7 +33,9 @@ MIRACLE_MILE = ("43.6400", "-72.2500")
 FORD = "Lebanon Ford, 90 Miracle Mile"
 
 
-def add_place(session, normalized: str, coordinates, *raw_spellings: str) -> None:
+def add_place(
+    session, normalized: str, coordinates, *raw_spellings: str, kind: str = "address"
+) -> None:
     lat, lng = coordinates
     for raw in raw_spellings:
         session.add(
@@ -42,7 +44,7 @@ def add_place(session, normalized: str, coordinates, *raw_spellings: str) -> Non
                 normalized_address=normalized,
                 lat=float(lat),
                 lng=float(lng),
-                kind="place",
+                kind=kind,
                 source="ai",
                 created_at=NOW,
                 updated_at=NOW,
@@ -106,6 +108,7 @@ def card(session, pin_id: str) -> dict:
         ("Supervisory Alarm", None, "alarms"),
         ("Suspicious Incident", "Alarm System", "alarms"),
         (None, "Alarm System", "alarms"),
+        (None, "ALARM SYSTEM", "alarms"),
         ("Paperwork Service Subpoena", None, "admin"),
         ("Fingerprinting", None, "admin"),
         ("Civil Subpoena Served", None, "admin"),
@@ -133,7 +136,7 @@ def test_call_category(db_session, incident_type, call_source, category):
 def test_two_spellings_of_one_place_make_one_pin_named_for_the_common_one(
     db_session,
 ):
-    add_place(db_session, "1 Main St, Lebanon", MIRACLE_MILE, "1 MAIN ST", "ONE MAIN")
+    add_place(db_session, "1 Main St", MIRACLE_MILE, "1 MAIN ST", "ONE MAIN")
     add_entries(db_session, "1 MAIN ST", "Alarm", "Alarm", "Alarm")
     add_entries(db_session, "ONE MAIN", "Alarm")
 
@@ -141,7 +144,7 @@ def test_two_spellings_of_one_place_make_one_pin_named_for_the_common_one(
 
     assert pin["raw_address"] == "1 MAIN ST"
     assert (pin["normalized_address"], pin["count"], pin["traffic_count"]) == (
-        "1 Main St, Lebanon",
+        "1 Main St",
         4,
         0,
     )
@@ -176,7 +179,7 @@ def test_a_road_counts_every_call_including_traffic(db_session):
 
 
 def test_a_place_with_only_traffic_still_has_a_pin(db_session):
-    add_place(db_session, "Route 12A, Lebanon", MIRACLE_MILE, "RT 12A")
+    add_place(db_session, "Shop, Route 12A", MIRACLE_MILE, "RT 12A")
     add_entries(db_session, "RT 12A", "Detail Traffic Control", "Road Hazard")
 
     [pin] = rows(db_session)
@@ -188,7 +191,7 @@ def test_a_place_with_only_traffic_still_has_a_pin(db_session):
     "incident_type", ["MVA Parking Lot/Private", "Parking in Parking Lot"]
 )
 def test_a_parking_lot_type_stays_with_the_place(db_session, incident_type):
-    add_place(db_session, "Mall, Lebanon", MIRACLE_MILE, "THE MALL")
+    add_place(db_session, "Mall, Miracle Mile", MIRACLE_MILE, "THE MALL")
     add_entries(db_session, "THE MALL", incident_type)
 
     [pin] = rows(db_session)
@@ -197,7 +200,7 @@ def test_a_parking_lot_type_stays_with_the_place(db_session, incident_type):
 
 
 def test_an_entry_with_no_incident_type_counts_with_the_place(db_session):
-    add_place(db_session, "Mall, Lebanon", MIRACLE_MILE, "THE MALL")
+    add_place(db_session, "Mall, Miracle Mile", MIRACLE_MILE, "THE MALL")
     add_entries(db_session, "THE MALL", None)
 
     [pin] = rows(db_session)
@@ -206,17 +209,17 @@ def test_an_entry_with_no_incident_type_counts_with_the_place(db_session):
 
 
 def test_pins_are_sorted_by_count_then_by_traffic_count(db_session):
-    add_place(db_session, "Quiet, Lebanon", ("43.61", "-72.21"), "QUIET")
-    add_place(db_session, "Busy, Lebanon", ("43.62", "-72.22"), "BUSY")
-    add_place(db_session, "Road, Lebanon", ("43.63", "-72.23"), "ROAD")
+    add_place(db_session, "Quiet Shop, Miracle Mile", ("43.61", "-72.21"), "QUIET")
+    add_place(db_session, "Busy Shop, Miracle Mile", ("43.62", "-72.22"), "BUSY")
+    add_place(db_session, "Road Shop, Miracle Mile", ("43.63", "-72.23"), "ROAD")
     add_entries(db_session, "QUIET", "Alarm")
     add_entries(db_session, "BUSY", "Alarm", "Alarm")
     add_entries(db_session, "ROAD", "Motor Vehicle Stop", "Motor Vehicle Stop")
 
     assert [pin["normalized_address"] for pin in rows(db_session)] == [
-        "Busy, Lebanon",
-        "Quiet, Lebanon",
-        "Road, Lebanon",
+        "Busy Shop, Miracle Mile",
+        "Quiet Shop, Miracle Mile",
+        "Road Shop, Miracle Mile",
     ]
 
 
@@ -224,7 +227,7 @@ def test_pins_are_sorted_by_count_then_by_traffic_count(db_session):
 
 
 def test_an_entry_before_since_is_left_out_and_one_on_the_day_is_kept(db_session):
-    add_place(db_session, "Mall, Lebanon", MIRACLE_MILE, "THE MALL")
+    add_place(db_session, "Mall, Miracle Mile", MIRACLE_MILE, "THE MALL")
     add_entries(db_session, "THE MALL", "Alarm", log_date=date(2025, 12, 31))
     add_entries(db_session, "THE MALL", "Alarm", "Alarm", log_date=date(2026, 1, 1))
 
@@ -234,7 +237,7 @@ def test_an_entry_before_since_is_left_out_and_one_on_the_day_is_kept(db_session
 
 
 def test_an_entry_with_no_reported_time_counts_by_its_log_date(db_session):
-    add_place(db_session, "Mall, Lebanon", MIRACLE_MILE, "THE MALL")
+    add_place(db_session, "Mall, Miracle Mile", MIRACLE_MILE, "THE MALL")
     add_entries(db_session, "THE MALL", "Alarm", reported_at=None)
 
     [pin] = rows(db_session)
@@ -243,7 +246,7 @@ def test_an_entry_with_no_reported_time_counts_by_its_log_date(db_session):
 
 
 def test_a_place_with_only_entries_before_since_has_no_pin(db_session):
-    add_place(db_session, "Old, Lebanon", MIRACLE_MILE, "OLD PLACE")
+    add_place(db_session, "Old Shop, Miracle Mile", MIRACLE_MILE, "OLD PLACE")
     add_entries(db_session, "OLD PLACE", "Alarm", log_date=date(2025, 12, 1))
 
     assert rows(db_session) == []
@@ -263,14 +266,59 @@ def test_an_id_is_a_url_safe_slug_of_the_normalized_address(db_session):
 
 
 def test_two_pins_with_one_slug_get_different_ids(db_session):
-    add_place(db_session, "Main St, Lebanon", ("43.60", "-72.20"), "MAIN A")
-    add_place(db_session, "Main St, Lebanon", ("43.61", "-72.21"), "MAIN B")
+    add_place(db_session, "12 Main St", ("43.60", "-72.20"), "MAIN A")
+    add_place(db_session, "12 Main St", ("43.61", "-72.21"), "MAIN B")
     add_entries(db_session, "MAIN A", "Alarm")
     add_entries(db_session, "MAIN B", "Alarm")
 
     ids = [pin["id"] for pin in rows(db_session)]
 
-    assert sorted(ids) == ["main-st-lebanon", "main-st-lebanon-2"]
+    assert sorted(ids) == ["12-main-st", "12-main-st--2"]
+
+
+@pytest.mark.parametrize(
+    ("normalized", "ai_kind", "kind"),
+    [
+        ("12 Main St", "address", "place"),
+        ("12 Main St", "place", "place"),
+        ("Lebanon Ford, Miracle Mile", "place", "place"),
+        ("Main St", "address", "road"),
+        ("Aldrich Ave", "place", "road"),
+        ("Campbell St and N Park St", "intersection", "road"),
+        ("I-89", "highway", "road"),
+    ],
+)
+def test_a_road_is_a_bare_street_an_intersection_or_a_highway(
+    db_session, normalized, ai_kind, kind
+):
+    add_place(db_session, normalized, MIRACLE_MILE, "RAW", kind=ai_kind)
+    add_entries(db_session, "RAW", "Alarm")
+
+    [pin] = rows(db_session)
+
+    assert pin["kind"] == kind
+
+
+def test_a_natural_slug_ending_in_2_does_not_collide_with_a_suffixed_id(db_session):
+    add_place(db_session, "12 Main St", ("43.60", "-72.20"), "MAIN A")
+    add_place(db_session, "12 Main St", ("43.61", "-72.21"), "MAIN B")
+    add_place(db_session, "12 Main St 2", ("43.62", "-72.22"), "MAIN TWO")
+    for raw in ("MAIN A", "MAIN B", "MAIN TWO"):
+        add_entries(db_session, raw, "Alarm")
+
+    ids = [pin["id"] for pin in rows(db_session)]
+
+    assert len(set(ids)) == 3
+    assert "12-main-st-2" in ids
+
+
+def test_a_roads_card_counts_outcomes_for_every_call(db_session):
+    add_place(db_session, "Miracle Mile", MIRACLE_MILE, "MIRACLE MILE")
+    add_entries(
+        db_session, "MIRACLE MILE", "Motor Vehicle Stop", disposition="Warning Issued"
+    )
+
+    assert card(db_session, "miracle-mile")["outcomes"] == [["Warning Issued", 1]]
 
 
 def test_an_address_with_no_letters_still_gets_an_id(db_session):
@@ -354,8 +402,8 @@ def test_a_call_with_no_times_or_officer_has_nulls(db_session):
 
 
 def test_ids_do_not_depend_on_counts(db_session):
-    add_place(db_session, "Main St, Lebanon", ("43.60", "-72.20"), "MAIN A")
-    add_place(db_session, "Main St, Lebanon", ("43.61", "-72.21"), "MAIN B")
+    add_place(db_session, "12 Main St", ("43.60", "-72.20"), "MAIN A")
+    add_place(db_session, "12 Main St", ("43.61", "-72.21"), "MAIN B")
     add_entries(db_session, "MAIN A", "Alarm")
     add_entries(db_session, "MAIN B", "Alarm")
     before = {pin["id"]: pin["lat"] for pin in rows(db_session)}

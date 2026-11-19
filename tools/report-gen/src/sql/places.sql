@@ -1,10 +1,10 @@
 -- One row per pin, with its report card as JSON. Calls are grouped by the place's
 -- normalized address and coordinates, so two spellings of one place make one pin.
--- A ", " or a leading house number always means a place, whatever the AI's kind says:
--- "12 Main St" and "Lebanon Ford, Miracle Mile". Any other name is a bare street, an
--- intersection or a highway, so a road. The AI's kind is not used, since it is
--- inconsistent: it sometimes calls "ALDRICH AVE" a place.
--- A road counts every call. A place leaves out traffic, which happened on the road.
+-- A road is decided in this order: a ", " in the name means a place; else any spelling
+-- the AI called an intersection or highway means a road; else a leading house number
+-- means a place; else a bare name is a road. "12 Main St" and "Lebanon Ford, Miracle
+-- Mile" are places. The kind comes after the comma because the AI is inconsistent, and
+-- before the digit because "1st St and Main" and "89 North" start with one.
 WITH entries AS (
     SELECT
         le.location,
@@ -19,6 +19,7 @@ WITH entries AS (
         le.cleared_at,
         le.officer,
         an.normalized_address,
+        an.kind AS address_kind,
         an.lat,
         an.lng,
         call_category(le.incident_type, le.call_source) AS category
@@ -40,8 +41,9 @@ groups AS (
         CASE
             WHEN normalized_address IS NULL
                 OR strpos(normalized_address, ', ') > 0
-                OR normalized_address ~ '^\d'
                 THEN 'place'
+            WHEN bool_or(address_kind IN ('intersection', 'highway')) THEN 'road'
+            WHEN normalized_address ~ '^\d' THEN 'place'
             ELSE 'road'
         END AS kind
     FROM entries

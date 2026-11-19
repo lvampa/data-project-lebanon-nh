@@ -286,6 +286,8 @@ def test_two_pins_with_one_slug_get_different_ids(db_session):
         ("Aldrich Ave", "place", "road"),
         ("Campbell St and N Park St", "intersection", "road"),
         ("I-89", "highway", "road"),
+        ("1st St and Main St", "intersection", "road"),
+        ("89 North", "highway", "road"),
     ],
 )
 def test_a_road_is_a_bare_street_an_intersection_or_a_highway(

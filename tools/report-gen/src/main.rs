@@ -43,9 +43,18 @@ async fn main() -> Result<()> {
     );
     output::write_json(&args.output_dir, "incidents.json", &incidents)?;
 
-    let addresses = db::fetch_addresses(&pool, args.since).await?;
+    let places = db::fetch_places(&pool, args.since).await?;
+    let addresses: Vec<&db::Address> = places.iter().map(|place| &place.address).collect();
     println!("✓ addresses.json  ({} rows)", addresses.len());
     output::write_json(&args.output_dir, "addresses.json", &addresses)?;
+
+    let places_dir = args.output_dir.join("places");
+    output::reset_dir(&places_dir)?;
+    for place in &places {
+        let card: serde_json::Value = serde_json::from_str(&place.card)?;
+        output::write_json(&places_dir, &format!("{}.json", place.address.id), &card)?;
+    }
+    println!("✓ places/  ({} files)", places.len());
 
     let staff = db::fetch_staff(&pool).await?;
     println!("✓ staff.json  ({} rows)", staff.len());

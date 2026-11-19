@@ -73,6 +73,18 @@ def test_by_weekday_counts_only_entries_with_a_reported_time(db_session, three_d
     assert [tuple(row) for row in rows] == [(4.0, 1)]
 
 
+def test_by_hour_counts_the_hour_of_the_reported_time(db_session, three_days):
+    add_entry(db_session, 4, date(2026, 1, 2), "Alarm", datetime(2026, 1, 2, 16, 30))
+    add_entry(db_session, 5, date(2026, 1, 2), "Alarm", datetime(2026, 1, 2, 16, 59))
+    db_session.flush()
+
+    rows = db_session.execute(text(query("stats_by_hour.sql")), {"since": SINCE}).all()
+
+    # Midnight on Jan 1 and two calls in the 4 pm hour. The entry with no reported
+    # time has no hour, and the Dec 31 entry is before the day.
+    assert [tuple(row) for row in rows] == [(0, 1), (16, 2)]
+
+
 def test_incidents_leave_out_before_the_day_and_put_unreported_ones_last(
     db_session, three_days
 ):

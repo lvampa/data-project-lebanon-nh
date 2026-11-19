@@ -6,3 +6,28 @@
 
 /* Tailwind only scans this app by default; shared components live outside it. */
 @source "../../shared";
+
+/* The police map page: the map on the left and a 420px panel on the right. */
+@utility police-map-stage {
+  display: grid;
+  grid-template-columns: 1fr;
+  height: calc(100dvh - 9rem);
+  min-height: 560px;
+  @media (min-width: 1024px) {
+    grid-template-columns: 1fr 420px;
+  }
+}
+
+/* The small label that follows the pointer over a pin on the police map. */
+.map-tip .maplibregl-popup-content {
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+}
+.map-tip .maplibregl-popup-tip {
+  display: none;
+}

@@ -52,19 +52,25 @@ export function MapControls({
       />
       <Divider />
       <ControlButton icon={<Crosshair size={15} />} label="Recenter" onClick={onRecenter} />
-      <ControlButton
-        icon={<LocateFixed size={15} />}
-        label="Locate me"
-        onClick={onLocate}
-        active={locateActive}
-      />
-      <Divider />
-      <ControlButton
-        icon={<Maximize2 size={15} />}
-        label="Fullscreen"
-        onClick={onFullscreen}
-        active={fullscreenActive}
-      />
+      {onLocate && (
+        <ControlButton
+          icon={<LocateFixed size={15} />}
+          label="Locate me"
+          onClick={onLocate}
+          active={locateActive}
+        />
+      )}
+      {onFullscreen && (
+        <>
+          <Divider />
+          <ControlButton
+            icon={<Maximize2 size={15} />}
+            label="Fullscreen"
+            onClick={onFullscreen}
+            active={fullscreenActive}
+          />
+        </>
+      )}
     </div>
   )
 }

@@ -1,0 +1,76 @@
+const NEW_HAMPSHIRE = 'America/New_York'
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+export function callWord(count: number): string {
+  return `${count.toLocaleString('en-US')} ${count === 1 ? 'call' : 'calls'}`
+}
+
+// "Lebanon Ford" from "Lebanon Ford, 90 Miracle Mile".
+export function nameOf(name: string): string {
+  return name.split(', ')[0]
+}
+
+// "90 Miracle Mile" from "Lebanon Ford, 90 Miracle Mile", and null for a road.
+export function streetOf(name: string): string | null {
+  const rest = name.split(', ').slice(1).join(', ')
+  return rest === '' ? null : rest
+}
+
+function inNewHampshire(iso: string, options: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat('en-US', { timeZone: NEW_HAMPSHIRE, ...options }).format(
+    new Date(iso),
+  )
+}
+
+// "January 1, 2026" from "2026-01-01".
+export function sinceLabel(since: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(`${since}T00:00:00Z`))
+}
+
+// A place whose own calls are none has only the traffic on its street to show.
+export function trafficNearby(count: number): string {
+  return `${count.toLocaleString('en-US')} traffic ${count === 1 ? 'call' : 'calls'} nearby`
+}
+
+// What a group of pins holds, for its tooltip. A group with no calls of its own has only
+// traffic, and its weight is exactly the sum of that traffic.
+export function clusterHolds(calls: number, weight: number): string {
+  return calls === 0 ? trafficNearby(weight) : callWord(calls)
+}
+
+// "Jan to Nov 2026" for a window that starts in January 2026 and was generated in November.
+export function windowLabel(since: string, generatedAt: string): string {
+  const [year, month] = since.split('-').map(Number)
+  const start = MONTHS[month - 1]
+  const endYear = Number(inNewHampshire(generatedAt, { year: 'numeric' }))
+  const end = inNewHampshire(generatedAt, { month: 'short' })
+  if (endYear === year) return start === end ? `${start} ${year}` : `${start} to ${end} ${year}`
+  return `${start} ${year} to ${end} ${endYear}`
+}
+
+// A call's time as the log printed it, in Lebanon's own time: "Nov 18, 2:05 pm". The log has
+// no zone, so the text is read as it is and never shifted.
+export function formatCallTime(reportedAt: string | null): string {
+  const match = reportedAt?.match(/^\d{4}-(\d{2})-(\d{2})T/)
+  const clock = clockOf(reportedAt)
+  if (!match || !clock) return 'Time not recorded'
+  return `${MONTHS[Number(match[1]) - 1]} ${Number(match[2])}, ${clock}`
+}
+
+// "2:05 pm" from a logged timestamp, or null when the step was not recorded.
+export function clockOf(timestamp: string | null): string | null {
+  const match = timestamp?.match(/T(\d{2}):(\d{2})/)
+  if (!match) return null
+  const h = Number(match[1])
+  return `${h % 12 === 0 ? 12 : h % 12}:${match[2]} ${h < 12 ? 'am' : 'pm'}`
+}
+
+// "Nov 19, 2026"
+export function updatedLabel(generatedAt: string): string {
+  return inNewHampshire(generatedAt, { month: 'short', day: 'numeric', year: 'numeric' })
+}

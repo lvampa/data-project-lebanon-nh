@@ -82,6 +82,7 @@
         "zod": "^4.4.3",
       },
       "devDependencies": {
+        "@maplibre/maplibre-gl-style-spec": "26.5.1",
         "@playwright/test": "catalog:",
         "@tailwindcss/postcss": "catalog:",
         "@types/node": "catalog:",

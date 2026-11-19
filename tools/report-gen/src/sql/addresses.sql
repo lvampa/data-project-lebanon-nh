@@ -27,6 +27,7 @@ entries AS (
         ON le.location = an.raw_address
     CROSS JOIN road_traffic rt
     WHERE le.parse_error = false
+      AND le.log_date >= $1
       AND an.lat IS NOT NULL
       AND an.lng IS NOT NULL
 )

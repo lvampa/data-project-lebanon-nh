@@ -5,6 +5,7 @@ export type { Incident, TypeStat, WeekdayStat } from '@project/ui/lib/types'
 export interface StatsData {
   total: number
   generated_at: string
+  since: string
   by_type: TypeStat[]
   by_weekday: WeekdayStat[]
 }

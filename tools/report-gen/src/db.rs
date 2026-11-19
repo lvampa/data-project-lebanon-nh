@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::Utc;
 use serde::Serialize;
@@ -23,6 +24,8 @@ pub struct ByWeekday {
 pub struct Stats {
     pub total: i64,
     pub generated_at: String,
+    // The first day the police log figures cover, as an ISO date.
+    pub since: String,
     pub by_type: Vec<ByType>,
     pub by_weekday: Vec<ByWeekday>,
 }
@@ -94,42 +97,28 @@ pub struct Property {
 
 pub const INCIDENT_LIMIT: i64 = 2000;
 
-pub async fn fetch_stats(pool: &PgPool) -> Result<Stats> {
+pub async fn fetch_stats(pool: &PgPool, since: NaiveDate) -> Result<Stats> {
     const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    let total: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM log_entries WHERE parse_error = false")
-            .fetch_one(pool)
-            .await?;
+    let total: i64 = sqlx::query_scalar(include_str!("sql/stats_total.sql"))
+        .bind(since)
+        .fetch_one(pool)
+        .await?;
 
-    let by_type_rows = sqlx::query_as::<_, (String, i64)>(
-        r"
-        SELECT incident_type, COUNT(*) AS count
-        FROM log_entries
-        WHERE parse_error = false AND incident_type IS NOT NULL
-        GROUP BY incident_type
-        ORDER BY count DESC
-        LIMIT 20
-        ",
-    )
-    .fetch_all(pool)
-    .await?;
+    let by_type_rows = sqlx::query_as::<_, (String, i64)>(include_str!("sql/stats_by_type.sql"))
+        .bind(since)
+        .fetch_all(pool)
+        .await?;
 
-    let by_weekday_rows = sqlx::query_as::<_, (f64, i64)>(
-        r"
-        SELECT EXTRACT(DOW FROM reported_at)::FLOAT8 AS dow, COUNT(*) AS count
-        FROM log_entries
-        WHERE parse_error = false AND reported_at IS NOT NULL
-        GROUP BY dow
-        ORDER BY dow
-        ",
-    )
-    .fetch_all(pool)
-    .await?;
+    let by_weekday_rows = sqlx::query_as::<_, (f64, i64)>(include_str!("sql/stats_by_weekday.sql"))
+        .bind(since)
+        .fetch_all(pool)
+        .await?;
 
     Ok(Stats {
         total,
         generated_at: Utc::now().to_rfc3339(),
+        since: since.to_string(),
         by_type: by_type_rows
             .into_iter()
             .map(|(t, c)| ByType {
@@ -148,25 +137,18 @@ pub async fn fetch_stats(pool: &PgPool) -> Result<Stats> {
     })
 }
 
-pub async fn fetch_incidents(pool: &PgPool) -> Result<Vec<Incident>> {
-    sqlx::query_as::<_, Incident>(
-        r"
-        SELECT case_number, reported_at, call_source, incident_type,
-               disposition, location, officer, reference_number, source_url
-        FROM log_entries
-        WHERE parse_error = false
-        ORDER BY reported_at DESC NULLS LAST
-        LIMIT $1
-        ",
-    )
-    .bind(INCIDENT_LIMIT)
-    .fetch_all(pool)
-    .await
-    .map_err(Into::into)
+pub async fn fetch_incidents(pool: &PgPool, since: NaiveDate) -> Result<Vec<Incident>> {
+    sqlx::query_as::<_, Incident>(include_str!("sql/incidents.sql"))
+        .bind(since)
+        .bind(INCIDENT_LIMIT)
+        .fetch_all(pool)
+        .await
+        .map_err(Into::into)
 }
 
-pub async fn fetch_addresses(pool: &PgPool) -> Result<Vec<Address>> {
+pub async fn fetch_addresses(pool: &PgPool, since: NaiveDate) -> Result<Vec<Address>> {
     sqlx::query_as::<_, Address>(include_str!("sql/addresses.sql"))
+        .bind(since)
         .fetch_all(pool)
         .await
         .map_err(Into::into)

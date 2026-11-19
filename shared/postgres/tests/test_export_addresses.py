@@ -11,15 +11,23 @@ from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from sqlalchemy import text
 
+# report-gen binds $1, the first day published. SQLAlchemy names it :since.
 QUERY = (
-    Path(__file__).resolve().parents[3]
-    / "tools"
-    / "report-gen"
-    / "src"
-    / "sql"
-    / "addresses.sql"
-).read_text()
+    (
+        Path(__file__).resolve().parents[3]
+        / "tools"
+        / "report-gen"
+        / "src"
+        / "sql"
+        / "addresses.sql"
+    )
+    .read_text()
+    .replace("$1", ":since")
+)
 NOW = datetime(2026, 11, 19)
+SINCE = date(2026, 1, 1)
+LOGGED = date(2026, 6, 1)
+REPORTED = datetime(2026, 6, 1, 12)
 MIRACLE_MILE = ("43.6400", "-72.2500")
 
 
@@ -41,13 +49,20 @@ def add_place(session, normalized: str, coordinates, *raw_spellings: str) -> Non
     session.flush()
 
 
-def add_entries(session, location: str, *incident_types: str) -> None:
+def add_entries(
+    session,
+    location: str,
+    *incident_types: str,
+    log_date: date = LOGGED,
+    reported_at: datetime | None = REPORTED,
+) -> None:
     for number, incident_type in enumerate(incident_types):
         session.add(
             LogEntry(
-                case_number=f"{location}-{incident_type}-{number}",
+                case_number=f"{location}-{incident_type}-{number}-{log_date}",
                 source_url="https://example.com/log.pdf",
-                log_date=date(2026, 11, 1),
+                log_date=log_date,
+                reported_at=reported_at,
                 location=location,
                 incident_type=incident_type,
                 created_at=NOW,
@@ -58,7 +73,8 @@ def add_entries(session, location: str, *incident_types: str) -> None:
 
 
 def rows(session) -> list[dict]:
-    return [dict(row._mapping) for row in session.execute(text(QUERY))]
+    result = session.execute(text(QUERY), {"since": SINCE})
+    return [dict(row._mapping) for row in result]
 
 
 def test_two_spellings_of_one_place_make_one_pin_named_for_the_common_one(
@@ -138,6 +154,7 @@ def test_an_entry_with_no_incident_type_counts_with_the_place(db_session):
             case_number="no-type",
             source_url="https://example.com/log.pdf",
             log_date=date(2026, 11, 1),
+            reported_at=REPORTED,
             location="THE MALL",
             incident_type=None,
             created_at=NOW,
@@ -164,3 +181,29 @@ def test_pins_are_sorted_by_count_then_by_traffic_count(db_session):
         "Quiet",
         "Road",
     ]
+
+
+def test_an_entry_before_since_is_left_out_and_one_on_the_day_is_kept(db_session):
+    add_place(db_session, "Mall", MIRACLE_MILE, "THE MALL")
+    add_entries(db_session, "THE MALL", "Alarm", log_date=date(2025, 12, 31))
+    add_entries(db_session, "THE MALL", "Alarm", "Alarm", log_date=date(2026, 1, 1))
+
+    [pin] = rows(db_session)
+
+    assert pin["count"] == 2
+
+
+def test_an_entry_with_no_reported_time_counts_by_its_log_date(db_session):
+    add_place(db_session, "Mall", MIRACLE_MILE, "THE MALL")
+    add_entries(db_session, "THE MALL", "Alarm", reported_at=None)
+
+    [pin] = rows(db_session)
+
+    assert pin["count"] == 1
+
+
+def test_a_place_with_only_entries_before_since_has_no_pin(db_session):
+    add_place(db_session, "Old", MIRACLE_MILE, "OLD PLACE")
+    add_entries(db_session, "OLD PLACE", "Alarm", log_date=date(2025, 12, 1))
+
+    assert rows(db_session) == []

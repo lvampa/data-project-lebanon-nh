@@ -14,12 +14,23 @@ const DEFAULT_CATEGORIES: LegendCategory[] = [
   { label: 'Police', count: 151, colorVar: '--chart-5' },
 ]
 
+// Three sample circles for the 'scale' variant: size and opacity both grow with the count.
+const SCALE_SAMPLES = [
+  { size: 12, opacity: 0.45 },
+  { size: 20, opacity: 0.72 },
+  { size: 30, opacity: 0.9 },
+]
+
 interface MapLegendProps {
   categories?: LegendCategory[]
   total?: number
-  variant?: 'stacked' | 'inline'
+  variant?: 'stacked' | 'inline' | 'scale'
   status?: string
   lastUpdated?: string
+  // The 'scale' variant: what the circles mean, and the circle color.
+  title?: string
+  caption?: string
+  color?: string
 }
 
 export function MapLegend({
@@ -28,8 +39,53 @@ export function MapLegend({
   variant = 'stacked',
   status = 'Verified',
   lastUpdated,
+  title = 'Police calls',
+  caption = 'Bigger and more solid, more calls',
+  color = 'var(--chart-1)',
 }: MapLegendProps) {
   const halo = '0 1px 2px rgba(0,0,0,0.06), 0 0 0 4px var(--background)'
+
+  if (variant === 'scale') {
+    return (
+      <div
+        style={{
+          background: 'color-mix(in oklch, var(--card) 94%, transparent)',
+          color: 'var(--card-foreground)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '10px 12px',
+          fontSize: 12,
+          boxShadow: '0 4px 14px rgba(15,23,42,.06)',
+          backdropFilter: 'blur(6px)',
+        }}
+      >
+        <div className="eyebrow" style={{ marginBottom: 6 }}>
+          {title}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0' }}>
+          {SCALE_SAMPLES.map(({ size, opacity }) => (
+            <i
+              key={size}
+              aria-hidden
+              style={{
+                display: 'inline-block',
+                width: size,
+                height: size,
+                borderRadius: '50%',
+                background: color,
+                opacity,
+                filter: `blur(${size / 30}px)`,
+              }}
+            />
+          ))}
+          <span style={{ color: 'var(--muted-foreground)' }}>{caption}</span>
+        </div>
+        {lastUpdated && (
+          <div style={{ color: 'var(--muted-foreground)' }}>Updated {lastUpdated}</div>
+        )}
+      </div>
+    )
+  }
 
   if (variant === 'inline') {
     return (

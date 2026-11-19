@@ -11,6 +11,10 @@ export interface StatsData {
 }
 
 export interface Address {
+  // A slug of the normalized address. It names the place's card, data/places/<id>.json.
+  id: string
+  // A road is a bare street, an intersection or a highway.
+  kind: 'place' | 'road'
   raw_address: string
   normalized_address: string | null
   count: number

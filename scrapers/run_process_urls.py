@@ -14,8 +14,7 @@ from typing import Any
 
 import logfire
 from bootstrap import bootstrap
-from ingest.pdf_urls import utc_now
-from postgres import get_engine, open_session
+from postgres import get_engine, open_session, utc_now
 from postgres.lock import POLICE_LOG_PARSE, advisory_lock
 from postgres.models.pdf_url import PdfUrl
 from scrapy.crawler import CrawlerProcess

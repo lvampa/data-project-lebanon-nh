@@ -9,13 +9,18 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from bootstrap_testing.names import checkout_database_name
 from mongo import get_db, get_mongo_settings
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import PyMongoError
 
-TEST_DATABASE = os.environ.get("TEST_MONGO_DB", "scraped_data_test")
+# One database per checkout. MongoDB creates it on the first write. TEST_MONGO_DB
+# overrides it.
+TEST_DATABASE = os.environ.get("TEST_MONGO_DB") or checkout_database_name(
+    "scraped_data"
+)
 
 # Only for the local compose database. Tests never read .env.
 TEST_PASSWORD = "changeme"

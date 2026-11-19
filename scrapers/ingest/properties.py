@@ -7,13 +7,14 @@ one transaction. When a check fails it writes nothing.
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import logfire
 from models.property import PropertyRecord
 from mongo.archive import RawArchive, stored_body
 from parsers.vgsi_parcel import parse_parcel
+from postgres import to_naive_utc
 from postgres.models.crawl_run import CrawlRun
 from postgres.models.property import Property
 from postgres.models.property_sale import PropertySale
@@ -51,7 +52,7 @@ def parse_archive(archive: RawArchive, run: CrawlRun) -> tuple[list[ParsedPage],
         body = stored_body(version) if version is not None else None
         if version is None or body is None:
             continue
-        fetched_at = _naive_utc(
+        fetched_at = to_naive_utc(
             version.get("last_seen_at") or version["first_fetched_at"]
         )
         # A parcel the run did not see has gone from the town's list.
@@ -86,12 +87,6 @@ def replace_properties(
     if sales:
         session.execute(insert(PropertySale), sales)
     return len(sales)
-
-
-def _naive_utc(moment: datetime) -> datetime:
-    if moment.tzinfo is not None:
-        return moment.astimezone(UTC).replace(tzinfo=None)
-    return moment
 
 
 @dataclass(frozen=True)

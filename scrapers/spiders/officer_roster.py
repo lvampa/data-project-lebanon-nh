@@ -1,10 +1,10 @@
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
 from typing import Any, override
 
 import logfire
 import scrapy
 from items.officer import OfficerItem
+from postgres import utc_now
 from scrapy.http import Request, Response
 
 ROSTER_URL = "https://www.lebanonnh.gov/287/Divisions-Roster"
@@ -44,7 +44,7 @@ class OfficerRosterSpider(scrapy.Spider):
         self, response: Response, division: str = "", **kwargs: Any
     ) -> Iterator[OfficerItem]:
         """Division page — extract officers from table rows or h-card widgets."""
-        now = datetime.now(UTC).replace(tzinfo=None)
+        now = utc_now()
 
         # Try table-based layout first
         rows = response.css("#main-content table tbody tr")

@@ -5,11 +5,11 @@ from typing import Any, cast, override
 import logfire
 import scrapy
 from ingest.pdf_text import extract_pdf_text
-from ingest.pdf_urls import ErrorKind, mark_error, utc_now
+from ingest.pdf_urls import ErrorKind, mark_error
 from items import PoliceLogPdfItem
 from models import PdfUrlClaim
 from mongo.archive import content_hash
-from postgres import open_session
+from postgres import open_session, utc_now
 from postgres.models.pdf_url import PdfUrl
 from scrapy.http import Request, Response
 from sqlalchemy import CursorResult, Update, select, update

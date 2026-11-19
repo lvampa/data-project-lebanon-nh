@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 import run_process_urls
-from ingest.pdf_urls import utc_now
 from mongo.archive import ArchivedResponse, RawArchive, archive_collection
 from mongo.client import MongoDB
+from postgres import utc_now
 from postgres.lock import POLICE_LOG_PARSE, advisory_lock
 from postgres.models.pdf_url import PdfUrl
 

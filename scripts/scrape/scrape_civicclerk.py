@@ -10,11 +10,11 @@ import argparse
 import asyncio
 import contextlib
 import io
-from datetime import UTC, datetime
+from datetime import datetime
 
 import logfire
 from bootstrap import bootstrap
-from postgres import open_session
+from postgres import open_session, utc_now
 from postgres.models.planning_document import PlanningDocument
 from postgres.models.planning_meeting import PlanningMeeting
 from pydantic import ValidationError
@@ -197,7 +197,7 @@ async def run(limit: int) -> None:
 
     from playwright.async_api import async_playwright
 
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now = utc_now()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch()

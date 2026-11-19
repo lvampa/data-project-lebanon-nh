@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Any, Self, cast
 
 import logfire
@@ -123,10 +122,6 @@ class PoliceLogPipeline:
 
     def close_spider(self) -> None:
         self._session.close()
-
-
-def _utc_now() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class CityStaffPipeline:

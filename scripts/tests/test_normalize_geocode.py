@@ -402,7 +402,7 @@ class UnavailableAfter(FakeGeocoder):
     def __call__(self, query: str) -> GeocodeResult | None:
         self.queries.append(query)
         if len(self.queries) > self.good:
-            raise GeocodeUnavailable("429")
+            raise GeocodeUnavailable("geocode('X'): The read operation timed out")
         return hit()
 
 
@@ -415,6 +415,7 @@ def test_an_unavailable_geocoder_stops_the_run_and_charges_no_attempt(db_session
 
     assert counts.placed == 1
     assert counts.geocoder_unavailable is True
+    assert "read operation timed out" in counts.geocoder_error
     assert len(geocoder.queries) == 2
     attempts = [the_row(db_session, f"ROW {n}").geocode_attempts for n in range(4)]
     assert attempts == [0, 0, 0, 0]
@@ -428,7 +429,10 @@ def test_the_command_exits_non_zero_and_says_so_when_the_geocoder_is_unavailable
     status = geocode_job.main([], geocoder=UnavailableAfter(good=0))
 
     assert status == 1
-    assert "unavailable" in capsys.readouterr().out.lower()
+    assert (
+        "Nominatim is unavailable or refused the request "
+        "(geocode('X'): The read operation timed out). Stopped early."
+    ) in capsys.readouterr().out
 
 
 def test_a_place_does_not_inherit_the_coordinates_of_an_address(db_session):

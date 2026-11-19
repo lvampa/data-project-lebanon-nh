@@ -51,6 +51,8 @@ class GeocodeCounts:
     requests: int = 0
     stopped_at_limit: bool = False
     geocoder_unavailable: bool = False
+    # Why the geocoder stopped the run, as the geocoder worded it.
+    geocoder_error: str = ""
 
 
 def run(
@@ -75,6 +77,7 @@ def run(
                 # Nothing is known about the row, so it is not charged an attempt.
                 session.rollback()
                 counts.geocoder_unavailable = True
+                counts.geocoder_error = str(exc)
                 logfire.error("geocoder unavailable; stopping the run", error=str(exc))
                 break
             session.commit()
@@ -278,7 +281,10 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
     if counts.stopped_at_limit:
         print(f"Stopped at {MAX_REQUESTS} requests. Run it again for the rest.")
     if counts.geocoder_unavailable:
-        print("Nominatim is unavailable or refused the request. Stopped early.")
+        print(
+            "Nominatim is unavailable or refused the request "
+            f"({counts.geocoder_error}). Stopped early."
+        )
         return 1
     return 0
 

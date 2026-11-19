@@ -13,6 +13,7 @@ export interface Address {
   raw_address: string
   normalized_address: string | null
   count: number
+  traffic_count: number
   lat: number
   lng: number
 }

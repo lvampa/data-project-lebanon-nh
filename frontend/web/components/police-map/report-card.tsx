@@ -13,7 +13,7 @@ import type { Address, PlaceCard } from '@/lib/types'
 interface Props {
   address: Address
   state: CardState
-  // The call count of every pin, for the rank.
+  // The call count of every pin of this kind, for the rank.
   counts: number[]
   year: string
   onClose: () => void
@@ -39,17 +39,16 @@ export function ReportCard({ address, state, counts, year, onClose, onRetry }: P
 
       {/* 2. How many, and how that compares */}
       <div className="mt-4 flex items-baseline gap-2.5">
-        <b
-          className="text-5xl font-semibold leading-none tabular-nums tracking-tight"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
+        <b className="text-display-2 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
           {address.count.toLocaleString('en-US')}
         </b>
         <span className="text-muted-foreground">
           {road ? 'calls on this road' : 'calls named this place'}
         </span>
       </div>
-      <div className="mt-1.5 text-sm text-muted-foreground">{rankLine(address.count, counts)}</div>
+      <div className="mt-1.5 text-sm text-muted-foreground">
+        {rankLine(address.count, counts, address.kind)}
+      </div>
 
       {state.status === 'loading' && (
         <p className="mt-6 text-sm text-muted-foreground">Loading the details…</p>

@@ -7,7 +7,10 @@ export type CardState =
 
 // The card for one pin, fetched when the pin is chosen. A newer choice drops an older fetch.
 export function usePlaceCard(id: string | null, attempt = 0): CardState | null {
-  const [state, setState] = useState<{ id: string; value: CardState } | null>(null)
+  const [state, setState] = useState<{ key: string; value: CardState } | null>(null)
+
+  // A new attempt is a new key, so Try again shows loading until the fetch ends.
+  const key = `${id}:${attempt}`
 
   useEffect(() => {
     if (!id) return
@@ -17,15 +20,15 @@ export function usePlaceCard(id: string | null, attempt = 0): CardState | null {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return response.json() as Promise<PlaceCard>
       })
-      .then((card) => setState({ id, value: { status: 'ready', card } }))
+      .then((card) => setState({ key, value: { status: 'ready', card } }))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return
-        setState({ id, value: { status: 'error' } })
+        setState({ key, value: { status: 'error' } })
       })
     return () => controller.abort()
-  }, [id, attempt])
+  }, [id, attempt, key])
 
   if (!id) return null
   // Until this pin's card arrives, whatever is held belongs to another pin.
-  return state?.id === id ? state.value : { status: 'loading' }
+  return state?.key === key ? state.value : { status: 'loading' }
 }

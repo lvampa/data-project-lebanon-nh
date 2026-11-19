@@ -17,7 +17,11 @@ interface Props {
 export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props) {
   const [attempt, setAttempt] = useState(0)
   const state = usePlaceCard(place?.id ?? null, attempt)
-  const counts = useMemo(() => addresses.map((a) => a.count), [addresses])
+  const kind = place?.kind
+  const counts = useMemo(
+    () => addresses.filter((a) => a.kind === kind).map((a) => a.count),
+    [addresses, kind],
+  )
 
   if (!place || !state) {
     return <TownSummary addresses={addresses} stats={stats} onChoose={onChoose} />

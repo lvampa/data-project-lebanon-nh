@@ -35,12 +35,18 @@ export function windowLabel(since: string, generatedAt: string): string {
 // A call's time as the log printed it, in Lebanon's own time: "Nov 18, 2:05 pm". The log has
 // no zone, so the text is read as it is and never shifted.
 export function formatCallTime(reportedAt: string | null): string {
-  const match = reportedAt?.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
-  if (!match) return 'Time not recorded'
-  const [, , month, day, hour, minute] = match
-  const h = Number(hour)
-  const clock = `${h % 12 === 0 ? 12 : h % 12}:${minute} ${h < 12 ? 'am' : 'pm'}`
-  return `${MONTHS[Number(month) - 1]} ${Number(day)}, ${clock}`
+  const match = reportedAt?.match(/^\d{4}-(\d{2})-(\d{2})T/)
+  const clock = clockOf(reportedAt)
+  if (!match || !clock) return 'Time not recorded'
+  return `${MONTHS[Number(match[1]) - 1]} ${Number(match[2])}, ${clock}`
+}
+
+// "2:05 pm" from a logged timestamp, or null when the step was not recorded.
+export function clockOf(timestamp: string | null): string | null {
+  const match = timestamp?.match(/T(\d{2}):(\d{2})/)
+  if (!match) return null
+  const h = Number(match[1])
+  return `${h % 12 === 0 ? 12 : h % 12}:${match[2]} ${h < 12 ? 'am' : 'pm'}`
 }
 
 // "Nov 19, 2026"

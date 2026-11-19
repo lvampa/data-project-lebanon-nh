@@ -27,7 +27,9 @@ export function PlaceSearch({ addresses, onChoose }: Props) {
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
-      setActive((i) => Math.min(i + 1, matches.length - 1))
+      // A closed list opens on the first press, and moves on the next.
+      if (!showing) setOpen(true)
+      else setActive((i) => Math.min(i + 1, matches.length - 1))
       event.preventDefault()
     } else if (event.key === 'ArrowUp') {
       setActive((i) => Math.max(i - 1, 0))
@@ -45,6 +47,7 @@ export function PlaceSearch({ addresses, onChoose }: Props) {
         type="search"
         role="combobox"
         aria-expanded={showing}
+        aria-autocomplete="list"
         aria-controls={listId}
         aria-activedescendant={showing ? `${listId}-${active}` : undefined}
         aria-label="Search a place or street"

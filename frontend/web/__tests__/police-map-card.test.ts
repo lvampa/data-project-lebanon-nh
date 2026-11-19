@@ -8,21 +8,34 @@ describe('rankLine', () => {
   const counts = [100, 80, 60, 40, 20, 10, 5, 4, 3, 1]
 
   it('says how many places have fewer calls, and the place in line', () => {
-    expect(rankLine(100, counts)).toBe('More calls than 90% of places in Lebanon · #1 of 10')
-    expect(rankLine(40, counts)).toBe('More calls than 60% of places in Lebanon · #4 of 10')
+    expect(rankLine(100, counts, 'place')).toBe(
+      'More calls than 90% of places in Lebanon · #1 of 10',
+    )
+    expect(rankLine(40, counts, 'place')).toBe(
+      'More calls than 60% of places in Lebanon · #4 of 10',
+    )
   })
 
   it('does not boast when the place is in the lower half', () => {
-    expect(rankLine(3, counts)).toBe('Fewer calls than most places in Lebanon')
+    expect(rankLine(3, counts, 'place')).toBe('Fewer calls than most places in Lebanon')
   })
 
   it('shares a rank in a tie, and counts only the places below it as passed', () => {
-    expect(rankLine(5, [5, 5, 1, 1])).toBe('More calls than 50% of places in Lebanon · #1 of 4')
-    expect(rankLine(5, [5, 5, 5, 1])).toBe('Fewer calls than most places in Lebanon')
+    expect(rankLine(5, [5, 5, 1, 1], 'place')).toBe(
+      'More calls than 50% of places in Lebanon · #1 of 4',
+    )
+    expect(rankLine(5, [5, 5, 5, 1], 'place')).toBe('Fewer calls than most places in Lebanon')
+  })
+
+  it('ranks a road against roads and says streets', () => {
+    expect(rankLine(9, [9, 5, 1], 'road')).toBe(
+      'More calls than 67% of streets in Lebanon · #1 of 3',
+    )
+    expect(rankLine(1, [9, 5, 1], 'road')).toBe('Fewer calls than most streets in Lebanon')
   })
 
   it('says nothing with no places to compare with', () => {
-    expect(rankLine(5, [])).toBe('')
+    expect(rankLine(5, [], 'place')).toBe('')
   })
 })
 

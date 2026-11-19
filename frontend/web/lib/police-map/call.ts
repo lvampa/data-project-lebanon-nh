@@ -46,11 +46,3 @@ export function callTiming(call: {
     onScene: minutesBetween(call.arrived_at, call.cleared_at),
   }
 }
-
-// "2:05 pm" from a logged timestamp, or null when the step was not recorded.
-export function clockOf(timestamp: string | null): string | null {
-  const match = timestamp?.match(/T(\d{2}):(\d{2})/)
-  if (!match) return null
-  const h = Number(match[1])
-  return `${h % 12 === 0 ? 12 : h % 12}:${match[2]} ${h < 12 ? 'am' : 'pm'}`
-}

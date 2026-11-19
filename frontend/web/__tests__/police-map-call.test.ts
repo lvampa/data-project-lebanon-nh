@@ -1,5 +1,6 @@
+import { clockOf } from '@/lib/police-map/format'
 import { describe, expect, it } from 'vitest'
-import { callTiming, channelLabel, clockOf, minutesBetween, shortName } from '@/lib/police-map/call'
+import { callTiming, channelLabel, minutesBetween, shortName } from '@/lib/police-map/call'
 
 describe('channelLabel', () => {
   it('puts the channel in plain words', () => {

@@ -23,10 +23,7 @@ export function TownSummary({ addresses, stats, onChoose }: Props) {
       <div className="eyebrow">Lebanon, NH · {windowLabel(stats.since, stats.generated_at)}</div>
       <h2 className="text-display-3 mb-0.5 mt-1.5">Police calls around town</h2>
       <div className="mt-4 flex items-baseline gap-2.5">
-        <b
-          className="text-5xl font-semibold leading-none tabular-nums tracking-tight"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
+        <b className="text-display-2 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
           {stats.total.toLocaleString('en-US')}
         </b>
         <span className="text-muted-foreground">calls in the police log</span>

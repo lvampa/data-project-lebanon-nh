@@ -1,8 +1,8 @@
 import { buttonVariants } from '@project/ui/components/ui/button'
 import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
-import { callTiming, channelLabel, clockOf, shortName } from '@/lib/police-map/call'
+import { callTiming, channelLabel, shortName } from '@/lib/police-map/call'
 import { categoryOf } from '@/lib/police-map/categories'
-import { formatCallTime } from '@/lib/police-map/format'
+import { clockOf, formatCallTime } from '@/lib/police-map/format'
 import type { PlaceCall } from '@/lib/types'
 
 // A call on one line, opening to the rest of its record.
@@ -38,12 +38,12 @@ export function CallRow({ call }: { call: PlaceCall }) {
           <time className="w-24 shrink-0 font-mono text-xs text-muted-foreground">
             {formatCallTime(call.reported_at)}
           </time>
-          <div>
+          <span>
             <TypeLabel type={call.incident_type} />
             <small className="mt-px block text-xs text-muted-foreground">
               {channelLabel(call.call_source)} · <OutcomeLabel disposition={call.disposition} />
             </small>
-          </div>
+          </span>
         </summary>
         <div className="pb-3 pl-6 text-xs text-muted-foreground">
           {steps.length > 1 && (

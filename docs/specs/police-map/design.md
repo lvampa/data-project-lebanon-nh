@@ -46,7 +46,9 @@ Everything else is a place.
   Every query that needs a category calls it, so the traffic prefix list exists once.
   Editing a category list means a new migration that replaces the function.
 - **A road is a bare street, an intersection or a highway.**
-  The AI's kind alone is not trusted, since it sometimes calls a bare street a place, so the text is checked too: no ", " and no leading house number.
+  The text decides, not the AI's kind, which is inconsistent: a ", " or a leading house number always means a place, and any other name is a road.
+  A named place with no comma, such as "Colburn Park", counts as a road.
+  That is rare, and the normalize prompt asks for "Name, Street".
   Pin ids that share a slug get a suffix after "--", which no slug contains, so ids stay unique and keep pointing at the same pin as counts change.
 - **Plain words, with the log's words on hover.**
   Common incident types and outcomes get a plain label, and the original text shows on hover.

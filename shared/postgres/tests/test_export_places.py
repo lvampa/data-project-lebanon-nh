@@ -299,6 +299,17 @@ def test_a_road_is_a_bare_street_an_intersection_or_a_highway(
     assert pin["kind"] == kind
 
 
+def test_one_odd_ai_kind_does_not_turn_a_place_into_a_road(db_session):
+    add_place(db_session, FORD, MIRACLE_MILE, "FORD A", kind="place")
+    add_place(db_session, FORD, MIRACLE_MILE, "FORD B", kind="intersection")
+    add_entries(db_session, "FORD A", "Alarm")
+    add_entries(db_session, "FORD B", "Alarm")
+
+    [pin] = rows(db_session)
+
+    assert pin["kind"] == "place"
+
+
 def test_a_natural_slug_ending_in_2_does_not_collide_with_a_suffixed_id(db_session):
     add_place(db_session, "12 Main St", ("43.60", "-72.20"), "MAIN A")
     add_place(db_session, "12 Main St", ("43.61", "-72.21"), "MAIN B")

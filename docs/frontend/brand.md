@@ -22,7 +22,9 @@ This file holds the rules the CSS can't enforce.
 - Diverging scale: #a3195b, #d36b96, #f1cadb, #e7e8eb, #c3d5ee, #7fa6d9, #1f4e8c.
 - One y-axis per chart, 4px rounded bar tops, 2px gaps, a light grid in `border`.
   Axes and labels use foreground or muted-foreground, never series colors.
-- Map point markers use `chart-2` with a 2px white ring.
+- Map point markers are soft circles in the sequential blue (#1f4e8c), with no ring.
+  Size and opacity grow with the number of calls, and a group of points looks like one larger point.
+- The selected marker gets a raspberry (#a3195b) ring.
 
 ## Type
 

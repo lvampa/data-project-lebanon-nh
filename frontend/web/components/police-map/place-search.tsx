@@ -50,8 +50,8 @@ export function PlaceSearch({ addresses, onChoose }: Props) {
         aria-autocomplete="list"
         aria-controls={listId}
         aria-activedescendant={showing ? `${listId}-${active}` : undefined}
-        aria-label="Search a place or street"
-        placeholder="Search a place or street"
+        aria-label="Search an address, street or business"
+        placeholder="Search an address, street or business"
         autoComplete="off"
         value={query}
         onChange={(event) => {

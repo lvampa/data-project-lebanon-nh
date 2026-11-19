@@ -14,6 +14,8 @@ export interface PinProperties {
   id: string
   name: string
   n: number
+  // 1 for a place with no calls of its own, only traffic on its street.
+  t: 0 | 1
 }
 
 export interface PinFeature {
@@ -31,12 +33,27 @@ export function pinName(address: Pick<Address, 'normalized_address' | 'raw_addre
   return address.normalized_address ?? address.raw_address
 }
 
+// A place with no calls of its own, only traffic on its street, still matters on the map.
+export function isTrafficOnly(address: Pick<Address, 'count' | 'traffic_count'>): boolean {
+  return address.count === 0 && address.traffic_count > 0
+}
+
+// What sizes and shades a pin: its calls, or its traffic when it has no calls of its own.
+export function pinCalls(address: Pick<Address, 'count' | 'traffic_count'>): number {
+  return isTrafficOnly(address) ? address.traffic_count : address.count
+}
+
 export function pinsGeoJson(addresses: Address[]): PinCollection {
   return {
     type: 'FeatureCollection',
     features: addresses.map((address) => ({
       type: 'Feature',
-      properties: { id: address.id, name: pinName(address), n: address.count },
+      properties: {
+        id: address.id,
+        name: pinName(address),
+        n: pinCalls(address),
+        t: isTrafficOnly(address) ? 1 : 0,
+      },
       geometry: { type: 'Point', coordinates: [address.lng, address.lat] },
     })),
   }

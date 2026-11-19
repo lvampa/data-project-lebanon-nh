@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { callWord, nameOf, streetOf, updatedLabel, windowLabel } from '@/lib/police-map/format'
+import {
+  callWord,
+  nameOf,
+  sinceLabel,
+  streetOf,
+  trafficNearby,
+  updatedLabel,
+  windowLabel,
+} from '@/lib/police-map/format'
 
 describe('callWord', () => {
   it('says call for one and calls for the rest', () => {
@@ -43,5 +51,19 @@ describe('windowLabel', () => {
 describe('updatedLabel', () => {
   it('is a short date', () => {
     expect(updatedLabel('2026-11-19T21:00:00Z')).toBe('Nov 19, 2026')
+  })
+})
+
+describe('sinceLabel', () => {
+  it('spells the date out', () => {
+    expect(sinceLabel('2026-01-01')).toBe('January 1, 2026')
+  })
+})
+
+describe('trafficNearby', () => {
+  it('names the traffic a place with no calls of its own has', () => {
+    expect(trafficNearby(7)).toBe('7 traffic calls nearby')
+    expect(trafficNearby(1)).toBe('1 traffic call nearby')
+    expect(trafficNearby(1200)).toBe('1,200 traffic calls nearby')
   })
 })

@@ -4,7 +4,7 @@ const CHANNELS: Record<string, string> = {
   Telephone: 'Reported by phone',
   '911': 'Reported by 911',
   'Walk-In': 'Reported in person',
-  Initiated: 'Started by an officer',
+  Initiated: 'Officer-initiated',
   'Alarm System': 'Reported by an alarm',
   Radio: 'Reported by radio',
   'E-Mail': 'Reported by email',

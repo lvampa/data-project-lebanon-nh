@@ -19,7 +19,7 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props)
   const state = usePlaceCard(place?.id ?? null, attempt)
   const kind = place?.kind
   const counts = useMemo(
-    () => addresses.filter((a) => a.kind === kind).map((a) => a.count),
+    () => addresses.filter((a) => a.kind === kind && a.count > 0).map((a) => a.count),
     [addresses, kind],
   )
 
@@ -33,6 +33,7 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props)
       state={state}
       counts={counts}
       year={stats.since.slice(0, 4)}
+      since={stats.since}
       onClose={onClose}
       onRetry={() => setAttempt((n) => n + 1)}
     />

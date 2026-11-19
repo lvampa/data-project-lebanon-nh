@@ -22,6 +22,21 @@ function inNewHampshire(iso: string, options: Intl.DateTimeFormatOptions): strin
   )
 }
 
+// "January 1, 2026" from "2026-01-01".
+export function sinceLabel(since: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(`${since}T00:00:00Z`))
+}
+
+// A place whose own calls are none has only the traffic on its street to show.
+export function trafficNearby(count: number): string {
+  return `${count.toLocaleString('en-US')} traffic ${count === 1 ? 'call' : 'calls'} nearby`
+}
+
 // "Jan to Nov 2026" for a window that starts in January 2026 and was generated in November.
 export function windowLabel(since: string, generatedAt: string): string {
   const [year, month] = since.split('-').map(Number)

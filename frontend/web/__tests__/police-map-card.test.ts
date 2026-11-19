@@ -1,41 +1,76 @@
 import { describe, expect, it } from 'vitest'
 import { categoriesFor } from '@/lib/police-map/categories'
 import { formatCallTime } from '@/lib/police-map/format'
-import { rankLine } from '@/lib/police-map/rank'
+import { remainder } from '@/lib/police-map/card'
+import { ordinal, rankLine } from '@/lib/police-map/rank'
 import { osmStreetNames, streetsToLight } from '@/lib/police-map/streets'
+
+describe('ordinal', () => {
+  it('spells the ordinals, including the teens', () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 101, 111].map(ordinal)).toEqual([
+      '1st',
+      '2nd',
+      '3rd',
+      '4th',
+      '11th',
+      '12th',
+      '13th',
+      '21st',
+      '22nd',
+      '101st',
+      '111th',
+    ])
+  })
+})
 
 describe('rankLine', () => {
   const counts = [100, 80, 60, 40, 20, 10, 5, 4, 3, 1]
 
-  it('says how many places have fewer calls, and the place in line', () => {
-    expect(rankLine(100, counts, 'place')).toBe(
-      'More calls than 90% of places in Lebanon · #1 of 10',
-    )
-    expect(rankLine(40, counts, 'place')).toBe(
-      'More calls than 60% of places in Lebanon · #4 of 10',
-    )
+  it('gives the place in line out of the pins of its kind', () => {
+    expect(rankLine(100, counts, 'place')).toBe('1st busiest of 10 places in Lebanon')
+    expect(rankLine(40, counts, 'place')).toBe('4th busiest of 10 places in Lebanon')
   })
 
   it('does not boast when the place is in the lower half', () => {
-    expect(rankLine(3, counts, 'place')).toBe('Fewer calls than most places in Lebanon')
+    expect(rankLine(3, counts, 'place')).toBe('Quieter than most places in Lebanon')
   })
 
   it('shares a rank in a tie, and counts only the places below it as passed', () => {
-    expect(rankLine(5, [5, 5, 1, 1], 'place')).toBe(
-      'More calls than 50% of places in Lebanon · #1 of 4',
-    )
-    expect(rankLine(5, [5, 5, 5, 1], 'place')).toBe('Fewer calls than most places in Lebanon')
+    expect(rankLine(5, [5, 5, 1, 1], 'place')).toBe('1st busiest of 4 places in Lebanon')
+    expect(rankLine(5, [5, 5, 5, 1], 'place')).toBe('Quieter than most places in Lebanon')
   })
 
-  it('ranks a road against roads and says streets', () => {
-    expect(rankLine(9, [9, 5, 1], 'road')).toBe(
-      'More calls than 67% of streets in Lebanon · #1 of 3',
-    )
-    expect(rankLine(1, [9, 5, 1], 'road')).toBe('Fewer calls than most streets in Lebanon')
+  it('ranks a street against streets and says so', () => {
+    expect(rankLine(9, [9, 5, 1], 'road')).toBe('1st busiest of 3 streets in Lebanon')
+    expect(rankLine(1, [9, 5, 1], 'road')).toBe('Quieter than most streets in Lebanon')
   })
 
-  it('says nothing with no places to compare with', () => {
+  it('puts thousands in the total', () => {
+    expect(rankLine(2, [...Array.from({ length: 1289 }, () => 1), 2], 'place')).toBe(
+      '1st busiest of 1,290 places in Lebanon',
+    )
+  })
+
+  it('says nothing with no pins to compare with', () => {
     expect(rankLine(5, [], 'place')).toBe('')
+  })
+})
+
+describe('remainder', () => {
+  it('is what the rows leave out of the total', () => {
+    expect(
+      remainder(
+        [
+          ['A', 5],
+          ['B', 3],
+        ],
+        10,
+      ),
+    ).toBe(2)
+  })
+
+  it('is never negative', () => {
+    expect(remainder([['A', 5]], 3)).toBe(0)
   })
 })
 

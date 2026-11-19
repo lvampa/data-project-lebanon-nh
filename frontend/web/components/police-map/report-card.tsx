@@ -5,8 +5,9 @@ import { CallRow } from '@/components/police-map/call-row'
 import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
 import type { CardState } from '@/components/police-map/use-place-card'
 import { categoriesFor } from '@/lib/police-map/categories'
+import { remainder } from '@/lib/police-map/card'
 import { nameOf, streetOf } from '@/lib/police-map/format'
-import { pinName } from '@/lib/police-map/map-style'
+import { isTrafficOnly, pinName } from '@/lib/police-map/map-style'
 import { rankLine } from '@/lib/police-map/rank'
 import type { Address, PlaceCard } from '@/lib/types'
 
@@ -16,6 +17,7 @@ interface Props {
   // The call count of every pin of this kind, for the rank.
   counts: number[]
   year: string
+  since: string
   onClose: () => void
   onRetry: () => void
 }
@@ -25,30 +27,37 @@ const SECTION_HEADING =
 const ROW = 'flex justify-between gap-3 border-b border-border py-2 text-sm'
 const ROW_VALUE = 'font-mono text-sm text-muted-foreground'
 
-export function ReportCard({ address, state, counts, year, onClose, onRetry }: Props) {
+export function ReportCard({ address, state, counts, year, since, onClose, onRetry }: Props) {
   const road = address.kind === 'road'
+  const trafficOnly = isTrafficOnly(address)
   const name = pinName(address)
   const street = streetOf(name)
 
   return (
     <div>
       {/* 1. What this is */}
-      <CardBar label={`${road ? 'Road' : 'Place'} · ${year}`} onClose={onClose} />
+      <CardBar label={`${road ? 'Street' : 'Place'} · ${year}`} onClose={onClose} />
       <h2 className="text-display-3 mb-0.5 mt-1.5">{nameOf(name)}</h2>
-      <div className="text-muted-foreground">{street ?? 'Road, highlighted on the map'}</div>
+      <div className="text-muted-foreground">{street ?? 'Highlighted on the map'}</div>
 
       {/* 2. How many, and how that compares */}
       <div className="mt-4 flex items-baseline gap-2.5">
         <b className="text-display-2 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
-          {address.count.toLocaleString('en-US')}
+          {(trafficOnly ? address.traffic_count : address.count).toLocaleString('en-US')}
         </b>
         <span className="text-muted-foreground">
-          {road ? 'calls on this road' : 'calls named this place'}
+          {trafficOnly
+            ? 'traffic calls nearby'
+            : road
+              ? 'police calls on this street'
+              : 'police calls here'}
         </span>
       </div>
-      <div className="mt-1.5 text-sm text-muted-foreground">
-        {rankLine(address.count, counts, address.kind)}
-      </div>
+      {!trafficOnly && (
+        <div className="mt-1.5 text-sm text-muted-foreground">
+          {rankLine(address.count, counts, address.kind)}
+        </div>
+      )}
 
       {state.status === 'loading' && (
         <p className="mt-6 text-sm text-muted-foreground">Loading the details…</p>
@@ -70,7 +79,16 @@ export function ReportCard({ address, state, counts, year, onClose, onRetry }: P
       )}
 
       {/* 7. Method */}
-      <HowWeCount />
+      <HowWeCount since={since} />
+    </div>
+  )
+}
+
+function OtherRow({ n }: { n: number }) {
+  return (
+    <div className={ROW}>
+      <span>Other</span>
+      <span className={ROW_VALUE}>{n.toLocaleString('en-US')}</span>
     </div>
   )
 }
@@ -90,7 +108,7 @@ function CardBar({ label, onClose }: { label: string; onClose: () => void }) {
           onClick={copy}
           className="h-7 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
-          {copied ? 'Copied' : 'Copy link'}
+          {copied ? 'Link copied' : 'Share'}
         </button>
         <button
           type="button"
@@ -116,10 +134,9 @@ function CardDetails({
 }) {
   const road = address.kind === 'road'
   const kinds = categoriesFor(address.kind, card.categories)
-  const outcomes = card.outcomes.map(([disposition, n]) => ({ disposition, n }))
-  if (card.false_alarms > 0 && !outcomes.some((o) => o.disposition === 'False Alarm')) {
-    outcomes.push({ disposition: 'False Alarm', n: card.false_alarms })
-  }
+  // A place lists the incidents at the place, and a street lists every call.
+  const otherTypes = remainder(card.types, road ? address.count : card.categories.premises)
+  const otherOutcomes = remainder(card.outcomes, address.count)
 
   return (
     <>
@@ -146,15 +163,19 @@ function CardDetails({
           <span className={ROW_VALUE}>{card.categories[kind.key]}</span>
         </div>
       ))}
-      {!road && address.traffic_count > 0 && (
+      {!road && address.count > 0 && address.traffic_count > 0 && (
         <p className="mt-3 border-l-4 border-highlight pl-3 text-sm text-muted-foreground">
-          Also {address.traffic_count.toLocaleString('en-US')} traffic calls
-          {street ? ` on ${street}` : ''}, highlighted on the map.
+          Not counted here: {address.traffic_count.toLocaleString('en-US')} traffic stops and
+          crashes{street ? ` on ${street}` : ''}, highlighted on the map.
         </p>
       )}
 
       {/* 4. What happened */}
-      {card.types.length > 0 && <h3 className={SECTION_HEADING}>What happened</h3>}
+      {card.types.length > 0 && (
+        <h3 className={SECTION_HEADING}>
+          {road ? 'What the calls were' : 'Most common incidents'}
+        </h3>
+      )}
       {card.types.map(([type, n]) => (
         <div key={type} className={ROW}>
           <span>
@@ -163,10 +184,11 @@ function CardDetails({
           <span className={ROW_VALUE}>{n}</span>
         </div>
       ))}
+      {card.types.length > 0 && otherTypes > 0 && <OtherRow n={otherTypes} />}
 
       {/* 5. How it ended */}
-      {outcomes.length > 0 && <h3 className={SECTION_HEADING}>How it ended</h3>}
-      {outcomes.map(({ disposition, n }) => (
+      {card.outcomes.length > 0 && <h3 className={SECTION_HEADING}>How they ended</h3>}
+      {card.outcomes.map(([disposition, n]) => (
         <div key={disposition} className={ROW}>
           <span>
             <OutcomeLabel disposition={disposition} />
@@ -174,11 +196,12 @@ function CardDetails({
           <span className={ROW_VALUE}>{n}</span>
         </div>
       ))}
+      {card.outcomes.length > 0 && otherOutcomes > 0 && <OtherRow n={otherOutcomes} />}
 
       {/* 6. The record itself */}
       {card.calls.length > 0 && (
         <>
-          <h3 className={SECTION_HEADING}>Latest calls</h3>
+          <h3 className={SECTION_HEADING}>Recent calls</h3>
           <ol>
             {card.calls.map((call) => (
               <CallRow key={call.case_number} call={call} />

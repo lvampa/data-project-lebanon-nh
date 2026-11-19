@@ -7,7 +7,7 @@ describe('channelLabel', () => {
     expect(channelLabel('Telephone')).toBe('Reported by phone')
     expect(channelLabel('911')).toBe('Reported by 911')
     expect(channelLabel('Walk-In')).toBe('Reported in person')
-    expect(channelLabel('Initiated')).toBe('Started by an officer')
+    expect(channelLabel('Initiated')).toBe('Officer-initiated')
     expect(channelLabel('Alarm System')).toBe('Reported by an alarm')
   })
 

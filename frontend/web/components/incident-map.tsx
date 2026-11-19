@@ -6,7 +6,7 @@ import { MapControls } from '@project/ui/components/map/MapControls'
 import { MapErrorState } from '@project/ui/components/map/MapErrorState'
 import { MapLoadingState } from '@project/ui/components/map/MapLoadingState'
 import { LEBANON_CENTER, LEBANON_ZOOM } from '@project/ui/lib/constants'
-import { callWord, nameOf } from '@/lib/police-map/format'
+import { callWord, nameOf, trafficNearby } from '@/lib/police-map/format'
 import { NO_PIN, pinLayers, streetLayer } from '@/lib/police-map/layers'
 import { CLUSTER_MAX_ZOOM, CLUSTER_RADIUS, pinsGeoJson } from '@/lib/police-map/map-style'
 import { streetFilter } from '@/lib/police-map/streets'
@@ -94,15 +94,19 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
           n?: number
           point_count?: number
           calls?: number
+          t?: number
         }
         const label = document.createElement('div')
         const strong = document.createElement('strong')
         if (props.point_count) {
           strong.textContent = `${props.point_count} places`
-          label.append(strong, ` · ${callWord(props.calls ?? 0)} · click to zoom in`)
+          label.append(strong, ` · ${callWord(props.calls ?? 0)} · zoom in to see them`)
         } else {
           strong.textContent = nameOf(props.name ?? '')
-          label.append(strong, ` · ${callWord(props.n ?? 0)}`)
+          label.append(
+            strong,
+            ` · ${props.t ? trafficNearby(props.n ?? 0) : callWord(props.n ?? 0)}`,
+          )
         }
         tip
           .setLngLat(feature.geometry.coordinates as [number, number])

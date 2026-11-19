@@ -64,7 +64,7 @@ export function CallRow({ call }: { call: PlaceCall }) {
             rel="noopener noreferrer"
             className={buttonVariants({ variant: 'link', size: 'xs' })}
           >
-            View in the city&apos;s log
+            Original log ↗
           </a>
         </div>
       </details>

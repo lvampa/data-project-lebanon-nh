@@ -50,6 +50,11 @@ Everything else is a place.
   A named place with no comma, such as "Colburn Park", counts as a road.
   That is rare, and the normalize prompt asks for "Name, Street".
   Pin ids that share a slug get a suffix after "--", which no slug contains, so ids stay unique and keep pointing at the same pin as counts change.
+- **A place with only traffic keeps its pin.**
+  It is sized and shaded by its traffic calls, its tooltip and card say "traffic calls nearby", and it has no rank.
+- **The lists on a card add up.**
+  Outcomes cover every call counted at the pin, and the incident list covers the calls at the place itself.
+  What the top rows leave out is shown as "Other".
 - **Plain words, with the log's words on hover.**
   Common incident types and outcomes get a plain label, and the original text shows on hover.
 - **The URL carries the selection**, so a card can be shared.

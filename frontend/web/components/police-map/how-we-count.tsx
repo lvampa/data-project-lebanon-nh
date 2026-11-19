@@ -1,13 +1,16 @@
-export function HowWeCount() {
+import { sinceLabel } from '@/lib/police-map/format'
+
+export function HowWeCount({ since }: { since: string }) {
   return (
     <details className="mt-5 border-t border-border pt-3 text-sm">
-      <summary className="cursor-pointer font-medium text-primary">How we count</summary>
+      <summary className="cursor-pointer font-medium text-primary">About these numbers</summary>
       <p className="mt-2">
-        A call counts toward the place named in the police log. Traffic stops and crashes on a road
-        count toward the road, not the business named as a landmark.
+        Each call is counted at the place the police log names. Traffic stops and crashes count
+        toward the street, even when the log names a nearby business. Data runs from{' '}
+        {sinceLabel(since)}, and comes from the city&apos;s daily police logs.
       </p>
       <p className="mt-2 text-muted-foreground">
-        The log records where and what. It does not record who was at fault.
+        A call shows where police went and why. It doesn&apos;t say who was at fault.
       </p>
     </details>
   )

@@ -1,6 +1,6 @@
 'use client'
 import { HowWeCount } from '@/components/police-map/how-we-count'
-import { nameOf, windowLabel } from '@/lib/police-map/format'
+import { nameOf, sinceLabel, windowLabel } from '@/lib/police-map/format'
 import { pinName } from '@/lib/police-map/map-style'
 import { busiestDay, busiestHour, busiestPlaces } from '@/lib/police-map/summary'
 import type { Address, StatsData } from '@/lib/types'
@@ -21,12 +21,14 @@ export function TownSummary({ addresses, stats, onChoose }: Props) {
   return (
     <div>
       <div className="eyebrow">Lebanon, NH · {windowLabel(stats.since, stats.generated_at)}</div>
-      <h2 className="text-display-3 mb-0.5 mt-1.5">Police calls around town</h2>
+      <h2 className="text-display-3 mb-0.5 mt-1.5">Police calls in Lebanon</h2>
       <div className="mt-4 flex items-baseline gap-2.5">
         <b className="text-display-2 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
           {stats.total.toLocaleString('en-US')}
         </b>
-        <span className="text-muted-foreground">calls in the police log</span>
+        <span className="text-muted-foreground">
+          calls on the map since {sinceLabel(stats.since)}
+        </span>
       </div>
       {day && hour && (
         <p className="mb-1 mt-3 text-base">
@@ -35,11 +37,11 @@ export function TownSummary({ addresses, stats, onChoose }: Props) {
         </p>
       )}
       <p className="text-muted-foreground">
-        Click a pin or search above to see what happens at a place.
+        Pick a circle or search for an address to see its calls.
       </p>
 
       <h3 className="mb-2 mt-6 font-mono text-xs font-medium uppercase tracking-widest text-muted-foreground">
-        Busiest places
+        Most calls
       </h3>
       <ol>
         {busiestPlaces(addresses, TOP_PLACES).map((place) => (
@@ -57,7 +59,7 @@ export function TownSummary({ addresses, stats, onChoose }: Props) {
           </li>
         ))}
       </ol>
-      <HowWeCount />
+      <HowWeCount since={stats.since} />
     </div>
   )
 }

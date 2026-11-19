@@ -59,6 +59,7 @@ export function PoliceMap({ addresses, stats }: Props) {
         <div className="pointer-events-none absolute bottom-7 left-3.5 z-10">
           <MapLegend
             variant="scale"
+            caption="Larger and darker means more calls"
             title={`Police calls · ${windowLabel(stats.since, stats.generated_at)}`}
             lastUpdated={updatedLabel(stats.generated_at)}
             color={PIN_COLOR}

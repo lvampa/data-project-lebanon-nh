@@ -4,6 +4,7 @@ mod db;
 mod output;
 
 use anyhow::Result;
+use chrono::NaiveDate;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -13,6 +14,10 @@ struct Args {
     /// Output directory for JSON files
     #[arg(long, default_value = "frontend/web/public/data")]
     output_dir: PathBuf,
+
+    /// First day of police log data to publish, as YYYY-MM-DD
+    #[arg(long, default_value = "2026-01-01")]
+    since: NaiveDate,
 }
 
 #[tokio::main]
@@ -25,11 +30,11 @@ async fn main() -> Result<()> {
 
     let pool = sqlx::PgPool::connect(&database_url).await?;
 
-    let stats = db::fetch_stats(&pool).await?;
+    let stats = db::fetch_stats(&pool, args.since).await?;
     println!("✓ stats.json  ({} total incidents)", stats.total);
     output::write_json(&args.output_dir, "stats.json", &stats)?;
 
-    let incidents = db::fetch_incidents(&pool).await?;
+    let incidents = db::fetch_incidents(&pool, args.since).await?;
     println!(
         "✓ incidents.json  ({} rows of {} total, capped at {})",
         incidents.len(),
@@ -38,7 +43,7 @@ async fn main() -> Result<()> {
     );
     output::write_json(&args.output_dir, "incidents.json", &incidents)?;
 
-    let addresses = db::fetch_addresses(&pool).await?;
+    let addresses = db::fetch_addresses(&pool, args.since).await?;
     println!("✓ addresses.json  ({} rows)", addresses.len());
     output::write_json(&args.output_dir, "addresses.json", &addresses)?;
 
@@ -51,4 +56,26 @@ async fn main() -> Result<()> {
     output::write_json(&args.output_dir, "properties.json", &properties)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn since_defaults_to_the_start_of_2026() {
+        let args = Args::try_parse_from(["report-gen"]).unwrap();
+        assert_eq!(args.since, NaiveDate::from_ymd_opt(2026, 1, 1).unwrap());
+    }
+
+    #[test]
+    fn since_takes_an_iso_date() {
+        let args = Args::try_parse_from(["report-gen", "--since", "2025-12-01"]).unwrap();
+        assert_eq!(args.since, NaiveDate::from_ymd_opt(2025, 12, 1).unwrap());
+    }
+
+    #[test]
+    fn since_rejects_anything_else() {
+        assert!(Args::try_parse_from(["report-gen", "--since", "last year"]).is_err());
+    }
 }

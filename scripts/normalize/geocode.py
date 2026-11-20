@@ -51,6 +51,8 @@ from postgres import get_engine, open_session
 from postgres.lock import GEOCODE, advisory_lock
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
+from pydantic import ValidationError
+from pymongo.errors import PyMongoError
 from sqlalchemy import ColumnElement, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
@@ -507,13 +509,15 @@ def _make_locator(
         return OsmLocator(snapshot)
     try:
         recorder = AiCallLog(ai_calls_collection(get_db()))
-    except Exception as exc:  # A plain run must not need MongoDB, whatever its error.
+    except (ValidationError, PyMongoError) as exc:
+        # A plain run must not need MongoDB. Building the recorder opens no connection, so
+        # the failure to expect is missing settings.
         # The type and message are logged and printed, so a real bug in the call log's setup
         # is not hidden behind "no AI".
         logfire.warning(
             "no call log; placing places without AI: {kind}: {error}",
             kind=type(exc).__name__,
-            error=str(exc),
+            error=repr(exc),
         )
         print(
             "No AI for place names, MongoDB is not available: "

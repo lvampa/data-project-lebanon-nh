@@ -8,6 +8,7 @@ import pytest
 from locations.geocode import GeocodeResult
 from locations.osm import Candidate, snapshot_from_replies
 from postgres.models.address_normalization import AddressNormalization
+from pymongo.errors import PyMongoError
 from sqlalchemy import select
 
 from scripts.normalize import geocode as geocode_job
@@ -822,7 +823,7 @@ def test_a_run_goes_on_without_ai_when_mongodb_is_not_available(
     db_session, snapshot_dir, monkeypatch, capsys
 ):
     def no_mongo():
-        raise RuntimeError("no mongo settings")
+        raise PyMongoError("no mongo")
 
     monkeypatch.setattr(geocode_job, "get_db", no_mongo)
     args = geocode_job._parse_args([])
@@ -832,7 +833,7 @@ def test_a_run_goes_on_without_ai_when_mongodb_is_not_available(
     assert locator is not None and locator.picker is None
     err = capsys.readouterr().err
     assert "MongoDB is not available" in err
-    assert "RuntimeError: no mongo settings" in err
+    assert "PyMongoError: no mongo" in err
 
 
 @pytest.mark.parametrize("text", ["=A1", "+1", "-1", "@SUM", "\tx", "\rx"])
@@ -869,3 +870,16 @@ def test_another_spelling_copies_an_osm_pin_with_its_reference(db_session):
 
     copy = the_row(db_session, "8 COMMERCE AV")
     assert (copy.geocoded_via, copy.osm_ref) == ("osm", "way/10")
+
+
+def test_an_unexpected_error_building_the_call_log_is_not_hidden(
+    snapshot_dir, monkeypatch
+):
+    def broken():
+        raise RuntimeError("a real bug")
+
+    monkeypatch.setattr(geocode_job, "get_db", broken)
+    args = geocode_job._parse_args([])
+
+    with pytest.raises(RuntimeError, match="a real bug"):
+        geocode_job._make_locator(args, snapshot_dir, lambda: FakeBackend())

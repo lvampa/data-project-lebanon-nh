@@ -436,13 +436,15 @@ def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
             .order_by(AddressNormalization.id)
         )
     )
-    # Rows are joined through the keys they share, so a place code links two addresses.
+    # Rows are joined through the keys they share, so a place code links two addresses. A
+    # code joins rows of one kind only, like `_placed_donor`: a place and an intersection
+    # that share a code are two different spots, and one must not take the other's pin.
     owner: dict[tuple[str, str], int] = {}
     groups: dict[int, list[AddressNormalization]] = {}
     for row in rows:
         keys = [("address", f"{row.normalized_address}|{row.kind}")]
         if row.place_code:
-            keys.append(("code", row.place_code))
+            keys.append(("code", f"{row.place_code}|{row.kind}"))
         joined = {owner[key] for key in keys if key in owner}
         target = min(joined) if joined else row.id
         merged = groups.setdefault(target, [])
@@ -459,13 +461,17 @@ def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
 
 def _has_human_row(session: Session, group: list[AddressNormalization]) -> bool:
     pairs = {(row.normalized_address, row.kind) for row in group}
-    codes = {row.place_code for row in group if row.place_code}
+    codes = {(row.place_code, row.kind) for row in group if row.place_code}
     same_address = tuple_(
         AddressNormalization.normalized_address, AddressNormalization.kind
     ).in_(pairs)
     clauses = [same_address]
     if codes:
-        clauses.append(AddressNormalization.place_code.in_(codes))
+        clauses.append(
+            tuple_(AddressNormalization.place_code, AddressNormalization.kind).in_(
+                codes
+            )
+        )
     return (
         session.scalar(
             select(AddressNormalization.id)

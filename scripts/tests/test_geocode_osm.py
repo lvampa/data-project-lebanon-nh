@@ -883,3 +883,78 @@ def test_an_unexpected_error_building_the_call_log_is_not_hidden(
 
     with pytest.raises(RuntimeError, match="a real bug"):
         geocode_job._make_locator(args, snapshot_dir, lambda: FakeBackend())
+
+
+# --- a place code joins rows of one kind only ---
+
+CROSS = "Mount Support Rd and Dartmouth Ave"
+
+
+def cross_row(session, raw: str = "QUARRY HILL TH + DARTMOUTH", **columns):
+    return add_row(
+        session,
+        raw,
+        **{
+            "kind": "intersection",
+            "normalized_address": CROSS,
+            "street": "MOUNT SUPPORT RD",
+            "place_code": "Q HILL",
+            **approximate(),
+            **columns,
+        },
+    )
+
+
+def test_an_intersection_that_matches_does_not_give_its_pin_to_a_place_with_its_code(
+    db_session,
+):
+    place_row(db_session, place_code="Q HILL", **approximate())
+    cross_row(db_session)
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT))
+
+    crossing = the_row(db_session, "QUARRY HILL TH + DARTMOUTH")
+    assert (crossing.lat, crossing.lng, crossing.osm_ref) == (43.674, -72.265, "node/2")
+    place = the_row(db_session, "QUARRY HILL TOWN HOUSES")
+    assert (place.lat, place.coordinate_precision, place.geocoded_via) == (
+        STREET_POINT[0],
+        "approximate",
+        "nominatim",
+    )
+    assert (counts.placed, counts.groups_retried) == (1, 2)
+
+
+def test_a_place_that_matches_does_not_give_its_pin_to_an_intersection_with_its_code(
+    db_session,
+):
+    place_row(db_session, place_code="Q HILL", **approximate())
+    cross_row(db_session, normalized_address="Mount Support Rd and Elm St")
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, Picks(0)))
+
+    place = the_row(db_session, "QUARRY HILL TOWN HOUSES")
+    assert (place.osm_ref, place.coordinate_precision) == ("node/11", "exact")
+    other = the_row(db_session, "QUARRY HILL TH + DARTMOUTH")
+    assert (other.coordinate_precision, other.geocoded_via) == (
+        "approximate",
+        "nominatim",
+    )
+
+
+def test_a_human_row_of_another_kind_with_the_same_code_does_not_block_a_group(
+    db_session,
+):
+    place_row(db_session, place_code="Q HILL", **approximate())
+    cross_row(
+        db_session,
+        "HAND PLACED CROSSING",
+        normalized_address="Elm St and Oak St",
+        source="human",
+        coordinate_precision="exact",
+        geocoded_via="manual",
+    )
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT, Picks(0)))
+
+    assert the_row(db_session, "QUARRY HILL TOWN HOUSES").osm_ref == "node/11"
+    assert counts.groups_kept == 0

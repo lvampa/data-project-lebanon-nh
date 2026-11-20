@@ -830,7 +830,9 @@ def test_a_run_goes_on_without_ai_when_mongodb_is_not_available(
     locator = geocode_job._make_locator(args, snapshot_dir, lambda: FakeBackend())
 
     assert locator is not None and locator.picker is None
-    assert "MongoDB is not available" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "MongoDB is not available" in err
+    assert "RuntimeError: no mongo settings" in err
 
 
 @pytest.mark.parametrize("text", ["=A1", "+1", "-1", "@SUM", "\tx", "\rx"])

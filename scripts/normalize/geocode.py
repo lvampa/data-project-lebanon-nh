@@ -508,8 +508,17 @@ def _make_locator(
     try:
         recorder = AiCallLog(ai_calls_collection(get_db()))
     except Exception as exc:  # A plain run must not need MongoDB, whatever its error.
+        # The type and message are logged and printed, so a real bug in the call log's setup
+        # is not hidden behind "no AI".
+        logfire.warning(
+            "no call log; placing places without AI: {kind}: {error}",
+            kind=type(exc).__name__,
+            error=str(exc),
+        )
         print(
-            f"No AI for place names, MongoDB is not available: {exc}", file=sys.stderr
+            "No AI for place names, MongoDB is not available: "
+            f"{type(exc).__name__}: {exc}",
+            file=sys.stderr,
         )
         return OsmLocator(snapshot)
 

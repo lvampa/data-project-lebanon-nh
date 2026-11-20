@@ -70,6 +70,12 @@ pub struct Address {
     pub traffic_count: i64,
     pub lat: f64,
     pub lng: f64,
+    // "approximate" when the point is only somewhere on the place's street.
+    pub precision: String,
+    // The street pin an approximate place hangs on, when it has one.
+    pub street_id: Option<String>,
+    // True when the place has no pin of its own and is listed on its street's card.
+    pub hidden: bool,
 }
 
 // A pin with its report card, which is JSON text that goes into places/<id>.json.

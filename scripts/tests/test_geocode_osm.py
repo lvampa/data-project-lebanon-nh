@@ -832,7 +832,7 @@ def test_a_run_goes_on_without_ai_when_mongodb_is_not_available(
 
     assert locator is not None and locator.picker is None
     err = capsys.readouterr().err
-    assert "MongoDB is not available" in err
+    assert "the call log could not be set up" in err
     assert "PyMongoError: no mongo" in err
 
 

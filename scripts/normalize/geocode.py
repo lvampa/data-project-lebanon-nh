@@ -520,7 +520,7 @@ def _make_locator(
             error=repr(exc),
         )
         print(
-            "No AI for place names, MongoDB is not available: "
+            "No AI for place names, the call log could not be set up: "
             f"{type(exc).__name__}: {exc}",
             file=sys.stderr,
         )

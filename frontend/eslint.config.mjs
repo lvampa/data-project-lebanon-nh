@@ -33,6 +33,8 @@ export default defineConfig([
     ...nextVitals,
     ...nextTs,
     { settings: { next: { rootDir: ['web/', 'admin/'] } } },
+    // Logging needs a reason, given on a disable comment where it is kept.
+    { rules: { 'no-console': 'error' } },
     tailwindFor(['web/**/*.{ts,tsx}', 'shared/**/*.{ts,tsx}'], 'web/app/globals.css'),
     tailwindFor(['admin/**/*.{ts,tsx}'], 'admin/app/globals.css'),
     {

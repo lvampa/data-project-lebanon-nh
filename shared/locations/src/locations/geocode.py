@@ -32,6 +32,8 @@ Precision = Literal["exact", "approximate"]
 # Lebanon from White River Junction across the river, so the address decides.
 _MIN_LAT, _MAX_LAT = 43.56, 43.69
 _MIN_LNG, _MAX_LNG = -72.34, -72.17
+# South, west, north, east: the order Overpass wants in a bounding box.
+CITY_BBOX = (_MIN_LAT, _MIN_LNG, _MAX_LAT, _MAX_LNG)
 # OpenStreetMap may tag West Lebanon as a village of its own, with no "Lebanon" at all.
 _AREA_KEYS = ("city", "town", "village", "hamlet")
 _AREA_NAMES = frozenset({"Lebanon", "West Lebanon"})

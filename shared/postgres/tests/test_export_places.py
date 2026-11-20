@@ -34,7 +34,13 @@ FORD = "Lebanon Ford, 90 Miracle Mile"
 
 
 def add_place(
-    session, normalized: str, coordinates, *raw_spellings: str, kind: str = "address"
+    session,
+    normalized: str,
+    coordinates,
+    *raw_spellings: str,
+    kind: str = "address",
+    precision: str | None = None,
+    street: str | None = None,
 ) -> None:
     lat, lng = coordinates
     for raw in raw_spellings:
@@ -45,6 +51,8 @@ def add_place(
                 lat=float(lat),
                 lng=float(lng),
                 kind=kind,
+                coordinate_precision=precision,
+                street=street,
                 source="ai",
                 created_at=NOW,
                 updated_at=NOW,
@@ -491,3 +499,193 @@ def test_a_card_with_nothing_to_list_has_empty_lists(db_session):
     result = card(db_session, "lebanon-ford-90-miracle-mile")
 
     assert (result["types"], result["outcomes"], result["calls"]) == ([], [], [])
+
+
+# --- places that have no spot of their own ---
+
+QUARRY = "Quarry Hill Town Houses, Mount Support Rd"
+ROAD_POINT = ("43.6740", "-72.2656")
+
+
+def add_hanging_place(session, normalized: str = QUARRY, raw: str = "QUARRY") -> None:
+    add_place(
+        session,
+        normalized,
+        ROAD_POINT,
+        raw,
+        kind="place",
+        precision="approximate",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(session, raw, "Alarm", "Welfare Check")
+
+
+def add_street(
+    session,
+    normalized: str = "Mount Support Rd",
+    calls: int = 5,
+    raw: str = "MT SUPPORT",
+) -> None:
+    add_place(
+        session,
+        normalized,
+        ("43.6741", "-72.2657"),
+        raw,
+        kind="place",
+        precision="approximate",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(session, raw, *["Alarm"] * calls)
+
+
+def pin(session, normalized: str) -> dict:
+    [found] = [p for p in rows(session) if p["normalized_address"] == normalized]
+    return found
+
+
+def test_an_exact_place_is_not_hidden(db_session):
+    add_place(
+        db_session,
+        FORD,
+        MIRACLE_MILE,
+        "LEBANON FORD",
+        precision="exact",
+        street="MIRACLE MILE",
+    )
+    add_entries(db_session, "LEBANON FORD", "Alarm")
+
+    found = pin(db_session, FORD)
+
+    assert (found["precision"], found["street_id"], found["hidden"]) == (
+        "exact",
+        None,
+        False,
+    )
+
+
+def test_a_place_with_no_precision_is_exact(db_session):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
+    add_entries(db_session, "LEBANON FORD", "Alarm")
+
+    assert pin(db_session, FORD)["precision"] == "exact"
+
+
+def test_an_approximate_place_hangs_on_its_streets_pin_and_keeps_its_count(db_session):
+    add_street(db_session)
+    add_hanging_place(db_session)
+
+    found = pin(db_session, QUARRY)
+
+    assert (found["precision"], found["street_id"], found["hidden"]) == (
+        "approximate",
+        "mount-support-rd",
+        True,
+    )
+    assert found["count"] == 2
+    assert pin(db_session, "Mount Support Rd")["hidden"] is False
+
+
+def test_an_approximate_place_with_no_street_pin_keeps_its_pin(db_session):
+    add_hanging_place(db_session)
+
+    found = pin(db_session, QUARRY)
+
+    assert (found["precision"], found["street_id"], found["hidden"]) == (
+        "approximate",
+        None,
+        False,
+    )
+
+
+def test_an_approximate_place_with_no_street_is_not_hidden(db_session):
+    add_street(db_session)
+    add_place(
+        db_session, QUARRY, ROAD_POINT, "QUARRY", kind="place", precision="approximate"
+    )
+    add_entries(db_session, "QUARRY", "Alarm")
+
+    assert pin(db_session, QUARRY)["hidden"] is False
+
+
+def test_an_intersection_with_the_same_first_street_is_not_the_streets_pin(db_session):
+    add_place(
+        db_session,
+        "Mount Support Rd and Dartmouth Ave",
+        ("43.6742", "-72.2650"),
+        "CROSS",
+        kind="intersection",
+        precision="approximate",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(db_session, "CROSS", *["Alarm"] * 9)
+    add_street(db_session, calls=2)
+    add_hanging_place(db_session)
+
+    assert pin(db_session, QUARRY)["street_id"] == "mount-support-rd"
+
+
+def test_an_approximate_road_or_intersection_keeps_its_pin(db_session):
+    add_street(db_session)
+    add_place(
+        db_session,
+        "Mount Support Rd and Dartmouth Ave",
+        ("43.6742", "-72.2650"),
+        "CROSS",
+        kind="intersection",
+        precision="approximate",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(db_session, "CROSS", "Alarm")
+
+    assert [p["hidden"] for p in rows(db_session)] == [False, False]
+
+
+def test_the_busiest_street_pin_wins_and_a_tie_goes_to_the_lowest_id(db_session):
+    add_street(db_session, "Mount Support Rd", 5, "MT SUPPORT")
+    add_place(
+        db_session,
+        "Mount Support Road",
+        ("43.6750", "-72.2660"),
+        "MT SUPPORT ROAD",
+        kind="place",
+        precision="approximate",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(db_session, "MT SUPPORT ROAD", *["Alarm"] * 5)
+    add_hanging_place(db_session)
+
+    assert pin(db_session, QUARRY)["street_id"] == "mount-support-rd"
+
+    add_entries(
+        db_session,
+        "MT SUPPORT ROAD",
+        "Alarm",
+        log_date=LOGGED,
+        reported_at=datetime(2026, 7, 1),
+    )
+
+    assert pin(db_session, QUARRY)["street_id"] == "mount-support-road"
+
+
+def test_a_place_is_approximate_when_any_of_its_spellings_is(db_session):
+    add_place(
+        db_session,
+        QUARRY,
+        ROAD_POINT,
+        "QUARRY A",
+        kind="place",
+        street="MOUNT SUPPORT RD",
+    )
+    add_place(
+        db_session,
+        QUARRY,
+        ROAD_POINT,
+        "QUARRY B",
+        kind="place",
+        precision="approximate",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(db_session, "QUARRY A", "Alarm")
+    add_entries(db_session, "QUARRY B", "Alarm")
+
+    assert pin(db_session, QUARRY)["precision"] == "approximate"

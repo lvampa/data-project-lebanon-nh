@@ -6,13 +6,19 @@ import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
 import type { CardState } from '@/components/police-map/use-place-card'
 import { categoriesFor } from '@/lib/police-map/categories'
 import { remainder } from '@/lib/police-map/card'
-import { nameOf, streetOf } from '@/lib/police-map/format'
+import { isApproximatePlace } from '@/lib/police-map/approximate'
+import { approximateLine, nameOf, onStreetHeading, streetOf } from '@/lib/police-map/format'
 import { isTrafficOnly, pinName } from '@/lib/police-map/map-style'
 import { rankLine } from '@/lib/police-map/rank'
 import type { Address, PlaceCard } from '@/lib/types'
 
 interface Props {
   address: Address
+  // The street an approximate place is somewhere on, for the line under its name.
+  streetLabel: string | null
+  // The approximate places listed on this street's card, busiest first.
+  onStreet: Address[]
+  onChoose: (id: string) => void
   state: CardState
   // The call count of every pin of this kind, for the rank.
   counts: number[]
@@ -27,18 +33,32 @@ const SECTION_HEADING =
 const ROW = 'flex justify-between gap-3 border-b border-border py-2 text-sm'
 const ROW_VALUE = 'font-mono text-sm text-muted-foreground'
 
-export function ReportCard({ address, state, counts, year, since, onClose, onRetry }: Props) {
+export function ReportCard({
+  address,
+  streetLabel,
+  onStreet,
+  onChoose,
+  state,
+  counts,
+  year,
+  since,
+  onClose,
+  onRetry,
+}: Props) {
   const road = address.kind === 'road'
   const trafficOnly = isTrafficOnly(address)
   const name = pinName(address)
   const street = streetOf(name)
+  const subtitle = isApproximatePlace(address)
+    ? approximateLine(streetLabel)
+    : (street ?? 'Highlighted on the map')
 
   return (
     <div>
       {/* 1. What this is */}
       <CardBar label={`${road ? 'Street' : 'Place'} · ${year}`} onClose={onClose} />
       <h2 className="text-display-3 mb-0.5 mt-1.5">{nameOf(name)}</h2>
-      <div className="text-muted-foreground">{street ?? 'Highlighted on the map'}</div>
+      <div className="text-muted-foreground">{subtitle}</div>
 
       {/* 2. How many, and how that compares */}
       <div className="mt-4 flex items-baseline gap-2.5">
@@ -79,8 +99,53 @@ export function ReportCard({ address, state, counts, year, since, onClose, onRet
       )}
 
       {/* 7. Method */}
+      {onStreet.length > 0 && (
+        <OnThisStreet street={nameOf(name)} places={onStreet} onChoose={onChoose} />
+      )}
+
       <HowWeCount since={since} />
     </div>
+  )
+}
+
+const LISTED_AT_FIRST = 10
+
+// The places that have no spot of their own and are somewhere on this street.
+function OnThisStreet({
+  street,
+  places,
+  onChoose,
+}: {
+  street: string
+  places: Address[]
+  onChoose: (id: string) => void
+}) {
+  const [first, rest] = [places.slice(0, LISTED_AT_FIRST), places.slice(LISTED_AT_FIRST)]
+  const row = (place: Address) => (
+    <li key={place.id} className="border-b border-border">
+      <button
+        type="button"
+        onClick={() => onChoose(place.id)}
+        className="flex w-full justify-between gap-3 py-2 text-left text-sm hover:text-primary"
+      >
+        <span>{nameOf(pinName(place))}</span>
+        <span className={ROW_VALUE}>{place.count.toLocaleString('en-US')}</span>
+      </button>
+    </li>
+  )
+  return (
+    <section>
+      <h3 className={SECTION_HEADING}>{onStreetHeading(street)}</h3>
+      <ul>{first.map(row)}</ul>
+      {rest.length > 0 && (
+        <details>
+          <summary className="cursor-pointer py-2 text-sm font-medium text-primary">
+            Show {rest.length} more
+          </summary>
+          <ul>{rest.map(row)}</ul>
+        </details>
+      )}
+    </section>
   )
 }
 

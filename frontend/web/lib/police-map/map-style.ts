@@ -1,5 +1,6 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 import type { Address } from '../types'
+import { hiddenCallsByStreet, isApproximatePlace } from './approximate'
 
 export const PIN_COLOR = '#1f4e8c'
 export const SELECTED_COLOR = '#a3195b'
@@ -12,7 +13,7 @@ export const MIN_HIT_RADIUS = 20
 
 // What a group of pins adds up: the calls its pins hold, and the weight that sizes it.
 export const CLUSTER_PROPERTIES = {
-  calls: ['+', ['get', 'n']],
+  calls: ['+', ['+', ['get', 'n'], ['get', 'h']]],
   weight: ['+', ['get', 'w']],
 }
 
@@ -25,6 +26,11 @@ export interface PinProperties {
   w: number
   // 1 for a place with no calls of its own, only traffic on its street.
   t: 0 | 1
+  // 1 for a place whose point is only somewhere on its street.
+  a: 0 | 1
+  // The calls of the hidden places listed on this street, so a tooltip's "N calls" and a
+  // group's total match the town's.
+  h: number
 }
 
 export interface PinFeature {
@@ -52,20 +58,28 @@ export function pinCalls(address: Pick<Address, 'count' | 'traffic_count'>): num
   return isTrafficOnly(address) ? address.traffic_count : address.count
 }
 
+// A place hidden under its street has no pin, so its calls ride on the street's pin: they add
+// to its size (`w`), and to the "N calls" a tooltip or a group shows (`h`), so those match the
+// town's totals. `n` stays the street's own count, which is what its card says.
 export function pinsGeoJson(addresses: Address[]): PinCollection {
+  const hiddenCalls = hiddenCallsByStreet(addresses)
   return {
     type: 'FeatureCollection',
-    features: addresses.map((address) => ({
-      type: 'Feature',
-      properties: {
-        id: address.id,
-        name: pinName(address),
-        n: address.count,
-        w: pinCalls(address),
-        t: isTrafficOnly(address) ? 1 : 0,
-      },
-      geometry: { type: 'Point', coordinates: [address.lng, address.lat] },
-    })),
+    features: addresses
+      .filter((address) => !address.hidden)
+      .map((address) => ({
+        type: 'Feature',
+        properties: {
+          id: address.id,
+          name: pinName(address),
+          n: address.count,
+          w: pinCalls(address) + (hiddenCalls.get(address.id) ?? 0),
+          t: isTrafficOnly(address) ? 1 : 0,
+          a: isApproximatePlace(address) ? 1 : 0,
+          h: hiddenCalls.get(address.id) ?? 0,
+        },
+        geometry: { type: 'Point', coordinates: [address.lng, address.lat] },
+      })),
   }
 }
 

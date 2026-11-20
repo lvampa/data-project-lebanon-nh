@@ -17,6 +17,9 @@ const FORD: Address = {
   traffic_count: 3,
   lat: 43.64,
   lng: -72.25,
+  precision: 'exact',
+  street_id: null,
+  hidden: false,
 }
 
 describe('pinsGeoJson', () => {
@@ -36,6 +39,8 @@ describe('pinsGeoJson', () => {
       n: 12,
       w: 12,
       t: 0,
+      a: 0,
+      h: 0,
     })
   })
 })

@@ -4,6 +4,7 @@ import { MapLegend } from '@project/ui/components/map/MapLegend'
 import { IncidentMap, type Selection } from '@/components/incident-map'
 import { PlaceSearch } from '@/components/police-map/place-search'
 import { SidePanel } from '@/components/police-map/side-panel'
+import { streetPinOf } from '@/lib/police-map/approximate'
 import { streetsToLight } from '@/lib/police-map/streets'
 import { updatedLabel, windowLabel } from '@/lib/police-map/format'
 import { idFromHash } from '@/lib/police-map/hash'
@@ -42,7 +43,13 @@ export function PoliceMap({ addresses, stats }: Props) {
   }, [])
 
   const selected = selection.id ? places.get(selection.id) : undefined
-  const streets = useMemo(() => (selected ? streetsToLight(selected) : []), [selected])
+  // A hidden place is somewhere on its street, so its street is lit and ringed.
+  const streetPin = selected ? streetPinOf(selected, places) : undefined
+  const streets = useMemo(() => {
+    if (!selected) return []
+    return streetsToLight(selected.hidden && streetPin ? streetPin : selected)
+  }, [selected, streetPin])
+  const ringed = selected ? (selected.hidden ? (selected.street_id ?? null) : selected.id) : null
 
   return (
     <div className="police-map-stage overflow-hidden rounded-lg border border-border bg-card">
@@ -50,6 +57,7 @@ export function PoliceMap({ addresses, stats }: Props) {
         <IncidentMap
           addresses={addresses}
           selection={selection}
+          ringed={ringed}
           streets={streets}
           onSelect={(id) => select(id, false)}
         />

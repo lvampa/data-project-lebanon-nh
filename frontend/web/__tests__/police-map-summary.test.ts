@@ -13,6 +13,9 @@ function place(id: string, name: string, count: number): Address {
     traffic_count: 0,
     lat: 43.64,
     lng: -72.25,
+    precision: 'exact',
+    street_id: null,
+    hidden: false,
   }
 }
 

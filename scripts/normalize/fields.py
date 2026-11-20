@@ -503,6 +503,8 @@ _COORDINATES_CLEARED_ON_NEW_ADDRESS = {
     "lng": None,
     "coordinate_precision": None,
     "geocoded_via": None,
+    "osm_ref": None,
+    "geocode_source_url": None,
     "geocode_attempts": 0,
 }
 

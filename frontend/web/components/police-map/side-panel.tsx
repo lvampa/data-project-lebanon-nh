@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { ReportCard } from '@/components/police-map/report-card'
 import { TownSummary } from '@/components/police-map/town-summary'
 import { usePlaceCard } from '@/components/police-map/use-place-card'
+import { placesOnStreet, streetNameOf } from '@/lib/police-map/approximate'
 import type { Address, StatsData } from '@/lib/types'
 
 interface Props {
@@ -18,6 +19,7 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props)
   const [attempt, setAttempt] = useState(0)
   const state = usePlaceCard(place?.id ?? null, attempt)
   const kind = place?.kind
+  const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
   const counts = useMemo(
     () => addresses.filter((a) => a.kind === kind && a.count > 0).map((a) => a.count),
     [addresses, kind],
@@ -30,6 +32,9 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props)
     <ReportCard
       key={place.id}
       address={place}
+      streetLabel={streetNameOf(place, places)}
+      onStreet={place.kind === 'road' ? placesOnStreet(addresses, place.id) : []}
+      onChoose={onChoose}
       state={state}
       counts={counts}
       year={stats.since.slice(0, 4)}

@@ -212,6 +212,9 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# OpenStreetMap snapshots for the geocode job
+scripts/data/osm/
+
 # Incident type export data
 scripts/data/incident_types.txt
 scripts/data/incident_categories.json

@@ -37,6 +37,18 @@ export function trafficNearby(count: number): string {
   return `${count.toLocaleString('en-US')} traffic ${count === 1 ? 'call' : 'calls'} nearby`
 }
 
+// The line under an approximate place's name.
+export function approximateLine(street: string | null): string {
+  return street ? `Approximate location, somewhere on ${street}` : 'Approximate location'
+}
+
+// The heading over the places listed on a street's card.
+export function onStreetHeading(street: string): string {
+  return `On ${street}, exact spot unknown`
+}
+
+export const APPROXIMATE_TIP = 'approximate location'
+
 // What a group of pins holds, for its tooltip. A group with no calls of its own has only
 // traffic, and its weight is exactly the sum of that traffic.
 export function clusterHolds(calls: number, weight: number): string {

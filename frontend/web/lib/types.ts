@@ -27,6 +27,13 @@ export interface Address {
   traffic_count: number
   lat: number
   lng: number
+  // 'approximate' when the point is only somewhere on the place's street.
+  precision: 'exact' | 'approximate'
+  // The street pin an approximate place is listed on, when it has one.
+  street_id: string | null
+  // True when the place has no pin of its own. It stays in the list so counts and ranks
+  // are unchanged, and the map leaves it out.
+  hidden: boolean
 }
 
 // One call on a place's card.

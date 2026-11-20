@@ -20,6 +20,8 @@ WITH entries AS (
         le.officer,
         an.normalized_address,
         an.kind AS address_kind,
+        an.coordinate_precision,
+        an.street,
         an.lat,
         an.lng,
         call_category(le.incident_type, le.call_source) AS category
@@ -45,7 +47,14 @@ groups AS (
             WHEN bool_or(address_kind IN ('intersection', 'highway')) THEN 'road'
             WHEN normalized_address ~ '^\d' THEN 'place'
             ELSE 'road'
-        END AS kind
+        END AS kind,
+        -- A pin is approximate when any spelling of it sits on its street's point.
+        CASE
+            WHEN bool_or(coordinate_precision = 'approximate') THEN 'approximate'
+            ELSE 'exact'
+        END AS coordinate_precision,
+        MODE() WITHIN GROUP (ORDER BY street) AS street,
+        bool_or(address_kind IN ('intersection', 'highway')) AS junction
     FROM entries
     GROUP BY normalized_address, lat, lng
 ),
@@ -95,6 +104,27 @@ counted AS (
         COUNT(*) FILTER (WHERE category <> 'traffic' OR kind = 'road') AS count
     FROM tagged
     GROUP BY pin_id
+),
+links AS (
+    -- A place on a street's point has no spot of its own. It hangs on its street's card
+    -- instead: the bare street with the same street, the busiest if there are several,
+    -- and the lowest id on a tie. An intersection has a first street too, but is not it.
+    SELECT
+        place.id AS pin_id,
+        (
+            SELECT road.id
+            FROM pins road
+            JOIN counted road_count ON road_count.pin_id = road.id
+            WHERE road.kind = 'road'
+              AND NOT road.junction
+              AND road.street = place.street
+            ORDER BY road_count.count DESC, road.id
+            LIMIT 1
+        ) AS street_id
+    FROM pins place
+    WHERE place.kind = 'place'
+      AND place.coordinate_precision = 'approximate'
+      AND place.street IS NOT NULL
 )
 SELECT
     pins.id,
@@ -105,6 +135,9 @@ SELECT
     counted.traffic AS traffic_count,
     pins.lat,
     pins.lng,
+    pins.coordinate_precision AS precision,
+    links.street_id,
+    links.street_id IS NOT NULL AS hidden,
     jsonb_build_object(
         'name', COALESCE(pins.normalized_address, pins.raw_address),
         'kind', pins.kind,
@@ -175,4 +208,5 @@ SELECT
     )::text AS card
 FROM pins
 JOIN counted ON counted.pin_id = pins.id
+LEFT JOIN links ON links.pin_id = pins.id
 ORDER BY counted.count DESC, counted.traffic DESC, pins.normalized_address, pins.id

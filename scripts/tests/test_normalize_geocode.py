@@ -159,12 +159,19 @@ def test_a_place_code_with_coordinates_on_another_row_is_reused_with_no_request(
         "HANNAFORDS - MARKET ST",
         place_code="L HANNAF",
         kind="place",
+        street="MARKET ST",
         lat=43.65,
         lng=-72.26,
         geocoded_via="nominatim",
         coordinate_precision="exact",
     )
-    add_row(db_session, "HANNAFORDS MARKET", place_code="L HANNAF", kind="place")
+    add_row(
+        db_session,
+        "HANNAFORDS MARKET",
+        place_code="L HANNAF",
+        kind="place",
+        street="MARKET ST",
+    )
     geocoder = FakeGeocoder()
 
     counts = geocode_job.run(geocoder)
@@ -174,6 +181,78 @@ def test_a_place_code_with_coordinates_on_another_row_is_reused_with_no_request(
     assert row.coordinate_precision == "exact"
     assert geocoder.queries == []
     assert (counts.reused, counts.requests) == (1, 0)
+
+
+AREA_PIN = (43.6001, -72.2001)
+
+
+def add_placed_with_code(session, raw: str, street: str | None, **columns) -> None:
+    add_row(
+        session,
+        raw,
+        place_code="E",
+        kind="place",
+        street=street,
+        lat=AREA_PIN[0],
+        lng=AREA_PIN[1],
+        geocoded_via="nominatim",
+        coordinate_precision="exact",
+        **columns,
+    )
+
+
+def test_places_with_an_area_code_on_different_streets_do_not_share_a_pin(db_session):
+    add_placed_with_code(db_session, "SHOP ON DANIELS DR", "DANIELS DR")
+    add_row(
+        db_session,
+        "SHOP ON OAK HILL RD",
+        place_code="E",
+        kind="place",
+        street="OAK HILL RD",
+    )
+    geocoder = FakeGeocoder({"SHOP ON OAK HILL RD, Lebanon, NH": hit()})
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "SHOP ON OAK HILL RD")
+    assert (row.lat, row.lng) == IN_CITY
+    assert row.geocoded_via == "nominatim"
+    assert counts.reused == 0
+
+
+def test_places_with_one_code_on_one_street_share_a_pin(db_session):
+    add_placed_with_code(db_session, "SHOP A ON DANIELS DR", "DANIELS DR")
+    add_row(
+        db_session,
+        "SHOP B ON DANIELS DR",
+        place_code="E",
+        kind="place",
+        street="DANIELS DR",
+    )
+
+    counts = geocode_job.run(FakeGeocoder())
+
+    row = the_row(db_session, "SHOP B ON DANIELS DR")
+    assert ((row.lat, row.lng), row.geocoded_via) == (AREA_PIN, "place_code")
+    assert counts.reused == 1
+
+
+@pytest.mark.parametrize(
+    ("donor_street", "row_street"),
+    [(None, None), ("DANIELS DR", None), (None, "DANIELS DR")],
+    ids=["both-null", "row-null", "donor-null"],
+)
+def test_a_missing_street_is_never_a_match_for_a_place_code(
+    db_session, donor_street, row_street
+):
+    add_placed_with_code(db_session, "PLACED", donor_street)
+    add_row(db_session, "UNPLACED", place_code="E", kind="place", street=row_street)
+    geocoder = FakeGeocoder({"UNPLACED, Lebanon, NH": hit()})
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "UNPLACED")
+    assert (row.geocoded_via, counts.reused) == ("nominatim", 0)
 
 
 def test_a_place_code_with_no_coordinates_anywhere_is_looked_up_normally(db_session):

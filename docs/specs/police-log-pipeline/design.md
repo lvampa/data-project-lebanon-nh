@@ -81,7 +81,9 @@ There is no Elasticsearch and no dbt.
   The job prints a summary, and it takes the `normalize` lock so two runs never spend the same AI calls.
   The geocode job takes its own `geocode` lock, so two runs never double the Nominatim rate.
 - **Geocode job:** it takes `ai` and `rule` addresses with a normalized address and no coordinates, and never a `human` row.
-  Before calling Nominatim it reuses coordinates from another row with the same place code, or the same normalized address and kind.
+  Before calling Nominatim it reuses coordinates from another row with the same place code, kind and street, or the same normalized address and kind.
+  A place code can name an area (code `E` covers a dozen streets), so a code alone is not enough, and a row with no street never takes a code's pin.
+  `--retry-approximate` joins rows by a shared place code under the same rule.
   A hand-placed donor is used too, so two spellings of one address never land on different spots; the copy keeps its `source`, and `geocoded_via` says how the pin was found.
   Otherwise it tries the geocode query, then the newest OpenStreetMap snapshot, then the street alone (an `approximate` result).
   From the snapshot, a house address is matched by number and street, and an intersection by a node its two roads share, both with no AI.

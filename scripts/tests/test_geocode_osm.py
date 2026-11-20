@@ -958,3 +958,81 @@ def test_a_human_row_of_another_kind_with_the_same_code_does_not_block_a_group(
 
     assert the_row(db_session, "QUARRY HILL TOWN HOUSES").osm_ref == "node/11"
     assert counts.groups_kept == 0
+
+
+# --- a place code joins rows of one kind on one street only ---
+
+
+def test_an_area_code_on_two_streets_makes_two_groups(db_session):
+    place_row(db_session, "QUARRY HILL TOWN HOUSES", place_code="E", **approximate())
+    place_row(
+        db_session,
+        "QUARRY HILL MARKETING",
+        "Quarry Hill Marketing",
+        place_code="E",
+        street="OAK HILL RD",
+        **approximate(),
+    )
+
+    groups = geocode_job._approximate_groups(db_session)
+
+    assert sorted(len(group) for group in groups) == [1, 1]
+
+
+def test_a_code_with_no_street_does_not_join_rows(db_session):
+    place_row(
+        db_session,
+        "QUARRY HILL TOWN HOUSES",
+        place_code="E",
+        street=None,
+        **approximate(),
+    )
+    place_row(
+        db_session,
+        "QUARRY HILL MARKETING",
+        "Quarry Hill Marketing",
+        place_code="E",
+        street=None,
+        **approximate(),
+    )
+
+    groups = geocode_job._approximate_groups(db_session)
+
+    assert sorted(len(group) for group in groups) == [1, 1]
+
+
+def test_a_human_row_with_the_code_on_another_street_does_not_block_a_group(db_session):
+    place_row(db_session, "QUARRY HILL TOWN HOUSES", place_code="E", **approximate())
+    place_row(
+        db_session,
+        "HAND PLACED",
+        "Hand Placed",
+        place_code="E",
+        street="OAK HILL RD",
+        source="human",
+        coordinate_precision="exact",
+        geocoded_via="manual",
+    )
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT, Picks(0)))
+
+    assert the_row(db_session, "QUARRY HILL TOWN HOUSES").osm_ref == "node/11"
+    assert counts.groups_kept == 0
+
+
+def test_a_human_row_with_the_code_on_the_same_street_blocks_the_group(db_session):
+    place_row(db_session, "QUARRY HILL TOWN HOUSES", place_code="E", **approximate())
+    place_row(
+        db_session,
+        "HAND PLACED",
+        "Hand Placed",
+        place_code="E",
+        source="human",
+        coordinate_precision="exact",
+        geocoded_via="manual",
+    )
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT, Picks(0)))
+
+    assert the_row(db_session, "QUARRY HILL TOWN HOUSES").osm_ref is None
+    assert counts.groups_kept == 1

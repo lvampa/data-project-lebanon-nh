@@ -5,10 +5,10 @@ import { Button } from '@project/ui/components/ui/button'
 
 export default function Error({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string }
-  unstable_retry: () => void
+  retry: () => void
 }) {
   useEffect(() => {
     console.error(error)
@@ -18,7 +18,7 @@ export default function Error({
     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
       <h2 className="text-xl font-semibold">Something went wrong</h2>
       <p className="text-muted-foreground">An unexpected error occurred. Please try again.</p>
-      <Button variant="outline" onClick={() => unstable_retry()}>
+      <Button variant="outline" onClick={() => retry()}>
         Try again
       </Button>
     </div>

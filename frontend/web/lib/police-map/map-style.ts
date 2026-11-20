@@ -13,7 +13,7 @@ export const MIN_HIT_RADIUS = 20
 
 // What a group of pins adds up: the calls its pins hold, and the weight that sizes it.
 export const CLUSTER_PROPERTIES = {
-  calls: ['+', ['get', 'n'], ['get', 'h']],
+  calls: ['+', ['+', ['get', 'n'], ['get', 'h']]],
   weight: ['+', ['get', 'w']],
 }
 

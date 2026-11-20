@@ -64,7 +64,9 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
     })
     mapRef.current = map
 
-    map.on('error', () => {
+    map.on('error', (event) => {
+      // MapLibre stops logging errors once a listener is attached, so log them here.
+      console.error(event.error)
       // A failed tile is not fatal. Only a map that never loaded is.
       if (!map.loaded()) setStatus((current) => (current === 'ready' ? current : 'error'))
     })
@@ -168,7 +170,9 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
 
   return (
     <div className="relative h-full w-full">
-      <div ref={containerRef} className="absolute inset-0" />
+      {/* Sized by height, not inset: MapLibre's unlayered .maplibregl-map sets position: relative,
+          which beats Tailwind's layered absolute and would collapse the map to no height. */}
+      <div ref={containerRef} className="h-full w-full" />
       {status === 'loading' && (
         <div className="absolute inset-0">
           <MapLoadingState progress="Loading the map" />

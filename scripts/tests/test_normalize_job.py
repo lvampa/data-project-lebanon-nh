@@ -839,7 +839,9 @@ def test_an_address_that_changes_clears_its_coordinates_so_it_is_placed_again(
         prompt_version="location-0+streets-old",
         lat=43.65,
         lng=-72.26,
-        geocoded_via="nominatim",
+        geocoded_via="osm",
+        osm_ref="way/1",
+        geocode_source_url="https://example.com/p",
         coordinate_precision="approximate",
         geocode_attempts=2,
     )
@@ -860,6 +862,8 @@ def test_an_address_that_changes_clears_its_coordinates_so_it_is_placed_again(
         None,
     )
     assert row.geocode_attempts == 0
+    # The reference and the page belong to the old pin.
+    assert (row.osm_ref, row.geocode_source_url) == (None, None)
 
 
 def test_an_address_that_stays_the_same_keeps_its_coordinates(db_session, call_log):

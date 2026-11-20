@@ -65,10 +65,12 @@ def test_update_address_upserts_geocoded_coordinates_and_commits():
         "geocoded_via",
         "coordinate_precision",
         "osm_ref",
+        "geocode_source_url",
     } <= upsert_set_columns(stmt)
     assert compile_pg(stmt).params["coordinate_precision"] == "exact"
     # A new pin must not keep the OpenStreetMap reference of the old one.
     assert compile_pg(stmt).params["osm_ref"] is None
+    assert compile_pg(stmt).params["geocode_source_url"] is None
     db.commit.assert_called_once()
     assert (result.lat, result.lng, result.geocoded_via) == (43.7, -72.3, "nominatim")
 
@@ -83,6 +85,8 @@ def test_typed_coordinates_clear_the_osm_reference():
     addresses.update_address(db, "TIMBERWOOD DR", update, nominatim_contact=None)
 
     stmt = executed_stmt(db)
-    assert "osm_ref" in upsert_set_columns(stmt)
+    assert {"osm_ref", "geocode_source_url"} <= upsert_set_columns(stmt)
     assert compile_pg(stmt).params["osm_ref"] is None
+    # A person's correction replaces a researched pin, so its page goes too.
+    assert compile_pg(stmt).params["geocode_source_url"] is None
     assert compile_pg(stmt).params["geocoded_via"] == "manual"

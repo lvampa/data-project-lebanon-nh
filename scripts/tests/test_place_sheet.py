@@ -54,12 +54,13 @@ def read(path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def fill(path, **typed: tuple[str, str]) -> None:
-    """Fill lat and lng for the rows named by their `name` column."""
+def fill(path, **typed: tuple[str, ...]) -> None:
+    """Fill lat and lng, and a source_url when given, for the rows named by `name`."""
     rows = read(path)
     for row in rows:
         if row["name"] in typed:
-            row["lat"], row["lng"] = typed[row["name"]]
+            row["lat"], row["lng"], *rest = typed[row["name"]]
+            row["source_url"] = rest[0] if rest else ""
     with path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=place_sheet.COLUMNS)
         writer.writeheader()
@@ -299,3 +300,105 @@ def test_main_import_returns_1_when_a_row_is_rejected(db_session, tmp_path, caps
 
     assert place_sheet.main(["import", str(path)]) == 1
     assert "line 2" in capsys.readouterr().out
+
+
+# --- research pins: a spot found on a page, with its link ---
+
+PAGE = "https://example.com/quarry-hill-town-houses"
+
+
+def test_a_row_with_a_source_url_is_a_research_pin_and_keeps_its_owner(
+    db_session, tmp_path
+):
+    add_place(db_session, "SHOP", "Shop, Mount Support Rd")
+    path = tmp_path / "sheet.csv"
+    place_sheet.export_sheet(db_session, path)
+    fill(path, Shop=("43.6700", "-72.2600", PAGE))
+
+    result = place_sheet.import_sheet(db_session, path)
+
+    assert (result.changed_places, result.rejected) == (1, [])
+    row = row_for(db_session, "SHOP")
+    assert (row.lat, row.lng) == (43.67, -72.26)
+    assert (row.geocoded_via, row.coordinate_precision) == ("research", "exact")
+    assert (row.geocode_source_url, row.osm_ref) == (PAGE, None)
+    # Nobody checked it, so it is still the AI's row.
+    assert (row.source, row.needs_review) == ("ai", False)
+
+
+def test_a_researched_row_keeps_an_existing_review_mark(db_session, tmp_path):
+    add_place(db_session, "SHOP", "Shop, Mount Support Rd", needs_review=True)
+    path = tmp_path / "sheet.csv"
+    place_sheet.export_sheet(db_session, path)
+    fill(path, Shop=("43.6700", "-72.2600", PAGE))
+
+    place_sheet.import_sheet(db_session, path)
+
+    assert row_for(db_session, "SHOP").needs_review is True
+
+
+def test_a_row_without_a_source_url_is_still_a_human_placement(db_session, tmp_path):
+    add_place(db_session, "SHOP", "Shop, Mount Support Rd")
+    path = tmp_path / "sheet.csv"
+    place_sheet.export_sheet(db_session, path)
+    fill(path, Shop=("43.6700", "-72.2600"))
+
+    place_sheet.import_sheet(db_session, path)
+
+    row = row_for(db_session, "SHOP")
+    assert (row.source, row.geocoded_via, row.geocode_source_url) == (
+        "human",
+        "manual",
+        None,
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://example.com/a",
+        "javascript:alert(1)",
+        "example.com/page",
+        "http://",
+        "'=HYPERLINK(1)",
+        "=HYPERLINK(1)",
+        "not a link",
+    ],
+)
+def test_a_source_url_that_is_not_a_web_link_is_rejected_and_changes_nothing(
+    db_session, tmp_path, url
+):
+    add_place(db_session, "SHOP", "Shop, Mount Support Rd")
+    path = tmp_path / "sheet.csv"
+    place_sheet.export_sheet(db_session, path)
+    fill(path, Shop=("43.6700", "-72.2600", url))
+
+    result = place_sheet.import_sheet(db_session, path)
+
+    [(line, reason)] = result.rejected
+    assert line == 2 and "http or https" in reason
+    row = row_for(db_session, "SHOP")
+    assert (row.lat, row.geocoded_via) == (STREET_POINT[0], "nominatim")
+
+
+def test_the_sheet_has_a_blank_source_url_column(db_session, tmp_path):
+    add_place(db_session, "SHOP", "Shop, Mount Support Rd")
+
+    place_sheet.export_sheet(db_session, tmp_path / "sheet.csv")
+
+    assert read(tmp_path / "sheet.csv")[0]["source_url"] == ""
+
+
+def test_a_sheet_without_the_source_url_column_still_imports(db_session, tmp_path):
+    add_place(db_session, "SHOP", "Shop, Mount Support Rd")
+    path = tmp_path / "sheet.csv"
+    place_sheet.export_sheet(db_session, path)
+    fill(path, Shop=("43.6700", "-72.2600"))
+    rows = [{k: v for k, v in r.items() if k != "source_url"} for r in read(path)]
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    assert place_sheet.import_sheet(db_session, path).changed_places == 1
+    assert row_for(db_session, "SHOP").source == "human"

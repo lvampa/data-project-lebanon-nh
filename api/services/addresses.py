@@ -120,6 +120,7 @@ def _new_coordinates(update: AddressUpdate, nominatim_contact: str | None) -> di
             "coordinate_precision": "exact",
             # The pin no longer comes from the map feature the row pointed at.
             "osm_ref": None,
+            "geocode_source_url": None,
         }
     if update.geocode:
         try:
@@ -141,6 +142,7 @@ def _new_coordinates(update: AddressUpdate, nominatim_contact: str | None) -> di
                 "geocoded_via": "nominatim",
                 "coordinate_precision": found.precision,
                 "osm_ref": None,
+                "geocode_source_url": None,
             }
         logfire.info(
             "geocode miss keeps existing coordinates for {address}",

@@ -105,6 +105,11 @@ There is no Elasticsearch and no dbt.
   `uv run place-sheet import` reads it back under the `geocode` lock.
   A filled row sets every `ai` or `rule` row for that address, if it still sits on the sheet's point, to `source = 'human'`, `geocoded_via = 'manual'` and precision `exact`, the same fields the admin API writes for typed coordinates.
   A blank row is skipped, and a bad number or a point outside Lebanon is rejected with its line number.
+  The sheet has an optional `source_url` column.
+  A filled row with a `source_url`, which must be an http or https link, is written as `geocoded_via = 'research'` instead: precision `exact`, `geocode_source_url` set, `osm_ref` cleared, and `source` left as `ai` or `rule`, since a person did not check the spot.
+  A research pin is exact, so `--retry-approximate` skips it and no lookup replaces it, and another spelling of the address copies it with its link.
+  A person's correction through the admin API clears `geocode_source_url` and `osm_ref` along with the old pin.
+  In both CSV files, text that starts with =, +, - or @ is quoted, and the import undoes the quote.
 - **Admin API:** `api/services/categories.py` and `addresses.py` list rows and let the operator correct them.
   A correction sets `source = 'human'` and clears the review mark; typed coordinates get `geocoded_via = 'manual'`.
   Deleting a row hands the value back to AI.

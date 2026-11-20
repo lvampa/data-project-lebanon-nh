@@ -56,9 +56,12 @@ def test_the_osm_migration_resets_osm_pins_on_the_way_down(
     db_connection.execute(
         text(
             "INSERT INTO address_normalizations (raw_address, lat, lng, geocoded_via,"
-            " coordinate_precision, osm_ref, source, created_at, updated_at)"
-            " VALUES ('A', 43.6, -72.2, 'osm', 'exact', 'way/1', 'ai', now(), now()),"
-            " ('B', 43.7, -72.3, 'manual', 'exact', NULL, 'human', now(), now())"
+            " coordinate_precision, osm_ref, geocode_source_url, source, created_at,"
+            " updated_at)"
+            " VALUES ('A', 43.6, -72.2, 'osm', 'exact', 'way/1', NULL, 'ai', now(), now()),"
+            " ('B', 43.7, -72.3, 'manual', 'exact', NULL, NULL, 'human', now(), now()),"
+            " ('C', 43.8, -72.4, 'research', 'exact', NULL, 'https://example.com/p',"
+            " 'ai', now(), now())"
         )
     )
 
@@ -73,6 +76,7 @@ def test_the_osm_migration_resets_osm_pins_on_the_way_down(
     assert [tuple(r) for r in rows] == [
         ("A", None, None, None),
         ("B", 43.7, "manual", "exact"),
+        ("C", None, None, None),
     ]
     columns = db_connection.execute(
         text(
@@ -80,4 +84,4 @@ def test_the_osm_migration_resets_osm_pins_on_the_way_down(
             " WHERE table_name = 'address_normalizations'"
         )
     ).scalars()
-    assert "osm_ref" not in list(columns)
+    assert not {"osm_ref", "geocode_source_url"} & set(columns)

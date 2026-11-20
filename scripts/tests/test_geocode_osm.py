@@ -16,7 +16,7 @@ from scripts.normalize.backends import (
     AiCallFailed,
     FakeBackend,
 )
-from scripts.normalize.csv_cells import cell
+from scripts.normalize.csv_cells import cell, uncell
 from scripts.normalize.match_review import Placed, write_review
 from scripts.normalize.osm_locate import OsmLocator
 from scripts.normalize.place_match import pick_candidate, place_match_prompt
@@ -225,10 +225,12 @@ def place_row(
     return add_row(
         session,
         raw,
-        kind="place",
-        normalized_address=f"{name}, Mount Support Rd",
-        street="MOUNT SUPPORT RD",
-        **columns,
+        **{
+            "kind": "place",
+            "normalized_address": f"{name}, Mount Support Rd",
+            "street": "MOUNT SUPPORT RD",
+            **columns,
+        },
     )
 
 
@@ -656,3 +658,187 @@ def test_main_goes_on_without_ai_and_says_so(db_session, snapshot_dir, capsys):
 
     captured = capsys.readouterr()
     assert "No AI for place names" in captured.err
+
+
+# --- research pins are exact, and nothing overwrites them ---
+
+
+def researched(**columns) -> dict:
+    return {
+        "lat": 43.6700,
+        "lng": -72.2600,
+        "coordinate_precision": "exact",
+        "geocoded_via": "research",
+        "geocode_source_url": "https://example.com/page",
+        **columns,
+    }
+
+
+def test_the_retry_skips_a_research_pin(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        **researched(),
+    )
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT))
+
+    row = the_row(db_session, "8 COMMERCE AVE")
+    assert (row.lat, row.geocoded_via) == (43.67, "research")
+    assert counts.groups_retried == 0
+
+
+def test_a_run_does_not_look_up_a_row_that_has_a_research_pin(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        **researched(),
+    )
+    geocoder = NoNominatim()
+
+    geocode_job.run(geocoder, locator=OsmLocator(SNAPSHOT))
+
+    assert geocoder.queries == []
+    assert the_row(db_session, "8 COMMERCE AVE").geocoded_via == "research"
+
+
+def test_another_spelling_copies_a_research_pin_with_its_link(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        **researched(),
+    )
+    add_row(
+        db_session,
+        "8 COMMERCE AV",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(SNAPSHOT))
+
+    copy = the_row(db_session, "8 COMMERCE AV")
+    assert (copy.lat, copy.geocoded_via, copy.geocode_source_url) == (
+        43.67,
+        "research",
+        "https://example.com/page",
+    )
+
+
+# --- an approximate answer from Nominatim, and the retry's groups ---
+
+
+def test_an_approximate_nominatim_answer_is_tried_against_the_snapshot(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+    geocoder = NoNominatim(
+        {"8 COMMERCE AVE, Lebanon, NH": GeocodeResult(43.65, -72.25, "approximate")}
+    )
+
+    counts = geocode_job.run(geocoder, locator=OsmLocator(SNAPSHOT))
+
+    row = the_row(db_session, "8 COMMERCE AVE")
+    assert (row.geocoded_via, row.coordinate_precision, row.osm_ref) == (
+        "osm",
+        "exact",
+        "way/10",
+    )
+    assert counts.requests == 1
+
+
+def test_an_approximate_answer_is_kept_when_the_snapshot_has_nothing(db_session):
+    add_row(
+        db_session,
+        "9 COMMERCE AVE",
+        normalized_address="9 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+    geocoder = NoNominatim(
+        {"9 COMMERCE AVE, Lebanon, NH": GeocodeResult(43.65, -72.25, "approximate")}
+    )
+
+    counts = geocode_job.run(geocoder, locator=OsmLocator(SNAPSHOT))
+
+    row = the_row(db_session, "9 COMMERCE AVE")
+    assert (row.lat, row.lng, row.coordinate_precision, row.geocoded_via) == (
+        43.65,
+        -72.25,
+        "approximate",
+        "nominatim",
+    )
+    # The street was not asked for, since the query's own point is the one kept.
+    assert geocoder.queries == ["9 COMMERCE AVE, Lebanon, NH"]
+    assert counts.requests == 1
+
+
+def test_the_retry_tries_each_row_of_a_group_until_one_matches(db_session):
+    # The first row has no street, so the snapshot cannot place it. The second can.
+    place_row(db_session, "QUARRY NO STREET", street=None, **approximate())
+    place_row(db_session, "QUARRY WITH STREET", **approximate())
+    picks = Picks(0)
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+
+    assert the_row(db_session, "QUARRY NO STREET").osm_ref == "node/11"
+    assert the_row(db_session, "QUARRY WITH STREET").osm_ref == "node/11"
+    assert (counts.placed, counts.groups_kept) == (2, 0)
+
+
+def test_spellings_that_would_be_looked_up_alike_are_tried_once(db_session):
+    place_row(db_session, "QUARRY HILL TH", **approximate())
+    place_row(db_session, "QUARRY HILL TOWNHOUSES", **approximate())
+    picks = Picks(None)
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+
+    assert len(picks.calls) == 1
+    assert counts.groups_kept == 1
+
+
+@pytest.mark.parametrize("kind", ["highway"])
+def test_the_retry_leaves_out_kinds_the_snapshot_cannot_place(db_session, kind):
+    add_row(
+        db_session,
+        "I-89 NB",
+        kind=kind,
+        normalized_address="I-89 northbound near exit 18",
+        **approximate(),
+    )
+
+    assert geocode_job.run_retry(OsmLocator(SNAPSHOT)).groups_retried == 0
+
+
+def test_a_run_goes_on_without_ai_when_mongodb_is_not_available(
+    db_session, snapshot_dir, monkeypatch, capsys
+):
+    def no_mongo():
+        raise RuntimeError("no mongo settings")
+
+    monkeypatch.setattr(geocode_job, "get_db", no_mongo)
+    args = geocode_job._parse_args([])
+
+    locator = geocode_job._make_locator(args, snapshot_dir, lambda: FakeBackend())
+
+    assert locator is not None and locator.picker is None
+    assert "MongoDB is not available" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("text", ["=A1", "+1", "-1", "@SUM", "\tx", "\rx"])
+def test_every_quoted_start_survives_a_round_trip(text):
+    assert cell(text) == "'" + text
+    assert uncell(cell(text)) == text
+
+
+def test_text_that_merely_starts_with_a_quote_is_left_alone():
+    assert uncell("'Quarry") == "'Quarry"
+    assert uncell("Quarry") == "Quarry"

@@ -318,3 +318,27 @@ def test_the_distance_to_the_street_is_in_meters():
     )
 
     assert first.meters_from_street == pytest.approx(56, abs=2)
+
+
+def test_a_node_in_the_shape_overpass_returns_is_parsed():
+    reply = {
+        "elements": [
+            {
+                "type": "node",
+                "id": 123456,
+                "lat": 43.665725,
+                "lon": -72.2501,
+                "tags": {"name": "Spruce Point", "leisure": "park"},
+            }
+        ]
+    }
+
+    parsed = snapshot_from_replies("2026-11-20", reply, {"elements": []})
+
+    [feature] = parsed.features
+    assert (feature.ref, feature.name, feature.kind) == (
+        "node/123456",
+        "Spruce Point",
+        "leisure=park",
+    )
+    assert (feature.lat, feature.lng) == (43.665725, -72.2501)

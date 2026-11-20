@@ -6,12 +6,20 @@ these files comes from city documents and map data. A leading quote makes it tex
 
 from typing import Any
 
-_FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
 
 
 def cell(value: Any) -> Any:
     """The value, with text that could run as a formula made safe. Numbers pass through,
     since a negative longitude is not a formula."""
-    if isinstance(value, str) and value.startswith(_FORMULA_STARTS):
+    if isinstance(value, str) and value.startswith(FORMULA_STARTS):
         return "'" + value
+    return value
+
+
+def uncell(value: str) -> str:
+    """Undo the quote `cell` adds, so text that starts with a formula character matches
+    again after a round trip through a file."""
+    if value.startswith("'") and value[1:].startswith(FORMULA_STARTS):
+        return value[1:]
     return value

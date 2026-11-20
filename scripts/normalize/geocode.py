@@ -265,6 +265,7 @@ def _apply(row: AddressNormalization, found: Placement, counts: GeocodeCounts) -
     row.coordinate_precision = found.precision
     row.geocoded_via = found.via
     row.osm_ref = found.osm_ref
+    row.geocode_source_url = None
 
 
 def _log_name(row: AddressNormalization) -> str:
@@ -321,6 +322,8 @@ def _placed_donor(
 def _copy_pin(row: AddressNormalization, donor: AddressNormalization) -> None:
     row.lat, row.lng = donor.lat, donor.lng
     row.coordinate_precision = donor.coordinate_precision
+    row.osm_ref = donor.osm_ref
+    row.geocode_source_url = donor.geocode_source_url
 
 
 def _look_up(
@@ -332,14 +335,22 @@ def _look_up(
 ) -> tuple[Placement | None, bool]:
     """The row's query first, then the OpenStreetMap snapshot, then its street alone, and
     whether the street was skipped for want of requests. A result outside the city is a
-    miss."""
+    miss. A query that finds only an approximate point is tried against the snapshot too,
+    and keeps that point when the snapshot has nothing."""
     query = row.geocode_query or f"{row.normalized_address}, Lebanon, NH"
     counts.requests += 1
     found = geocoder(query)
-    if found is not None and in_city_bounds(found.lat, found.lng):
-        return Placement(found.lat, found.lng, found.precision, "nominatim"), False
+    nominatim = found if found and in_city_bounds(found.lat, found.lng) else None
+    if nominatim is not None and nominatim.precision == "exact":
+        return Placement(nominatim.lat, nominatim.lng, "exact", "nominatim"), False
     if locator is not None and (match := locator.locate(row)) is not None:
         return _from_match(match), False
+    if nominatim is not None:
+        # Only a street point came back, and the snapshot has nothing better.
+        return (
+            Placement(nominatim.lat, nominatim.lng, nominatim.precision, "nominatim"),
+            False,
+        )
     if not row.street:
         return None, False
     if counts.requests >= max_requests:
@@ -378,7 +389,7 @@ def run_retry(locator: OsmLocator) -> GeocodeCounts:
             if not rows:
                 session.rollback()
                 continue
-            match = locator.locate(rows[0])
+            match = _first_match(locator, rows)
             if match is None:
                 session.rollback()
                 counts.groups_kept += 1
@@ -395,6 +406,20 @@ def run_retry(locator: OsmLocator) -> GeocodeCounts:
     return counts
 
 
+def _first_match(locator: OsmLocator, rows: list[AddressNormalization]) -> Match | None:
+    """The first row of a group the snapshot can place. Rows that would be looked up the
+    same way, as spellings of one address are, are tried once."""
+    tried: set[tuple[str | None, str | None, str | None]] = set()
+    for row in rows:
+        key = (row.normalized_address, row.kind, row.street)
+        if key in tried:
+            continue
+        tried.add(key)
+        if (match := locator.locate(row)) is not None:
+            return match
+    return None
+
+
 def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
     rows = list(
         session.scalars(
@@ -403,6 +428,8 @@ def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
                 AddressNormalization.source.in_(("ai", "rule")),
                 AddressNormalization.normalized_address.is_not(None),
                 AddressNormalization.coordinate_precision == "approximate",
+                # A highway or a bare street is not something the snapshot can place.
+                AddressNormalization.kind.in_(("address", "place", "intersection")),
             )
             .order_by(AddressNormalization.id)
         )
@@ -478,7 +505,13 @@ def _make_locator(
     except AiBackendUnavailable as exc:
         print(f"No AI for place names: {exc}", file=sys.stderr)
         return OsmLocator(snapshot)
-    recorder = AiCallLog(ai_calls_collection(get_db()))
+    try:
+        recorder = AiCallLog(ai_calls_collection(get_db()))
+    except Exception as exc:  # A plain run must not need MongoDB, whatever its error.
+        print(
+            f"No AI for place names, MongoDB is not available: {exc}", file=sys.stderr
+        )
+        return OsmLocator(snapshot)
 
     def picker(
         name: str, street: str, candidates: Sequence[Candidate]

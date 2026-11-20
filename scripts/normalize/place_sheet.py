@@ -10,7 +10,9 @@ leave the rest blank.
 
 `import` reads the file back. A row with both columns filled sets every row for that
 address to those coordinates as a `human` placement, which the geocode job never
-changes. A blank row is skipped, and a row with a bad number, or a point outside
+changes. If the row also has a `source_url` (an http or https link to the page that
+gave the spot), the pin is a `research` pin instead: exact, with the link kept, but the
+row stays `ai` or `rule`, since a person did not check it. A blank row is skipped, and a row with a bad number, or a point outside
 Lebanon, is rejected with its line number and changes nothing.
 """
 
@@ -22,6 +24,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse
 
 from bootstrap import bootstrap
 from locations.geocode import in_city_bounds
@@ -31,7 +34,7 @@ from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import CursorResult, func, text, update
 from sqlalchemy.orm import Session
 
-from scripts.normalize.csv_cells import cell
+from scripts.normalize.csv_cells import cell, uncell
 from scripts.normalize.match_review import DEFAULT_DIR
 
 DEFAULT_SINCE = date(2026, 1, 1)
@@ -45,7 +48,15 @@ COLUMNS = (
     "openstreetmap",
     "lat",
     "lng",
+    "source_url",
 )
+# What a person's own placement sets besides the pin. A researched pin leaves all of it, since
+# nobody checked it.
+_HUMAN_PLACEMENT = {
+    "source": "human",
+    "needs_review": False,
+    "prompt_version": None,
+}
 # The same tolerance on a coordinate that was written to the sheet and read back.
 _SAME_POINT = 1e-7
 
@@ -104,6 +115,7 @@ def export_sheet(session: Session, path: Path, since: date = DEFAULT_SINCE) -> i
                     _map_link(row.lat, row.lng),
                     "",
                     "",
+                    "",
                 ]
             )
     return len(rows)
@@ -139,8 +151,17 @@ def _import_row(
     if not in_city_bounds(lat, lng):
         result.rejected.append((line, f"{lat}, {lng} is outside Lebanon"))
         return
+    source_url = uncell((row.get("source_url") or "").strip())
+    if source_url and not _is_web_url(source_url):
+        result.rejected.append((line, "source_url must be an http or https link"))
+        return
     changed = _place_by_hand(
-        session, _uncell(row.get("normalized_address", "")), current, lat, lng
+        session,
+        uncell(row.get("normalized_address", "")),
+        current,
+        lat,
+        lng,
+        source_url or None,
     )
     if changed == 0:
         result.rejected.append(
@@ -157,9 +178,14 @@ def _place_by_hand(
     current: tuple[float, float],
     lat: float,
     lng: float,
+    source_url: str | None,
 ) -> int:
     """Set every ai or rule row for the address that still sits on the sheet's point. A
-    human row is never matched, and a row the geocode job moved since is left as it is."""
+    human row is never matched, and a row the geocode job moved since is left as it is.
+
+    With a source URL the pin is `research`: found on a page, not checked by a person, so
+    `source` stays as it is. Without one it is the person's own placement."""
+    researched = source_url is not None
     changed = cast(
         "CursorResult[Any]",
         session.execute(
@@ -174,26 +200,22 @@ def _place_by_hand(
             .values(
                 lat=lat,
                 lng=lng,
-                source="human",
-                geocoded_via="manual",
+                geocoded_via="research" if researched else "manual",
                 # A point typed by hand is a point, whatever the last lookup said.
                 coordinate_precision="exact",
                 osm_ref=None,
-                needs_review=False,
-                prompt_version=None,
+                geocode_source_url=source_url,
                 updated_at=utc_now(),
+                **({} if researched else _HUMAN_PLACEMENT),
             )
         ),
     )
     return changed.rowcount
 
 
-def _uncell(value: str) -> str:
-    """Undo the quote `cell` adds, so an address that starts with a formula character
-    still matches after a round trip through the file."""
-    if value.startswith("'") and value[1:2] in ("=", "+", "-", "@"):
-        return value[1:]
-    return value
+def _is_web_url(value: str) -> bool:
+    parts = urlparse(value)
+    return parts.scheme in ("http", "https") and bool(parts.netloc)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -79,6 +79,7 @@ export default function SearchPage() {
       const data = await fetchSearch(query.trim())
       setResponse(data)
     } catch (err) {
+      // eslint-disable-next-line no-console -- The banner says only that search failed; the console keeps why.
       console.error(err)
       setError('Search failed. Is the API running?')
     } finally {

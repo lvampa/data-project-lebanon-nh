@@ -11,6 +11,7 @@ export default function Error({
   retry: () => void
 }) {
   useEffect(() => {
+    // eslint-disable-next-line no-console -- An error page is the only record of the error it caught.
     console.error(error)
   }, [error])
 

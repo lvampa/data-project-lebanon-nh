@@ -65,7 +65,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
     mapRef.current = map
 
     map.on('error', (event) => {
-      // MapLibre stops logging errors once a listener is attached, so log them here.
+      // eslint-disable-next-line no-console -- MapLibre stops logging once a listener is attached, so a failed map or tile would leave no trace.
       console.error(event.error)
       // A failed tile is not fatal. Only a map that never loaded is.
       if (!map.loaded()) setStatus((current) => (current === 'ready' ? current : 'error'))

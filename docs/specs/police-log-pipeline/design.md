@@ -101,6 +101,10 @@ There is no Elasticsearch and no dbt.
   Overpass answers 429 or 502 when busy, so a request is retried 4 times with waits of 10, 30, 90 and 180 seconds, then fails with the last status.
   The functions in `shared/locations/src/locations/osm.py` find a location in the newest snapshot with no network: a house address by number and street, an intersection by a node two named roads share, and a named place by candidates that share a meaningful word with the name and lie within 200 m of its street.
   Street names are compared through `canonical_address`, so OpenStreetMap's "Mount Support Road" and the log's "MT SUPPORT RD" are one street.
+- **Placing by hand in bulk:** `uv run place-sheet export` writes a CSV of the places and house addresses still on a street point, busiest first, with the calls the map counts for them (every call but road traffic), a link to OpenStreetMap, and empty `lat` and `lng` columns.
+  `uv run place-sheet import` reads it back under the `geocode` lock.
+  A filled row sets every `ai` or `rule` row for that address, if it still sits on the sheet's point, to `source = 'human'`, `geocoded_via = 'manual'` and precision `exact`, the same fields the admin API writes for typed coordinates.
+  A blank row is skipped, and a bad number or a point outside Lebanon is rejected with its line number.
 - **Admin API:** `api/services/categories.py` and `addresses.py` list rows and let the operator correct them.
   A correction sets `source = 'human'` and clears the review mark; typed coordinates get `geocoded_via = 'manual'`.
   Deleting a row hands the value back to AI.

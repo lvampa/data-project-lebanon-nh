@@ -17,6 +17,14 @@ from scripts.normalize import geocode as geocode_job
 
 NOW = datetime(2026, 11, 13)
 
+
+@pytest.fixture(autouse=True)
+def _no_snapshot_or_review_files(tmp_path, monkeypatch):
+    """A snapshot or a review file on a developer's machine must not change these tests."""
+    monkeypatch.setattr(geocode_job, "DEFAULT_SNAPSHOT_DIR", tmp_path / "no-snapshot")
+    monkeypatch.setattr(geocode_job, "REVIEW_DIR", tmp_path / "review")
+
+
 # Inside the city's bounds, and outside (Concord, NH).
 IN_CITY = (43.6426, -72.2518)
 CONCORD = (43.2081, -71.5376)

@@ -1,13 +1,24 @@
 """Put normalized locations on the map, by hand from Connor's Mac.
 
-    uv run geocode
+    uv run geocode [--retry-approximate] [--no-llm]
 
 It takes `ai` and `rule` rows that have a normalized address and no coordinates, and
 never a `human` row. It reuses the coordinates of a place code another row already
 has, or the coordinates of another spelling of the same address. Otherwise it asks the
-geocoder for the row's query and then for its street alone, and drops a result outside
-the city. A row that misses three times is marked for review. It stops
-after 600 requests, and leaves the rest for the next run.
+geocoder for the row's query, then looks the row up in the newest OpenStreetMap
+snapshot (`uv run osm-snapshot`), then asks the geocoder for its street alone, and
+drops a result outside the city. A row that misses three times is marked for review.
+It stops after 600 requests, and leaves the rest for the next run.
+
+From the snapshot, a house address is matched by number and street, an intersection by
+a node its two roads share, and a named place by the AI choosing one of a few real
+features near its street, or none. `--no-llm` leaves the last step out, and the AI is
+called at most 100 times a run. Every placement from the snapshot goes in a file in
+tmp/, with the old coordinates beside the new ones.
+
+`--retry-approximate` looks again, from the snapshot only, at every row that sits on a
+street point, a group of rows at a time. A miss changes nothing, and a group with a
+`human` row in it is left alone.
 
 A row whose lookup times out, cannot connect or gets a 5xx is skipped and not charged
 an attempt, so the next run tries it again. A 403 or 429 stops the run at once, and so
@@ -18,8 +29,11 @@ summary says how many.
 import argparse
 import re
 import sys
+from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 import logfire
 from bootstrap import bootstrap
@@ -30,12 +44,21 @@ from locations.geocode import (
     geocode,
     in_city_bounds,
 )
+from locations.osm import Candidate, Match, Snapshot
+from mongo.ai_calls import AiCallLog, ai_calls_collection
+from mongo.client import get_db
 from postgres import get_engine, open_session
 from postgres.lock import GEOCODE, advisory_lock
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select, tuple_
 from sqlalchemy.orm import Session
+
+from scripts.normalize.backends import AiBackend, AiBackendUnavailable, backend_from_env
+from scripts.normalize.match_review import DEFAULT_DIR as REVIEW_DIR
+from scripts.normalize.match_review import Placed, write_review
+from scripts.normalize.osm_locate import OsmLocator
+from scripts.normalize.place_match import pick_candidate
 
 MAX_ATTEMPTS = 3
 MAX_REQUESTS = 600
@@ -45,6 +68,8 @@ MAX_CONSECUTIVE_FAILURES = 5
 PROGRESS_EVERY = 50
 
 Geocoder = Callable[[str], GeocodeResult | None]
+
+DEFAULT_SNAPSHOT_DIR = Path(__file__).parents[1] / "data" / "osm"
 
 # A highway names a point when it gives a cross street, an exit, or a landmark. The
 # last is a guess: anything that says "near" or "at".
@@ -64,10 +89,31 @@ class GeocodeCounts:
     geocoder_unavailable: bool = False
     # Why the geocoder stopped the run, as the geocoder worded it.
     geocoder_error: str = ""
+    # What the snapshot placed, for the review file.
+    from_snapshot: list[Placed] = field(default_factory=list)
+    # Groups of rows `--retry-approximate` looked at, and left as they were.
+    groups_retried: int = 0
+    groups_kept: int = 0
+
+    def found_by(self) -> Counter[str]:
+        return Counter(item.match.via for item in self.from_snapshot)
+
+
+@dataclass(frozen=True)
+class Placement:
+    lat: float
+    lng: float
+    precision: str
+    via: str
+    osm_ref: str | None = None
+    match: Match | None = None
 
 
 def run(
-    geocoder: Geocoder = geocode, *, max_requests: int = MAX_REQUESTS
+    geocoder: Geocoder = geocode,
+    *,
+    max_requests: int = MAX_REQUESTS,
+    locator: OsmLocator | None = None,
 ) -> GeocodeCounts:
     counts = GeocodeCounts()
     with open_session() as session:
@@ -85,7 +131,7 @@ def run(
                 continue
             requests_before = counts.requests
             try:
-                _place(session, row, geocoder, counts, max_requests)
+                _place(session, row, geocoder, counts, max_requests, locator)
             except GeocodeBackOff as exc:
                 # Nominatim said to stop, and asking again risks a ban.
                 session.rollback()
@@ -179,6 +225,7 @@ def _place(
     geocoder: Geocoder,
     counts: GeocodeCounts,
     max_requests: int,
+    locator: OsmLocator | None,
 ) -> None:
     if _reuse_place_code(session, row) or _reuse_same_address(session, row):
         counts.reused += 1
@@ -188,7 +235,7 @@ def _place(
         counts.bare_highways += 1
         return
 
-    found, skipped_for_budget = _look_up(row, geocoder, counts, max_requests)
+    found, skipped_for_budget = _look_up(row, geocoder, counts, max_requests, locator)
     if found is None:
         if skipped_for_budget:
             # Not a real miss: the run ran out of requests before the second try.
@@ -198,10 +245,30 @@ def _place(
             row.needs_review = True
         counts.missed += 1
         return
+    _apply(row, found, counts)
+    counts.placed += 1
+
+
+def _apply(row: AddressNormalization, found: Placement, counts: GeocodeCounts) -> None:
+    if found.match is not None:
+        counts.from_snapshot.append(
+            Placed(
+                row.raw_address,
+                _log_name(row),
+                found.match,
+                row.lat,
+                row.lng,
+                row.coordinate_precision,
+            )
+        )
     row.lat, row.lng = found.lat, found.lng
     row.coordinate_precision = found.precision
-    row.geocoded_via = "nominatim"
-    counts.placed += 1
+    row.geocoded_via = found.via
+    row.osm_ref = found.osm_ref
+
+
+def _log_name(row: AddressNormalization) -> str:
+    return (row.normalized_address or row.raw_address).split(", ")[0]
 
 
 def _reuse_place_code(session: Session, row: AddressNormalization) -> bool:
@@ -261,14 +328,18 @@ def _look_up(
     geocoder: Geocoder,
     counts: GeocodeCounts,
     max_requests: int,
-) -> tuple[GeocodeResult | None, bool]:
-    """The row's query first, then its street alone, and whether the street was skipped
-    for want of requests. A result outside the city is a miss."""
+    locator: OsmLocator | None = None,
+) -> tuple[Placement | None, bool]:
+    """The row's query first, then the OpenStreetMap snapshot, then its street alone, and
+    whether the street was skipped for want of requests. A result outside the city is a
+    miss."""
     query = row.geocode_query or f"{row.normalized_address}, Lebanon, NH"
     counts.requests += 1
     found = geocoder(query)
     if found is not None and in_city_bounds(found.lat, found.lng):
-        return found, False
+        return Placement(found.lat, found.lng, found.precision, "nominatim"), False
+    if locator is not None and (match := locator.locate(row)) is not None:
+        return _from_match(match), False
     if not row.street:
         return None, False
     if counts.requests >= max_requests:
@@ -277,23 +348,153 @@ def _look_up(
     street = geocoder(f"{row.street}, Lebanon, NH")
     if street is not None and in_city_bounds(street.lat, street.lng):
         # A street with no point on it is approximate, whatever the match said.
-        return GeocodeResult(street.lat, street.lng, "approximate"), False
+        return Placement(street.lat, street.lng, "approximate", "nominatim"), False
     return None, False
+
+
+def _from_match(match: Match) -> Placement:
+    return Placement(match.lat, match.lng, "exact", "osm", match.osm_ref, match)
 
 
 def _names_a_point(normalized_address: str) -> bool:
     return _NAMES_A_POINT.search(normalized_address) is not None
 
 
-def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int:
+def run_retry(locator: OsmLocator) -> GeocodeCounts:
+    """Look again, from the snapshot only, at every row that sits on a street point.
+
+    A group is the rows that share a normalized address and kind, joined by any place code
+    they share. One lookup places the whole group. A group with a `human` row in it is
+    left alone, and so is a group the snapshot cannot place.
+    """
+    counts = GeocodeCounts()
+    with open_session() as session:
+        for group in _approximate_groups(session):
+            counts.groups_retried += 1
+            if _has_human_row(session, group):
+                counts.groups_kept += 1
+                continue
+            rows = _still_approximate(session, group)
+            if not rows:
+                session.rollback()
+                continue
+            match = locator.locate(rows[0])
+            if match is None:
+                session.rollback()
+                counts.groups_kept += 1
+                continue
+            for row in rows:
+                _apply(row, _from_match(match), counts)
+                counts.placed += 1
+            session.commit()
+    logfire.info(
+        "geocode retry: {placed} rows placed in {groups} groups",
+        placed=counts.placed,
+        groups=counts.groups_retried,
+    )
+    return counts
+
+
+def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
+    rows = list(
+        session.scalars(
+            select(AddressNormalization)
+            .where(
+                AddressNormalization.source.in_(("ai", "rule")),
+                AddressNormalization.normalized_address.is_not(None),
+                AddressNormalization.coordinate_precision == "approximate",
+            )
+            .order_by(AddressNormalization.id)
+        )
+    )
+    # Rows are joined through the keys they share, so a place code links two addresses.
+    owner: dict[tuple[str, str], int] = {}
+    groups: dict[int, list[AddressNormalization]] = {}
+    for row in rows:
+        keys = [("address", f"{row.normalized_address}|{row.kind}")]
+        if row.place_code:
+            keys.append(("code", row.place_code))
+        joined = {owner[key] for key in keys if key in owner}
+        target = min(joined) if joined else row.id
+        merged = groups.setdefault(target, [])
+        for other in joined - {target}:
+            merged.extend(groups.pop(other))
+        merged.append(row)
+        for key in keys:
+            owner[key] = target
+        for other_key, group_id in list(owner.items()):
+            if group_id in joined:
+                owner[other_key] = target
+    return list(groups.values())
+
+
+def _has_human_row(session: Session, group: list[AddressNormalization]) -> bool:
+    pairs = {(row.normalized_address, row.kind) for row in group}
+    codes = {row.place_code for row in group if row.place_code}
+    same_address = tuple_(
+        AddressNormalization.normalized_address, AddressNormalization.kind
+    ).in_(pairs)
+    clauses = [same_address]
+    if codes:
+        clauses.append(AddressNormalization.place_code.in_(codes))
+    return (
+        session.scalar(
+            select(AddressNormalization.id)
+            .where(AddressNormalization.source == "human", or_(*clauses))
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def _still_approximate(
+    session: Session, group: list[AddressNormalization]
+) -> list[AddressNormalization]:
+    """Re-read each row under a lock, like `_still_ours_to_place`: the admin may have
+    corrected one since the group was loaded."""
+    kept = []
+    for row in group:
+        session.refresh(row, with_for_update=True)
+        if row.source in ("ai", "rule") and row.coordinate_precision == "approximate":
+            kept.append(row)
+    return kept
+
+
+def _make_locator(
+    args: argparse.Namespace,
+    snapshot_dir: Path,
+    backend_factory: Callable[[], AiBackend],
+) -> OsmLocator | None:
+    try:
+        snapshot = Snapshot.load_newest(snapshot_dir)
+    except FileNotFoundError as exc:
+        print(f"{exc} Skipping the OpenStreetMap step.", file=sys.stderr)
+        return None
+    if args.no_llm:
+        return OsmLocator(snapshot)
+    try:
+        backend = backend_factory()
+        backend.check_ready()
+    except AiBackendUnavailable as exc:
+        print(f"No AI for place names: {exc}", file=sys.stderr)
+        return OsmLocator(snapshot)
+    recorder = AiCallLog(ai_calls_collection(get_db()))
+
+    def picker(
+        name: str, street: str, candidates: Sequence[Candidate]
+    ) -> Candidate | None:
+        return pick_candidate(backend, recorder, name, street, candidates)
+
+    return OsmLocator(snapshot, picker)
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    geocoder: Geocoder = geocode,
+    backend_factory: Callable[[], AiBackend] = backend_from_env,
+) -> int:
     bootstrap("geocode")
-    # It takes no options, but parsing still makes --help print usage instead of
-    # running the job.
-    argparse.ArgumentParser(
-        prog="geocode",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    ).parse_args(argv)
+    args = _parse_args(argv)
     with advisory_lock(get_engine(), GEOCODE) as acquired:
         if not acquired:
             print(
@@ -301,13 +502,16 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
                 file=sys.stderr,
             )
             return 1
-        counts = run(geocoder)
-    print(
-        f"Geocoding: {counts.placed} placed, {counts.reused} reused from another row, "
-        f"{counts.missed} missed, {counts.bare_highways} bare highways left for review, "
-        f"{counts.skipped} skipped (will retry next run). "
-        f"{counts.requests} requests."
-    )
+        locator = _make_locator(args, DEFAULT_SNAPSHOT_DIR, backend_factory)
+        if args.retry_approximate:
+            if locator is None:
+                print("--retry-approximate needs a snapshot.", file=sys.stderr)
+                return 1
+            counts = run_retry(locator)
+        else:
+            counts = run(geocoder, locator=locator)
+    review_file = write_review(counts.from_snapshot, REVIEW_DIR, datetime.now())
+    _print_summary(counts, locator, review_file, retry=args.retry_approximate)
     if counts.stopped_at_limit:
         print(f"Stopped at {MAX_REQUESTS} requests. Run it again for the rest.")
     if counts.geocoder_unavailable:
@@ -317,6 +521,61 @@ def main(argv: Sequence[str] | None = None, geocoder: Geocoder = geocode) -> int
         )
         return 1
     return 0
+
+
+def _print_summary(
+    counts: GeocodeCounts,
+    locator: OsmLocator | None,
+    review_file: Path | None,
+    *,
+    retry: bool,
+) -> None:
+    if retry:
+        print(
+            f"Retry: {counts.placed} rows placed from the snapshot, "
+            f"{counts.groups_kept} of {counts.groups_retried} groups left as they were."
+        )
+    else:
+        print(
+            f"Geocoding: {counts.placed} placed, {counts.reused} reused from another row, "
+            f"{counts.missed} missed, {counts.bare_highways} bare highways left for "
+            f"review, {counts.skipped} skipped (will retry next run). "
+            f"{counts.requests} requests."
+        )
+    if locator is not None:
+        by_kind = ", ".join(
+            f"{n} by {kind}" for kind, n in sorted(counts.found_by().items())
+        )
+        print(
+            f"From OpenStreetMap: {len(counts.from_snapshot)} placed"
+            f"{f' ({by_kind})' if by_kind else ''}. {locator.llm_calls} AI calls."
+        )
+        if locator.left_for_next_run:
+            print(
+                f"{locator.left_for_next_run} places left for the next run. "
+                "Run `uv run geocode --retry-approximate` for them."
+            )
+    if review_file is not None:
+        print(f"Review the placements in {review_file}.")
+
+
+def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="geocode",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--retry-approximate",
+        action="store_true",
+        help="Look again, from the OpenStreetMap snapshot, at rows on a street point.",
+    )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Place addresses and intersections from the snapshot, but ask no AI.",
+    )
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":

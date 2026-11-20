@@ -227,7 +227,8 @@ def locate_address(snapshot: Snapshot, housenumber: str, street: str) -> Match |
         return None
     first = buildings[0]
     if any(
-        _meters(first.lat, first.lng, f.lat, f.lng) > SAME_BUILDING_M for f in buildings
+        meters_between(first.lat, first.lng, f.lat, f.lng) > SAME_BUILDING_M
+        for f in buildings
     ):
         return None
     lat = sum(f.lat for f in buildings) / len(buildings)
@@ -250,7 +251,7 @@ def locate_intersection(
     if not shared:
         return None
     points = [nodes_a[node] for node in shared]
-    spread = max(_meters(*p, *q) for p in points for q in points)
+    spread = max(meters_between(*p, *q) for p in points for q in points)
     if spread > INTERSECTION_SPREAD_M:
         return None
     lat = sum(p[0] for p in points) / len(points)
@@ -319,7 +320,7 @@ def _node_points(roads: list[Road]) -> dict[int, tuple[float, float]]:
     }
 
 
-def _meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+def meters_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Meters between two points, flat-earth, which is exact enough inside one city."""
     dy = (lat2 - lat1) * 110_540
     dx = (lng2 - lng1) * 111_320 * math.cos(math.radians((lat1 + lat2) / 2))
@@ -332,7 +333,7 @@ def _meters_to_road(lat: float, lng: float, road: Road) -> float:
     for (lat1, lng1), (lat2, lng2) in zip(road.points, road.points[1:], strict=False):
         best = min(best, _meters_to_segment(lat, lng, lat1, lng1, lat2, lng2))
     if len(road.points) == 1:
-        best = _meters(lat, lng, *road.points[0])
+        best = meters_between(lat, lng, *road.points[0])
     return best
 
 

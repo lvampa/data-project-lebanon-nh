@@ -842,3 +842,28 @@ def test_every_quoted_start_survives_a_round_trip(text):
 def test_text_that_merely_starts_with_a_quote_is_left_alone():
     assert uncell("'Quarry") == "'Quarry"
     assert uncell("Quarry") == "Quarry"
+
+
+def test_another_spelling_copies_an_osm_pin_with_its_reference(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        lat=43.6501,
+        lng=-72.248,
+        coordinate_precision="exact",
+        geocoded_via="osm",
+        osm_ref="way/10",
+    )
+    add_row(
+        db_session,
+        "8 COMMERCE AV",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(SNAPSHOT))
+
+    copy = the_row(db_session, "8 COMMERCE AV")
+    assert (copy.geocoded_via, copy.osm_ref) == ("osm", "way/10")

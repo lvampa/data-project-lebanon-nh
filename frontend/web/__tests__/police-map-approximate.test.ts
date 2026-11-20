@@ -54,10 +54,11 @@ describe('hidden places on the map', () => {
     expect(ids).toEqual(['ford', 'mount-support-rd', 'lonely'])
   })
 
-  it('add their calls to the size of their street, not to its call count', () => {
+  it('ride on their street pin: its size, and the calls a tooltip or group shows', () => {
     const street = pinsGeoJson(ALL).features.find((f) => f.properties.id === 'mount-support-rd')
 
     expect(street?.properties.n).toBe(600)
+    expect(street?.properties.h).toBe(1020)
     expect(street?.properties.w).toBe(600 + 900 + 120)
   })
 
@@ -67,6 +68,15 @@ describe('hidden places on the map', () => {
     )
 
     expect(flags).toEqual({ ford: 0, 'mount-support-rd': 0, lonely: 1 })
+  })
+
+  it('leave no calls out of what the pins hold, so a group matches the town total', () => {
+    const held = pinsGeoJson(ALL).features.reduce(
+      (sum, f) => sum + f.properties.n + f.properties.h,
+      0,
+    )
+
+    expect(held).toBe(ALL.reduce((sum, a) => sum + a.count, 0))
   })
 
   it('still count in the totals the caller computes from the whole list', () => {

@@ -61,7 +61,8 @@ Everything else is a place.
   `addresses.json` carries `precision`, `street_id` and `hidden` per address.
   A place with `hidden: true` is left out of the pin GeoJSON, and its street's card lists it under "On <street>, exact spot unknown", with its calls, each row opening its own card.
   It stays in `addresses.json`, so counts, ranks, search and the `#<id>` link work as before, and a hidden place's card lights and rings its street.
-  A hidden place's calls add to its street pin's size, but not to the "N calls" a tooltip or group shows, which counts only the pins drawn.
+  A hidden place's calls ride on its street pin: they add to its size and to the "N calls" a tooltip or group shows, so those match the town's totals.
+  The street's own card still shows its own count.
   A place with no street pin keeps its pin, and says "Approximate location, somewhere on <street>" on its card and "approximate location" in its tooltip.
   An approximate road or intersection keeps its pin.
 - **Plain words, with the log's words on hover.**

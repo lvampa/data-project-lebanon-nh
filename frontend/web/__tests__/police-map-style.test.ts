@@ -40,6 +40,7 @@ describe('pinsGeoJson', () => {
       w: 12,
       t: 0,
       a: 0,
+      h: 0,
     })
   })
 })

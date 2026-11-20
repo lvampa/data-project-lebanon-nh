@@ -105,6 +105,7 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
         const props = feature.properties as {
           name?: string
           n?: number
+          h?: number
           point_count?: number
           calls?: number
           t?: number
@@ -124,7 +125,7 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
           strong.textContent = nameOf(props.name ?? '')
           label.append(
             strong,
-            ` · ${props.t ? trafficNearby(props.w ?? 0) : callWord(props.n ?? 0)}`,
+            ` · ${props.t ? trafficNearby(props.w ?? 0) : callWord((props.n ?? 0) + (props.h ?? 0))}`,
             props.a ? ` · ${APPROXIMATE_TIP}` : '',
           )
         }

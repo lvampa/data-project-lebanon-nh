@@ -1,5 +1,6 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 import type { Address } from '../types'
+import { hiddenCallsByStreet, isApproximatePlace } from './approximate'
 
 export const PIN_COLOR = '#1f4e8c'
 export const SELECTED_COLOR = '#a3195b'
@@ -25,6 +26,8 @@ export interface PinProperties {
   w: number
   // 1 for a place with no calls of its own, only traffic on its street.
   t: 0 | 1
+  // 1 for a place whose point is only somewhere on its street.
+  a: 0 | 1
 }
 
 export interface PinFeature {
@@ -52,20 +55,27 @@ export function pinCalls(address: Pick<Address, 'count' | 'traffic_count'>): num
   return isTrafficOnly(address) ? address.traffic_count : address.count
 }
 
+// A place hidden under its street has no pin, so its calls add to the street's size. They are
+// not in the street's `n`, which is the one tradeoff: a group's "N calls" counts the pins it
+// holds, not the places listed under them.
 export function pinsGeoJson(addresses: Address[]): PinCollection {
+  const hiddenCalls = hiddenCallsByStreet(addresses)
   return {
     type: 'FeatureCollection',
-    features: addresses.map((address) => ({
-      type: 'Feature',
-      properties: {
-        id: address.id,
-        name: pinName(address),
-        n: address.count,
-        w: pinCalls(address),
-        t: isTrafficOnly(address) ? 1 : 0,
-      },
-      geometry: { type: 'Point', coordinates: [address.lng, address.lat] },
-    })),
+    features: addresses
+      .filter((address) => !address.hidden)
+      .map((address) => ({
+        type: 'Feature',
+        properties: {
+          id: address.id,
+          name: pinName(address),
+          n: address.count,
+          w: pinCalls(address) + (hiddenCalls.get(address.id) ?? 0),
+          t: isTrafficOnly(address) ? 1 : 0,
+          a: isApproximatePlace(address) ? 1 : 0,
+        },
+        geometry: { type: 'Point', coordinates: [address.lng, address.lat] },
+      })),
   }
 }
 

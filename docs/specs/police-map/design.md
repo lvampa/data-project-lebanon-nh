@@ -56,6 +56,14 @@ Everything else is a place.
   For a place, outcomes and incidents cover the calls at the place itself, with alarms in the outcomes so false alarms show.
   For a street, both cover every call.
   What the top rows leave out is shown as "Other".
+- **A place on its street's point gets no pin.**
+  Nominatim returns one point for a street, so every place it could not find would stack there.
+  `addresses.json` carries `precision`, `street_id` and `hidden` per address.
+  A place with `hidden: true` is left out of the pin GeoJSON, and its street's card lists it under "On <street>, exact spot unknown", with its calls, each row opening its own card.
+  It stays in `addresses.json`, so counts, ranks, search and the `#<id>` link work as before, and a hidden place's card lights and rings its street.
+  A hidden place's calls add to its street pin's size, but not to the "N calls" a tooltip or group shows, which counts only the pins drawn.
+  A place with no street pin keeps its pin, and says "Approximate location, somewhere on <street>" on its card and "approximate location" in its tooltip.
+  An approximate road or intersection keeps its pin.
 - **Plain words, with the log's words on hover.**
   Common incident types and outcomes get a plain label, and the original text shows on hover.
 - **The URL carries the selection**, so a card can be shared.

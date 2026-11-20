@@ -6,7 +6,13 @@ import { MapControls } from '@project/ui/components/map/MapControls'
 import { MapErrorState } from '@project/ui/components/map/MapErrorState'
 import { MapLoadingState } from '@project/ui/components/map/MapLoadingState'
 import { LEBANON_CENTER, LEBANON_ZOOM } from '@project/ui/lib/constants'
-import { callWord, clusterHolds, nameOf, trafficNearby } from '@/lib/police-map/format'
+import {
+  APPROXIMATE_TIP,
+  callWord,
+  clusterHolds,
+  nameOf,
+  trafficNearby,
+} from '@/lib/police-map/format'
 import { NO_PIN, pinLayers, streetLayer } from '@/lib/police-map/layers'
 import {
   CLUSTER_MAX_ZOOM,
@@ -26,6 +32,8 @@ export interface Selection {
 interface Props {
   addresses: Address[]
   selection: Selection
+  // The pin that wears the ring. A hidden place has none, so its street's pin does.
+  ringed: string | null
   // Streets to light up, spelled as the map tiles spell them. None lights nothing.
   streets: string[]
   onSelect: (id: string) => void
@@ -33,7 +41,7 @@ interface Props {
 
 type Status = 'loading' | 'ready' | 'error'
 
-export function IncidentMap({ addresses, selection, streets, onSelect }: Props) {
+export function IncidentMap({ addresses, selection, ringed, streets, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const onSelectRef = useRef(onSelect)
@@ -101,6 +109,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
           calls?: number
           t?: number
           w?: number
+          a?: number
           weight?: number
         }
         const label = document.createElement('div')
@@ -116,6 +125,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
           label.append(
             strong,
             ` · ${props.t ? trafficNearby(props.w ?? 0) : callWord(props.n ?? 0)}`,
+            props.a ? ` · ${APPROXIMATE_TIP}` : '',
           )
         }
         tip
@@ -154,7 +164,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
   useEffect(() => {
     const map = mapRef.current
     if (!map || status !== 'ready') return
-    map.setFilter('selected', ['==', ['get', 'id'], selection.id ?? NO_PIN])
+    map.setFilter('selected', ['==', ['get', 'id'], ringed ?? NO_PIN])
     if (map.getLayer('street')) map.setFilter('street', streetFilter(streets))
     const place = selection.id ? places.get(selection.id) : undefined
     if (place && selection.fly) {
@@ -164,7 +174,7 @@ export function IncidentMap({ addresses, selection, streets, onSelect }: Props) 
         duration: 600,
       })
     }
-  }, [selection, streets, status, places])
+  }, [selection, ringed, streets, status, places])
 
   return (
     <div className="relative h-full w-full">

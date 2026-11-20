@@ -64,7 +64,25 @@ def test_update_address_upserts_geocoded_coordinates_and_commits():
         "lng",
         "geocoded_via",
         "coordinate_precision",
+        "osm_ref",
     } <= upsert_set_columns(stmt)
     assert compile_pg(stmt).params["coordinate_precision"] == "exact"
+    # A new pin must not keep the OpenStreetMap reference of the old one.
+    assert compile_pg(stmt).params["osm_ref"] is None
     db.commit.assert_called_once()
     assert (result.lat, result.lng, result.geocoded_via) == (43.7, -72.3, "nominatim")
+
+
+def test_typed_coordinates_clear_the_osm_reference():
+    db = MagicMock()
+    db.execute.return_value.one.return_value = MagicMock(
+        lat=43.7, lng=-72.3, geocoded_via="manual"
+    )
+    update = AddressUpdate(normalized_address="Timberwood Drive", lat=43.7, lng=-72.3)
+
+    addresses.update_address(db, "TIMBERWOOD DR", update, nominatim_contact=None)
+
+    stmt = executed_stmt(db)
+    assert "osm_ref" in upsert_set_columns(stmt)
+    assert compile_pg(stmt).params["osm_ref"] is None
+    assert compile_pg(stmt).params["geocoded_via"] == "manual"

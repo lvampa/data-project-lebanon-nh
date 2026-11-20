@@ -47,3 +47,37 @@ def test_migrations_run_up_and_down_and_match_models(alembic_config):
 def test_constraints_reject_invalid_rows(db_connection, statement):
     with pytest.raises(IntegrityError):
         db_connection.execute(text(statement))
+
+
+def test_the_osm_migration_resets_osm_pins_on_the_way_down(
+    alembic_config, db_connection
+):
+    command.upgrade(alembic_config, "head")
+    db_connection.execute(
+        text(
+            "INSERT INTO address_normalizations (raw_address, lat, lng, geocoded_via,"
+            " coordinate_precision, osm_ref, source, created_at, updated_at)"
+            " VALUES ('A', 43.6, -72.2, 'osm', 'exact', 'way/1', 'ai', now(), now()),"
+            " ('B', 43.7, -72.3, 'manual', 'exact', NULL, 'human', now(), now())"
+        )
+    )
+
+    command.downgrade(alembic_config, "d74f0b2e8a51")
+
+    rows = db_connection.execute(
+        text(
+            "SELECT raw_address, lat, geocoded_via, coordinate_precision"
+            " FROM address_normalizations ORDER BY raw_address"
+        )
+    ).all()
+    assert [tuple(r) for r in rows] == [
+        ("A", None, None, None),
+        ("B", 43.7, "manual", "exact"),
+    ]
+    columns = db_connection.execute(
+        text(
+            "SELECT column_name FROM information_schema.columns"
+            " WHERE table_name = 'address_normalizations'"
+        )
+    ).scalars()
+    assert "osm_ref" not in list(columns)

@@ -23,6 +23,7 @@ dependencies = [
 migrate = "scripts.migrate:main"
 normalize = "scripts.normalize.job:main"
 geocode = "scripts.normalize.geocode:main"
+osm-snapshot = "scripts.normalize.osm_snapshot:main"
 
 [tool.uv.sources]
 bootstrap = { workspace = true }

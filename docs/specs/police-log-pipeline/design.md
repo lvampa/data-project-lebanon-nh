@@ -89,6 +89,10 @@ There is no Elasticsearch and no dbt.
   A transient failure (a timeout, a connection error or a 5xx) skips the row without charging an attempt, and the next run tries it again.
   A 403 or 429 stops the run at once, and so do 5 transient failures in a row.
   A bare highway with no cross street, exit or landmark is marked for review and never looked up.
+- **OpenStreetMap snapshot:** `uv run osm-snapshot` downloads every named or numbered feature and every named road inside Lebanon's own boundary (not a box, which takes in White River Junction, Vermont) in two Overpass requests, and writes `scripts/data/osm/snapshot-YYYY-MM-DD.json`, which is gitignored.
+  Overpass answers 429 or 502 when busy, so a request is retried 4 times with waits of 10, 30, 90 and 180 seconds, then fails with the last status.
+  The functions in `shared/locations/src/locations/osm.py` find a location in the newest snapshot with no network: a house address by number and street, an intersection by a node two named roads share, and a named place by candidates that share a meaningful word with the name and lie within 200 m of its street.
+  Street names are compared through `canonical_address`, so OpenStreetMap's "Mount Support Road" and the log's "MT SUPPORT RD" are one street.
 - **Admin API:** `api/services/categories.py` and `addresses.py` list rows and let the operator correct them.
   A correction sets `source = 'human'` and clears the review mark; typed coordinates get `geocoded_via = 'manual'`.
   Deleting a row hands the value back to AI.

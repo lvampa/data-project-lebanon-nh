@@ -11,7 +11,7 @@ class AddressNormalization(ProvenanceMixin, Base):
     __tablename__ = "address_normalizations"
     __table_args__ = (
         CheckConstraint(
-            "geocoded_via IN ('manual', 'nominatim', 'place_code')",
+            "geocoded_via IN ('manual', 'nominatim', 'place_code', 'osm')",
             name="ck_address_normalizations_geocoded_via",
         ),
         CheckConstraint(
@@ -39,6 +39,8 @@ class AddressNormalization(ProvenanceMixin, Base):
     lng: Mapped[float | None] = mapped_column(Float)
     # How the coordinates were found. `source` says who owns the row.
     geocoded_via: Mapped[str | None] = mapped_column(Text)
+    # The OpenStreetMap feature the pin came from, such as "way/123456", when found there.
+    osm_ref: Mapped[str | None] = mapped_column(Text)
     # `exact` for a matched address, place or intersection; `approximate` for a street
     # or highway matched without a point on it.
     coordinate_precision: Mapped[str | None] = mapped_column(Text)

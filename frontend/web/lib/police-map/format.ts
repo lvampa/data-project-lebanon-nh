@@ -1,8 +1,9 @@
 const NEW_HAMPSHIRE = 'America/New_York'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-export function callWord(count: number): string {
-  return `${count.toLocaleString('en-US')} ${count === 1 ? 'call' : 'calls'}`
+// Officers start about half the entries themselves, so a count is of log entries, not calls.
+export function entryWord(count: number): string {
+  return `${count.toLocaleString('en-US')} ${count === 1 ? 'log entry' : 'log entries'}`
 }
 
 // "Lebanon Ford" from "Lebanon Ford, 90 Miracle Mile".
@@ -34,7 +35,8 @@ export function sinceLabel(since: string): string {
 
 // A place whose own calls are none has only the traffic on its street to show.
 export function trafficNearby(count: number): string {
-  return `${count.toLocaleString('en-US')} traffic ${count === 1 ? 'call' : 'calls'} nearby`
+  const what = count === 1 ? 'traffic stop or call' : 'traffic stops and calls'
+  return `${count.toLocaleString('en-US')} ${what} nearby`
 }
 
 // The line under an approximate place's name.
@@ -52,7 +54,7 @@ export const APPROXIMATE_TIP = 'approximate location'
 // What a group of pins holds, for its tooltip. A group with no calls of its own has only
 // traffic, and its weight is exactly the sum of that traffic.
 export function clusterHolds(calls: number, weight: number): string {
-  return calls === 0 ? trafficNearby(weight) : callWord(calls)
+  return calls === 0 ? trafficNearby(weight) : entryWord(calls)
 }
 
 // "Jan to Nov 2026" for a window that starts in January 2026 and was generated in November.

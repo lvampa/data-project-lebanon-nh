@@ -65,8 +65,10 @@ export function pinsGeoJson(addresses: Address[]): PinCollection {
   const hiddenCalls = hiddenCallsByStreet(addresses)
   return {
     type: 'FeatureCollection',
+    // A pin with nothing to show, such as one a filter emptied, is left off the map.
     features: addresses
       .filter((address) => !address.hidden)
+      .filter((address) => pinCalls(address) + (hiddenCalls.get(address.id) ?? 0) > 0)
       .map((address) => ({
         type: 'Feature',
         properties: {

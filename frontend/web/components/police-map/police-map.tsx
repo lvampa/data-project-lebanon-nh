@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapLegend } from '@project/ui/components/map/MapLegend'
 import { IncidentMap, type Selection } from '@/components/incident-map'
 import { PlaceSearch } from '@/components/police-map/place-search'
+import type { FilteredCard } from '@/components/police-map/filtered-section'
 import { SidePanel } from '@/components/police-map/side-panel'
 import { streetPinOf } from '@/lib/police-map/approximate'
 import { streetsToLight } from '@/lib/police-map/streets'
@@ -14,11 +15,13 @@ import type { Address, StatsData } from '@/lib/types'
 interface Props {
   addresses: Address[]
   stats: StatsData
+  // Set while filters are on, for the card and the town summary.
+  filtered?: FilteredCard | null
 }
 
 const NOTHING: Selection = { id: null, fly: false }
 
-export function PoliceMap({ addresses, stats }: Props) {
+export function PoliceMap({ addresses, stats, filtered = null }: Props) {
   const [selection, setSelection] = useState<Selection>(NOTHING)
   const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
 
@@ -67,8 +70,8 @@ export function PoliceMap({ addresses, stats }: Props) {
         <div className="pointer-events-none absolute bottom-7 left-3.5 z-10">
           <MapLegend
             variant="scale"
-            caption="Larger and darker means more calls"
-            title={`Police calls · ${windowLabel(stats.since, stats.generated_at)}`}
+            caption="Larger and darker means more activity"
+            title={`Police activity · ${windowLabel(stats.since, stats.generated_at)}`}
             lastUpdated={updatedLabel(stats.generated_at)}
             color={PIN_COLOR}
           />
@@ -84,6 +87,7 @@ export function PoliceMap({ addresses, stats }: Props) {
           place={selected}
           onChoose={(id) => select(id, true)}
           onClose={clear}
+          filtered={filtered}
         />
       </aside>
     </div>

@@ -50,9 +50,16 @@ frontend/web /map
 }
 ```
 
-The file holds no location text, case numbers or links, only an index into `addresses.json`.
-Officer names are already public in `incidents.json`.
+`minute` is wall-clock minutes: the log's own local time, with no zone, minus `since` at midnight, so a daylight saving change never shifts an entry.
+An entry with no report time is placed at its log day's midnight.
 With the dev data, 23,850 entries, it is 725 KB, and 186 KB gzipped.
+
+**What the file adds.**
+It holds no case numbers or links, and no address text beyond the pin ids, which are slugs of the normalized address.
+But it is a minute-level timeline of every entry at every pin for the year, where a card shows only a pin's top types and latest ten calls.
+House-level data was accepted on 2026-11-14.
+When person-named locations are hidden on the public site, the same rule must scrub `pins` here as well as `addresses.json`.
+It also names the officer on every entry, where `incidents.json` holds only the latest 2,000.
 
 ## Key decisions
 
@@ -69,7 +76,10 @@ With the dev data, 23,850 entries, it is 725 KB, and 186 KB gzipped.
   `activity.json` loads the first time someone changes a filter or opens another tab.
 - **The map's style does not change.**
   Filtered counts go into the live map as `Address` rows with new `count` and `traffic_count`, so pins, groups, hidden places and "traffic nearby" keep working as they do.
+  `traffic_count` counts only kept traffic, so under "About a place" or "Alarms" it is 0 and no place turns into "traffic nearby".
+  A pin a filter empties leaves the map, unless hidden places with activity ride on it.
   The map updates its pin source in place instead of being rebuilt on every change.
+  The selection, the hash and the search keep the year's rows, so a filter change never flies the map, and a card hides its rank while filters are on.
 - **One kind at a time:** All activity, About a place, Traffic and Alarms.
   "All activity" keeps the map's rule that traffic counts on the road, not the business beside it.
   With Traffic chosen, a place shows its traffic as "traffic stops and calls nearby", as today.
@@ -80,6 +90,7 @@ With the dev data, 23,850 entries, it is 725 KB, and 186 KB gzipped.
   That is the "about a place" kind, started by a caller, at a place and not a road.
   False alarms are shown apart on each card and are never in the rank.
   The police station is left out, because the log files reports taken at the station there, not where they happened.
+  It is matched by its pin id, so a rename of its normalized address would bring it back; that is a known risk.
   Its count was 1,217, made of 602 walk-ins and 615 calls.
   The kind chips step aside on this tab.
 - **No trend and no speed ranking.**
@@ -101,7 +112,7 @@ With the dev data, 23,850 entries, it is 725 KB, and 186 KB gzipped.
   "See on the map" filters every tab to that officer.
 - **The view and filters live in the URL query, and the selected pin stays in the hash**, so a filtered view can be shared.
 - **One chart tooltip**, styled like the map's tooltip, opens on hover with a mouse and on tap on a phone.
-  It escapes the log's text, because it renders HTML.
+  The log's text is only ever rendered as text, in the tooltip and everywhere else, never as HTML.
 - **Color meets WCAG AA**, checked with computed ratios.
   Hour strips and the heat map use steps from the sequential scale that each reach 3:1, with the scale reversed in the dark theme.
   The weekly chart labels each series directly and separates segments with a 1px gap.
@@ -120,3 +131,5 @@ With the dev data, 23,850 entries, it is 725 KB, and 186 KB gzipped.
 - Whether a caller's alarm that turns out real counts as a call from the public about the place.
   Today no alarm counts.
 - Whether the Officers tab goes public with this change, since an officer's hours and time on scene sit close to a performance view.
+  It also decides whether `activity.json` carries the officer column.
+- Under narrow filters most pins drop to the smallest size, because the size scale is tuned to a year of all activity.

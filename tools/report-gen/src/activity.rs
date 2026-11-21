@@ -305,6 +305,27 @@ mod tests {
         assert_eq!(scene_minutes(&shift), UNTIMED);
     }
 
+    #[test]
+    fn a_visit_that_runs_past_midnight_counts_its_minutes() {
+        let mut call = entry(Some("Telephone"));
+        call.arrived_at = Some(at(23, 50));
+        call.cleared_at = Some(
+            NaiveDate::from_ymd_opt(2026, 6, 2)
+                .unwrap()
+                .and_hms_opt(0, 20, 0)
+                .unwrap(),
+        );
+        assert_eq!(scene_minutes(&call), 30);
+    }
+
+    #[test]
+    fn a_visit_cleared_the_minute_police_arrived_is_zero_not_untimed() {
+        let mut call = entry(Some("Telephone"));
+        call.arrived_at = Some(at(12, 9));
+        call.cleared_at = Some(at(12, 9));
+        assert_eq!(scene_minutes(&call), 0);
+    }
+
     // --- the file ---
 
     #[test]

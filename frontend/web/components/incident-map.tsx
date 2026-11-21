@@ -160,7 +160,9 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
         const points = leaves.flatMap((leaf) =>
           leaf.geometry.type === 'Point' ? [leaf.geometry.coordinates as [number, number]] : [],
         )
-        const fit = map.cameraForBounds(boundsOf(points), { padding: 80, maxZoom: GROUP_MAX_ZOOM })
+        const fit = points.length
+          ? map.cameraForBounds(boundsOf(points), { padding: 80, maxZoom: GROUP_MAX_ZOOM })
+          : undefined
         map.easeTo({
           center: fit?.center ?? (feature.geometry.coordinates as [number, number]),
           zoom: Math.max(fit?.zoom ?? 0, splitZoom + 0.3),

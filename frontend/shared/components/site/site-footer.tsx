@@ -37,11 +37,14 @@ function Column({ title, items }: { title: string; items: NavItem[] }) {
 export function SiteFooter() {
   return (
     // The top fades from the page into the brand color instead of a hard edge. Mixed in oklab
-    // so the middle stays navy and does not pass through gray. The call-out's top padding is
+    // so the middle stays navy and does not pass through gray. bg-brand stays under it for a
+    // browser without `in oklab`. The call-out's top padding is
     // longer than the fade, so its content sits on the full brand color.
     <footer
-      className="text-brand-foreground"
-      style={{ background: 'linear-gradient(in oklab, var(--background), var(--brand) 120px)' }}
+      className="bg-brand text-brand-foreground"
+      style={{
+        backgroundImage: 'linear-gradient(in oklab, var(--background), var(--brand) 120px)',
+      }}
     >
       <section
         aria-labelledby="footer-callout-heading"

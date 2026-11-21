@@ -17,13 +17,14 @@ import {
   VIEWS,
   isDefault,
   nounFor,
+  rangeDays,
   rangeLabel,
   readQuery,
   writeQuery,
   type Filters,
   type View,
 } from '@/lib/police-views/filters'
-import { weekFlags } from '@/lib/police-views/findings'
+import { weekFlags, weeksInRange } from '@/lib/police-views/findings'
 import { lastDayOf, selectEntries } from '@/lib/police-views/select'
 import type { Address, StatsData } from '@/lib/types'
 import { BusyTimesView } from './busy-times-view'
@@ -85,10 +86,12 @@ export function PoliceViews({ addresses, stats }: Props) {
   const derived = useDerived(activity, addresses, stats, filters)
 
   // A place chosen on another tab opens on the map, which reads the selection from the hash.
+  // Places counts calls about a place, so the map opens on that kind, and the pin is there.
   const showPlace = (id: string) => {
+    const onMap = { ...filters, kind: 'place' as const }
     const { pathname } = window.location
-    window.history.replaceState(null, '', `${pathname}${writeQuery('map', filters)}#${id}`)
-    setState({ view: 'map', filters })
+    window.history.replaceState(null, '', `${pathname}${writeQuery('map', onMap)}#${id}`)
+    setState({ view: 'map', filters: onMap })
   }
   const showOfficer = (officer: string) => go({ view: 'map', filters: { ...filters, officer } })
 
@@ -140,22 +143,24 @@ export function PoliceViews({ addresses, stats }: Props) {
               activity={activity}
               kept={derived.publicKept}
               filters={filters}
-              flags={derived.flags}
+              range={derived.weeks}
               onShow={showPlace}
             />
           ) : view === 'busy' ? (
             <BusyTimesView
               activity={activity}
               kept={derived.kept}
-              flags={derived.flags}
+              range={derived.weeks}
               noun={nounFor(filters.kind)}
+              coverage={coverageOf(activity, stats)}
             />
           ) : (
             <OfficersView
               activity={activity}
               kept={derived.everyOfficerKept}
               noun={nounFor(filters.kind)}
-              rangeLabel={derived.range}
+              rangeLabel={derived.rangeText}
+              coverage={coverageOf(activity, stats)}
               onShow={showOfficer}
             />
           )}
@@ -177,6 +182,7 @@ function useDerived(
   return useMemo(() => {
     if (!activity) return null
     const lastDay = lastDayOf(activity)
+    const firstDay = lastDay - rangeDays(filters.range) + 1
     const kept = selectEntries(activity, addresses, filters, 'all')
     const publicKept = selectEntries(activity, addresses, filters, 'public')
     const everyOfficerKept = selectEntries(
@@ -206,11 +212,13 @@ function useDerived(
       kept,
       publicKept,
       everyOfficerKept,
-      flags: weekFlags(activity),
-      range: rangeLabel(activity.since, lastDay, filters.range),
+      weeks: weeksInRange(weekFlags(activity), firstDay),
+      rangeText: rangeLabel(activity.since, lastDay, filters.range),
       mapAddresses: filteredAddresses(addresses, activity, kept),
       mapStats: {
         ...stats,
+        // The summary and the legend name the range, not the whole year.
+        since: dayToIso(activity.since, Math.max(0, firstDay)),
         total: shown.all,
         by_weekday: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, d) => ({
           day,
@@ -250,6 +258,18 @@ function useDerived(
   }, [activity, addresses, stats, filters])
 }
 
+// Entries whose address has no point yet are not in activity.json, so the views say so.
+function coverageOf(activity: Activity, stats: StatsData): string {
+  const mapped = activity.size.toLocaleString('en-US')
+  return `Counts the ${mapped} log entries with a mapped location, of ${stats.total.toLocaleString('en-US')} in the log.`
+}
+
+// "2026-08-22" for day 233 after "2026-01-01".
+function dayToIso(since: string, day: number): string {
+  const start = new Date(`${since}T00:00:00Z`).getTime()
+  return new Date(start + day * 86_400_000).toISOString().slice(0, 10)
+}
+
 function updatedOf(stats: StatsData): string {
   return new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
@@ -259,13 +279,13 @@ function updatedOf(stats: StatsData): string {
 }
 
 // The map fills the window under the tabs and filters, so the whole map shows at the top
-// of the page. Measured, because the filter bar's height changes with what it holds.
+// of the page. Measured, and measured again when the bar above it wraps or unwraps.
 function FittedMap({ children }: { children: React.ReactNode }) {
   const box = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
+    const node = box.current
+    if (!node) return
     const fit = () => {
-      const node = box.current
-      if (!node) return
       const top = node.getBoundingClientRect().top + window.scrollY
       node.style.setProperty(
         '--map-height',
@@ -274,7 +294,12 @@ function FittedMap({ children }: { children: React.ReactNode }) {
     }
     fit()
     window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
+    const observer = new ResizeObserver(fit)
+    if (node.previousElementSibling) observer.observe(node.previousElementSibling)
+    return () => {
+      window.removeEventListener('resize', fit)
+      observer.disconnect()
+    }
   }, [])
   return <div ref={box}>{children}</div>
 }

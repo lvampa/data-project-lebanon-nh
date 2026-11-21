@@ -1,16 +1,19 @@
 import type { WeekFlag } from '@/lib/police-views/findings'
 import { weekNote, weekStart } from './weeks'
 
-// A small bar per week, on a scale the caller shares across cards. A week missing logs, or
+// A small bar per week, on a scale the caller shares across cards. `weeks` starts at week
+// `first` of the year. A week missing logs, or
 // still filling in, is striped instead of solid.
 export function WeekBars({
   weeks,
+  first,
   max,
   flags,
   since,
   noun,
 }: {
   weeks: number[]
+  first: number
   max: number
   flags: WeekFlag[]
   since: string
@@ -30,7 +33,7 @@ export function WeekBars({
             height: `${(value / max) * 100}%`,
             backgroundColor: 'var(--chart-ink)',
           }}
-          data-tip-title={`Week of ${weekStart(since, week)}`}
+          data-tip-title={`Week of ${weekStart(since, first + week)}`}
           data-tip={[`${value.toLocaleString('en-US')} ${noun}`, weekNote(flags[week])]
             .filter(Boolean)
             .join('\n')}

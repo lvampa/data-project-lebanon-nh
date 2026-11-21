@@ -13,6 +13,8 @@ interface Props {
   noun: string
   // "Jan to Nov 2026", for the line under the heading.
   rangeLabel: string
+  // Says that only entries with a mapped location are counted.
+  coverage: string
   onShow: (officer: string) => void
 }
 
@@ -21,7 +23,7 @@ const MIN_ENTRIES = 25
 
 type Sort = 'count' | 'name'
 
-export function OfficersView({ activity, kept, noun, rangeLabel, onShow }: Props) {
+export function OfficersView({ activity, kept, noun, rangeLabel, coverage, onShow }: Props) {
   const [sort, setSort] = useState<Sort>('count')
   const unnamed = activity.officers.indexOf(null)
   const officers = useMemo(
@@ -54,6 +56,7 @@ export function OfficersView({ activity, kept, noun, rangeLabel, onShow }: Props
             {leftOut > 0 &&
               `${leftOut.toLocaleString('en-US')} ${leftOut === 1 ? 'entry names' : 'entries name'} no officer and ${leftOut === 1 ? 'is' : 'are'} left out.`}
           </p>
+          <p className="mt-1 text-sm text-muted-foreground">{coverage}</p>
         </div>
         <Tabs
           variant="pill"

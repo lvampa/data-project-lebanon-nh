@@ -9,19 +9,24 @@ import {
   clock,
   partOfDay,
   directLabels,
+  heatKey,
+  heatStep,
   stayRows,
   typicalWeek,
   type StayRow,
-  type WeekFlag,
+  type WeekRange,
 } from '@/lib/police-views/findings'
 import { weekNote, weekStart } from './weeks'
 
 interface Props {
   activity: Activity
   kept: Uint8Array
-  flags: WeekFlag[]
+  // The weeks the date range covers.
+  range: WeekRange
   // What the kept entries are, such as "log entries" or "traffic stops and calls".
   noun: string
+  // Says that only entries with a mapped location are counted.
+  coverage: string
 }
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -46,7 +51,7 @@ const HEAT_STEPS = 4
 const BOX = 'rounded-lg border border-border bg-card p-5'
 const FINDING = 'mb-3.5 text-lg [&_b]:font-semibold [&_b]:text-highlight'
 
-export function BusyTimesView({ activity, kept, flags, noun }: Props) {
+export function BusyTimesView({ activity, kept, range, noun, coverage }: Props) {
   const town = useMemo(() => tally(activity, kept, wholeTown).get(TOWN) ?? null, [activity, kept])
   const grid = useMemo(() => heatGrid(activity, kept), [activity, kept])
   const stretch = busyStretch(grid)
@@ -70,6 +75,7 @@ export function BusyTimesView({ activity, kept, flags, noun }: Props) {
       <h2 id="busy-heading" className="text-display-3">
         When police are busiest
       </h2>
+      <p className="-mt-2 text-sm text-muted-foreground">{coverage}</p>
 
       <div className={BOX}>
         <p className={FINDING}>{stretchFinding}</p>
@@ -77,8 +83,8 @@ export function BusyTimesView({ activity, kept, flags, noun }: Props) {
       </div>
 
       <div className={BOX}>
-        <WeekFinding activity={activity} weeks={town?.weeks ?? []} flags={flags} noun={noun} />
-        <WeeklyChart activity={activity} kept={kept} flags={flags} />
+        <WeekFinding activity={activity} weeks={town?.weeks ?? []} range={range} noun={noun} />
+        <WeeklyChart activity={activity} kept={kept} range={range} />
       </div>
 
       <h2 className="mt-2 text-display-3">How long police stay</h2>
@@ -99,11 +105,10 @@ function heatGrid(activity: Activity, kept: Uint8Array): number[][] {
 
 function HeatMap({ grid, noun }: { grid: number[][]; noun: string }) {
   const max = Math.max(1, ...grid.flat())
-  const step = max / HEAT_STEPS
-  const color = (value: number) =>
-    value === 0
-      ? 'var(--secondary)'
-      : `var(--heat-${Math.min(HEAT_STEPS, Math.floor(value / step) + 1)})`
+  const color = (value: number) => {
+    const step = heatStep(value, max, HEAT_STEPS)
+    return step === 0 ? 'var(--secondary)' : `var(--heat-${step})`
+  }
   return (
     // A phone has no room for 24 columns, so it keeps the finding above and drops the grid.
     <div className="hidden md:block">
@@ -126,11 +131,12 @@ function HeatMap({ grid, noun }: { grid: number[][]; noun: string }) {
         <span className="inline-flex items-center gap-1.5">
           <i className="size-2.5 rounded-xs bg-secondary" /> None
         </span>
-        {Array.from({ length: HEAT_STEPS }, (_, k) => (
-          <span key={k} className="inline-flex items-center gap-1.5">
-            <i className="size-2.5 rounded-xs" style={{ background: `var(--heat-${k + 1})` }} />
-            {Math.max(1, Math.ceil(k * step)).toLocaleString('en-US')} to{' '}
-            {Math.floor((k + 1) * step).toLocaleString('en-US')}
+        {heatKey(max, HEAT_STEPS).map((row) => (
+          <span key={row.step} className="inline-flex items-center gap-1.5">
+            <i className="size-2.5 rounded-xs" style={{ background: `var(--heat-${row.step})` }} />
+            {row.low === row.high
+              ? row.low.toLocaleString('en-US')
+              : `${row.low.toLocaleString('en-US')} to ${row.high.toLocaleString('en-US')}`}
           </span>
         ))}
       </div>
@@ -168,15 +174,15 @@ function Row({
 function WeekFinding({
   activity,
   weeks,
-  flags,
+  range,
   noun,
 }: {
   activity: Activity
   weeks: number[]
-  flags: WeekFlag[]
+  range: WeekRange
   noun: string
 }) {
-  const week = typicalWeek(weeks, flags, activity.since)
+  const week = typicalWeek(weeks.slice(range.first), range.flags, activity.since, range.first)
   if (!week) return null
   return (
     <p className={FINDING}>
@@ -196,19 +202,23 @@ const CHART_HEIGHT = 150
 function WeeklyChart({
   activity,
   kept,
-  flags,
+  range,
 }: {
   activity: Activity
   kept: Uint8Array
-  flags: WeekFlag[]
+  range: WeekRange
 }) {
+  const { first, flags } = range
   const weeks = useMemo(() => {
-    const byWeek = Array.from({ length: flags.length }, () => new Array(CATEGORIES.length).fill(0))
+    const byWeek = Array.from({ length: first + flags.length }, () =>
+      new Array(CATEGORIES.length).fill(0),
+    )
     for (let i = 0; i < activity.size; i++) {
       if (kept[i]) byWeek[activity.week[i]][activity.category[i]]++
     }
-    return byWeek
-  }, [activity, kept, flags.length])
+    // Only the weeks the date range covers.
+    return byWeek.slice(first)
+  }, [activity, kept, first, flags.length])
   const totals = weeks.map((week) => week.reduce((a, b) => a + b, 0))
   const max = Math.max(1, ...totals)
   const kindTotals = CATEGORIES.map((_, k) => weeks.reduce((a, week) => a + week[k], 0))
@@ -227,7 +237,7 @@ function WeeklyChart({
             <div
               key={w}
               className="flex h-full min-w-0 flex-1 flex-col-reverse"
-              data-tip-title={`Week of ${weekStart(activity.since, w)}: ${totals[w].toLocaleString('en-US')}`}
+              data-tip-title={`Week of ${weekStart(activity.since, first + w)}: ${totals[w].toLocaleString('en-US')}`}
               data-tip={[
                 ...CATEGORIES.flatMap((kind, k) =>
                   week[k] ? [`${kind.label}: ${week[k].toLocaleString('en-US')}`] : [],

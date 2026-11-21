@@ -4,10 +4,13 @@ import {
   busyStretch,
   clock,
   directLabels,
+  heatKey,
+  heatStep,
   partOfDay,
   stayRows,
   typicalWeek,
   weekFlags,
+  weeksInRange,
 } from '@/lib/police-views/findings'
 import { SINCE, activityFile, address, times, type FixtureEntry } from './police-views-fixture'
 
@@ -103,6 +106,51 @@ describe('typicalWeek', () => {
     const found = typicalWeek(totals, flags, SINCE)!
     expect(found.steady).toBe(false)
     expect(found.topMonth).toBe(2)
+  })
+})
+
+describe('weeksInRange', () => {
+  const year = [null, null, 'thin', null, null, 'partial'] as const
+
+  it('starts at the week the range starts in, and marks it partial when it starts mid-week', () => {
+    // Day 16 is the third day of week 2.
+    expect(weeksInRange([...year], 16)).toEqual({
+      first: 2,
+      flags: ['partial', null, null, 'partial'],
+    })
+  })
+
+  it('keeps a first week whole when the range starts on its first day', () => {
+    expect(weeksInRange([...year], 21).flags[0]).toBeNull()
+    expect(weeksInRange([...year], -40)).toEqual({ first: 0, flags: [...year] })
+  })
+})
+
+describe('typicalWeek under a date range', () => {
+  it('counts only the weeks in the range, and names their month', () => {
+    // Weeks 30 to 33 fall in August. The weeks before the range are not passed in.
+    const found = typicalWeek([420, 440, 430, 450], [null, null, null, null], SINCE, 30)!
+    expect(found.perWeek).toBe(440)
+    expect(found.topMonth).toBe(7)
+  })
+})
+
+describe('heatStep and heatKey', () => {
+  it('give every count exactly one step, the busiest in the last', () => {
+    expect([0, 1, 24, 25, 99, 100].map((v) => heatStep(v, 100, 4))).toEqual([0, 1, 1, 2, 4, 4])
+    expect(heatKey(100, 4)).toEqual([
+      { step: 1, low: 1, high: 24 },
+      { step: 2, low: 25, high: 49 },
+      { step: 3, low: 50, high: 74 },
+      { step: 4, low: 75, high: 100 },
+    ])
+  })
+
+  it('leaves out a step no whole count falls in', () => {
+    expect(heatKey(2, 4)).toEqual([
+      { step: 3, low: 1, high: 1 },
+      { step: 4, low: 2, high: 2 },
+    ])
   })
 })
 

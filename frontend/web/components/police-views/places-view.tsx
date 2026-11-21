@@ -7,7 +7,7 @@ import { pinName } from '@/lib/police-map/map-style'
 import type { Activity } from '@/lib/police-views/activity'
 import { tally, topOf, type Tally } from '@/lib/police-views/counts'
 import { type Filters } from '@/lib/police-views/filters'
-import type { WeekFlag } from '@/lib/police-views/findings'
+import type { WeekRange } from '@/lib/police-views/findings'
 import { selectEntries } from '@/lib/police-views/select'
 import type { Address } from '@/lib/types'
 import { HourStrip } from './hour-strip'
@@ -19,7 +19,8 @@ interface Props {
   // The public lens, from the page, so the count line and the cards agree.
   kept: Uint8Array
   filters: Filters
-  flags: WeekFlag[]
+  // The weeks the date range covers.
+  range: WeekRange
   onShow: (id: string) => void
 }
 
@@ -29,7 +30,7 @@ const MIN_FOR_SHARE = 20
 
 type Sort = 'count' | 'night'
 
-export function PlacesView({ addresses, activity, kept, filters, flags, onShow }: Props) {
+export function PlacesView({ addresses, activity, kept, filters, range, onShow }: Props) {
   const [sort, setSort] = useState<Sort>('count')
   const places = useMemo(() => tally(activity, kept, (i) => activity.pin[i]), [activity, kept])
   const falseAlarms = useMemo(
@@ -46,7 +47,7 @@ export function PlacesView({ addresses, activity, kept, filters, flags, onShow }
     )
     .slice(0, SHOWN)
   // One scale for every card, so the bars compare across places.
-  const weekMax = Math.max(1, ...ranked.flatMap(([, t]) => t.weeks))
+  const weekMax = Math.max(1, ...ranked.flatMap(([, t]) => t.weeks.slice(range.first)))
 
   return (
     <section aria-labelledby="places-heading">
@@ -86,7 +87,7 @@ export function PlacesView({ addresses, activity, kept, filters, flags, onShow }
                 falseAlarms={falseAlarms.get(pin) ?? 0}
                 showNight={filters.time === 'all'}
                 weekMax={weekMax}
-                flags={flags}
+                range={range}
                 since={activity.since}
                 types={activity.types}
                 onShow={onShow}
@@ -112,7 +113,7 @@ function PlaceTile({
   falseAlarms,
   showNight,
   weekMax,
-  flags,
+  range,
   since,
   types,
   onShow,
@@ -123,7 +124,7 @@ function PlaceTile({
   falseAlarms: number
   showNight: boolean
   weekMax: number
-  flags: WeekFlag[]
+  range: WeekRange
   since: string
   types: (string | null)[]
   onShow: (id: string) => void
@@ -143,7 +144,14 @@ function PlaceTile({
       </div>
       <h3 className="mt-2 font-semibold leading-tight">{nameOf(name)}</h3>
       <div className="min-h-5 text-sm text-muted-foreground">{streetOf(name)}</div>
-      <WeekBars weeks={t.weeks} max={weekMax} flags={flags} since={since} noun="calls" />
+      <WeekBars
+        weeks={t.weeks.slice(range.first)}
+        first={range.first}
+        max={weekMax}
+        flags={range.flags}
+        since={since}
+        noun="calls"
+      />
       <HourStrip hours={t.hours} compact />
       <div className="mt-2.5 grid gap-0.5 text-sm text-muted-foreground">
         {showNight && (

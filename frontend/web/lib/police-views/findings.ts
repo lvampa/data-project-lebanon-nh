@@ -91,12 +91,29 @@ export interface TypicalWeek {
 // Weeks under 15% apart from their average count as steady.
 const STEADY = 0.15
 
-// A typical full week, and whether the year was steady or had a clear high. Incomplete weeks
-// are left out of both.
+export interface WeekRange {
+  // The first week the date range touches, an index into the year's weeks.
+  first: number
+  // The flags of the weeks from `first` on.
+  flags: WeekFlag[]
+}
+
+// The weeks a date range covers. A range that starts mid-week makes its first week partial,
+// so it cannot pass for a quiet week.
+export function weeksInRange(flags: WeekFlag[], firstDay: number): WeekRange {
+  const first = Math.floor(Math.max(0, firstDay) / 7)
+  const inRange = flags.slice(first)
+  if (firstDay > 0 && firstDay % 7 !== 0 && inRange.length > 0) inRange[0] = 'partial'
+  return { first, flags: inRange }
+}
+
+// A typical full week, and whether the range was steady or had a clear high. `totals` and
+// `flags` start at week `firstWeek`. Incomplete weeks are left out of both.
 export function typicalWeek(
   totals: number[],
   flags: WeekFlag[],
   since: string,
+  firstWeek = 0,
 ): TypicalWeek | null {
   const full = totals.filter((_, week) => !flags[week])
   if (full.length === 0 || full.every((v) => v === 0)) return null
@@ -111,7 +128,7 @@ export function typicalWeek(
   totals.forEach((total, week) => {
     if (flags[week]) return
     // A week belongs to the month of its middle day.
-    const month = new Date(start + (week * 7 + 3) * 86_400_000).getUTCMonth()
+    const month = new Date(start + ((firstWeek + week) * 7 + 3) * 86_400_000).getUTCMonth()
     byMonth[month] += total
     weeksIn[month]++
   })
@@ -233,4 +250,29 @@ export function directLabels(
   for (let k = labels.length - 2; k >= 0; k--)
     labels[k].y = Math.min(labels[k].y, labels[k + 1].y - LABEL_GAP)
   return labels
+}
+
+// The heat map's color step for a count: 0 for none, then 1 to `steps`, the busiest last.
+export function heatStep(value: number, max: number, steps: number): number {
+  if (value <= 0) return 0
+  return Math.min(steps, Math.floor(value / (max / steps)) + 1)
+}
+
+export interface HeatKeyRow {
+  step: number
+  low: number
+  high: number
+}
+
+// The counts each step covers, found by putting every count through `heatStep`, so the key
+// always matches the colors. A step no whole count falls in is left out.
+export function heatKey(max: number, steps: number): HeatKeyRow[] {
+  const rows: HeatKeyRow[] = []
+  for (let value = 1; value <= max; value++) {
+    const step = heatStep(value, max, steps)
+    const last = rows.at(-1)
+    if (last?.step === step) last.high = value
+    else rows.push({ step, low: value, high: value })
+  }
+  return rows
 }

@@ -78,12 +78,14 @@ pub struct Address {
     pub hidden: bool,
 }
 
-// A pin with its report card, which is JSON text that goes into places/<id>.json.
+// A pin with its report card, which is JSON text that goes into places/<id>.json, and every
+// entry of the pin as JSON text, for activity.json.
 #[derive(Debug, sqlx::FromRow)]
 pub struct PlaceRow {
     #[sqlx(flatten)]
     pub address: Address,
     pub card: String,
+    pub entries: String,
 }
 
 // ---- Staff ----

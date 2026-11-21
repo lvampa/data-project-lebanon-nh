@@ -1,5 +1,6 @@
 #![deny(clippy::all, clippy::pedantic)]
 
+mod activity;
 mod db;
 mod output;
 
@@ -55,6 +56,10 @@ async fn main() -> Result<()> {
         output::write_json(&places_dir, &format!("{}.json", place.address.id), &card)?;
     }
     println!("✓ places/  ({} files)", places.len());
+
+    let activity = activity::build(&places, args.since)?;
+    println!("✓ activity.json  ({} entries)", activity.entries());
+    output::write_json_compact(&args.output_dir, "activity.json", &activity)?;
 
     let staff = db::fetch_staff(&pool).await?;
     println!("✓ staff.json  ({} rows)", staff.len());

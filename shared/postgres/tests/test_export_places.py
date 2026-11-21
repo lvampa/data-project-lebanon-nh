@@ -689,3 +689,100 @@ def test_a_place_is_approximate_when_any_of_its_spellings_is(db_session):
     add_entries(db_session, "QUARRY B", "Alarm")
 
     assert pin(db_session, QUARRY)["precision"] == "approximate"
+
+
+# --- every entry of a pin, for activity.json ---
+
+
+def entries(session, normalized: str) -> list[list]:
+    return json.loads(pin(session, normalized)["entries"])
+
+
+def test_a_place_lists_every_entry_including_the_road_traffic_its_count_leaves_out(
+    db_session,
+):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
+    add_entries(db_session, "LEBANON FORD", "Welfare Check", "Motor Vehicle Stop")
+
+    listed = entries(db_session, FORD)
+
+    assert pin(db_session, FORD)["count"] == 1
+    assert sorted(entry[1] for entry in listed) == ["premises", "traffic"]
+
+
+def test_an_entry_carries_its_time_kind_type_outcome_source_officer_and_times(
+    db_session,
+):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
+    add_entries(
+        db_session,
+        "LEBANON FORD",
+        "Welfare Check",
+        disposition="Investigated",
+        call_source="Telephone",
+    )
+    entry = db_session.query(LogEntry).one()
+    entry.dispatched_at = datetime(2026, 6, 1, 12, 2)
+    entry.arrived_at = datetime(2026, 6, 1, 12, 9)
+    entry.cleared_at = datetime(2026, 6, 1, 12, 40)
+    entry.officer = "C. Day"
+    db_session.flush()
+
+    assert entries(db_session, FORD) == [
+        [
+            "2026-06-01T12:00:00",
+            "premises",
+            "Welfare Check",
+            "Investigated",
+            "Telephone",
+            "C. Day",
+            "2026-06-01T12:02:00",
+            "2026-06-01T12:09:00",
+            "2026-06-01T12:40:00",
+        ]
+    ]
+
+
+def test_entries_are_in_log_order(db_session):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
+    add_entries(db_session, "LEBANON FORD", "Late", reported_at=datetime(2026, 6, 2, 9))
+    add_entries(
+        db_session, "LEBANON FORD", "Early", reported_at=datetime(2026, 6, 1, 9)
+    )
+
+    assert [entry[2] for entry in entries(db_session, FORD)] == ["Early", "Late"]
+
+
+def test_an_entry_with_no_reported_time_is_placed_at_its_log_day(db_session):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD")
+    add_entries(db_session, "LEBANON FORD", "Welfare Check", reported_at=None)
+
+    [entry] = entries(db_session, FORD)
+
+    assert entry[0] == "2026-06-01T00:00:00"
+
+
+def test_a_hidden_place_keeps_its_own_entries_and_its_street_keeps_its_own(db_session):
+    add_street(db_session)
+    add_hanging_place(db_session)
+
+    assert pin(db_session, QUARRY)["hidden"] is True
+    assert len(entries(db_session, QUARRY)) == 2
+    assert len(entries(db_session, "Mount Support Rd")) == 5
+
+
+def test_every_published_entry_is_on_exactly_one_pin(db_session):
+    add_place(db_session, FORD, MIRACLE_MILE, "LEBANON FORD", "LEBANON FORD INC")
+    add_street(db_session)
+    add_hanging_place(db_session)
+    add_entries(db_session, "LEBANON FORD", "Welfare Check", "Motor Vehicle Stop")
+    add_entries(db_session, "LEBANON FORD INC", "Alarm")
+    add_entries(db_session, "LEBANON FORD", "Too early", log_date=date(2025, 12, 31))
+
+    listed = sum(len(json.loads(row["entries"])) for row in rows(db_session))
+
+    published = db_session.scalar(
+        text("SELECT count(*) FROM log_entries WHERE log_date >= :since"),
+        {"since": SINCE},
+    )
+    assert listed == published == 10

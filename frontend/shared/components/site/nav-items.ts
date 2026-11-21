@@ -1,11 +1,13 @@
-export type NavItem = { label: string; href: string }
+// `soon` marks a topic that is not ready yet. It shows as plain text with a "Coming soon"
+// chip, not a link, so nobody lands on a page that is not there.
+export type NavItem = { label: string; href: string; soon?: boolean }
 
 // Four topics, no dropdowns. Government holds budgets and meetings.
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Voter Info', href: '/elections' },
+  { label: 'Voter Info', href: '/elections', soon: true },
   { label: 'Public safety', href: '/public-safety' },
-  { label: 'Properties', href: '/properties' },
-  { label: 'Government', href: '/government' },
+  { label: 'Properties', href: '/properties', soon: true },
+  { label: 'Government', href: '/government', soon: true },
 ]
 
 export const ABOUT_ITEMS: NavItem[] = [

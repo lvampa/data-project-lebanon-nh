@@ -8,6 +8,19 @@ export const SELECTED_COLOR = '#a3195b'
 export const CALLS_CAP = 3000
 export const CLUSTER_RADIUS = 38
 export const CLUSTER_MAX_ZOOM = 15
+// A group of places at one address opens no closer than street level.
+export const GROUP_MAX_ZOOM = 17
+
+// The box around a group's places, as [[west, south], [east, north]], for the camera to fit.
+export function boundsOf(points: [number, number][]): [[number, number], [number, number]] {
+  const lngs = points.map(([lng]) => lng)
+  const lats = points.map(([, lat]) => lat)
+  return [
+    [Math.min(...lngs), Math.min(...lats)],
+    [Math.max(...lngs), Math.max(...lats)],
+  ]
+}
+
 // A click lands anywhere within this many pixels of a pin's center.
 export const MIN_HIT_RADIUS = 20
 
@@ -123,7 +136,8 @@ export const pinOpacity: ExpressionSpecification = [
   'interpolate',
   ['linear'],
   ['sqrt', calls],
-  ...[1, 0.45, 3, 0.62, 6, 0.78, 15, 0.9],
+  // .65 is the lowest that keeps a one-call pin at 3:1 on the light basemap.
+  ...[1, 0.65, 3, 0.72, 6, 0.8, 15, 0.9],
 ]
 
 export const sortByCalls: ExpressionSpecification = ['-', calls]

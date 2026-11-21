@@ -18,6 +18,8 @@ import {
   CLUSTER_MAX_ZOOM,
   CLUSTER_PROPERTIES,
   CLUSTER_RADIUS,
+  GROUP_MAX_ZOOM,
+  boundsOf,
   pinsGeoJson,
 } from '@/lib/police-map/map-style'
 import { streetFilter } from '@/lib/police-map/streets'
@@ -148,10 +150,21 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
           if (props.id) onSelectRef.current(props.id)
           return
         }
-        // A group opens by zooming in until its places separate.
+        // One click shows every place in the group. The zoom where a group first splits often
+        // only splits it into smaller groups, which took a second click.
         const source = map.getSource('pins') as maplibregl.GeoJSONSource
-        const zoom = await source.getClusterExpansionZoom(props.cluster_id)
-        map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: zoom + 0.3 })
+        const [splitZoom, leaves] = await Promise.all([
+          source.getClusterExpansionZoom(props.cluster_id),
+          source.getClusterLeaves(props.cluster_id, Infinity, 0),
+        ])
+        const points = leaves.flatMap((leaf) =>
+          leaf.geometry.type === 'Point' ? [leaf.geometry.coordinates as [number, number]] : [],
+        )
+        const fit = map.cameraForBounds(boundsOf(points), { padding: 80, maxZoom: GROUP_MAX_ZOOM })
+        map.easeTo({
+          center: fit?.center ?? (feature.geometry.coordinates as [number, number]),
+          zoom: Math.max(fit?.zoom ?? 0, splitZoom + 0.3),
+        })
       })
 
       setStatus('ready')

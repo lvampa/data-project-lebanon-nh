@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CALLS_CAP,
+  boundsOf,
   isTrafficOnly,
   pinCalls,
   pinName,
@@ -73,5 +74,27 @@ describe('a place with traffic on its street and no calls of its own', () => {
     expect(isTrafficOnly(FORD)).toBe(false)
     expect(pinCalls(FORD)).toBe(12)
     expect(isTrafficOnly({ ...FORD, count: 0, traffic_count: 0 })).toBe(false)
+  })
+})
+
+describe('boundsOf', () => {
+  it('boxes every place of a group, west and south first', () => {
+    expect(
+      boundsOf([
+        [-72.25, 43.64],
+        [-72.31, 43.62],
+        [-72.27, 43.66],
+      ]),
+    ).toEqual([
+      [-72.31, 43.62],
+      [-72.25, 43.66],
+    ])
+  })
+
+  it('is a point for places at one address', () => {
+    expect(boundsOf([[-72.25, 43.64]])).toEqual([
+      [-72.25, 43.64],
+      [-72.25, 43.64],
+    ])
   })
 })

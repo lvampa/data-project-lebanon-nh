@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ComingSoon } from './coming-soon'
 import { LogoMark } from './logo-mark'
 import { buttonVariants } from '../ui/button'
 import { cn } from '../../lib/utils'
@@ -10,25 +11,41 @@ function Column({ title, items }: { title: string; items: NavItem[] }) {
       <h2 className="font-mono text-xs font-medium uppercase tracking-[0.08em] text-brand-foreground/70">
         {title}
       </h2>
-      {items.map((item) => (
-        <Link
-          key={item.href + item.label}
-          href={item.href}
-          className="text-[15px] leading-[22px] text-brand-foreground/90 underline-offset-4 hover:text-brand-foreground hover:underline"
-        >
-          {item.label}
-        </Link>
-      ))}
+      {items.map((item) =>
+        item.soon ? (
+          <span
+            key={item.href + item.label}
+            className="flex items-center gap-2 text-[15px] leading-[22px] text-brand-foreground/70"
+          >
+            {item.label}
+            <ComingSoon onBrand />
+          </span>
+        ) : (
+          <Link
+            key={item.href + item.label}
+            href={item.href}
+            className="text-[15px] leading-[22px] text-brand-foreground/90 underline-offset-4 hover:text-brand-foreground hover:underline"
+          >
+            {item.label}
+          </Link>
+        ),
+      )}
     </div>
   )
 }
 
 export function SiteFooter() {
   return (
-    <footer className="bg-brand text-brand-foreground">
+    // The top fades from the page into the brand color instead of a hard edge. Mixed in oklab
+    // so the middle stays navy and does not pass through gray. The call-out's top padding is
+    // longer than the fade, so its content sits on the full brand color.
+    <footer
+      className="text-brand-foreground"
+      style={{ background: 'linear-gradient(in oklab, var(--background), var(--brand) 120px)' }}
+    >
       <section
         aria-labelledby="footer-callout-heading"
-        className="mx-auto flex max-w-7xl flex-col items-start gap-8 px-5 py-16 md:px-8 md:py-24"
+        className="mx-auto flex max-w-7xl flex-col items-start gap-8 px-5 pt-36 pb-16 md:px-8 md:pt-44 md:pb-24"
       >
         <LogoMark size={48} strokeWidth={5.2} />
         {/* Placeholder copy until the mission statement is written. */}

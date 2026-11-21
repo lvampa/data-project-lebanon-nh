@@ -19,7 +19,8 @@
   --success: oklch(0.469 0.103 154.1);
   --warning: oklch(0.508 0.108 73.3);
   --border: oklch(0.911 0.012 259.8);
-  --input: oklch(0.858 0.018 256.3);
+  /* A control's border is its only edge, so it needs 3:1 against the page. */
+  --input: oklch(0.62 0.031 258.4);
   --ring: oklch(0.426 0.115 256.6);
   --chart-1: oklch(0.486 0.131 257.7);
   --chart-2: oklch(0.568 0.182 357.1);
@@ -58,7 +59,7 @@
   --accent-foreground: oklch(0.944 0.011 256.7);
   --destructive: oklch(0.731 0.133 26.9);
   --border: oklch(0.347 0.052 260.5);
-  --input: oklch(0.396 0.066 263.4);
+  --input: oklch(0.579 0.05 259.9);
   --ring: oklch(0.761 0.089 258.7);
   --chart-1: oklch(0.646 0.123 257);
   --chart-2: oklch(0.651 0.161 351.8);

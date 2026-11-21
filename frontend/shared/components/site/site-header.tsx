@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Menu, X } from 'lucide-react'
+import { ComingSoon, ComingSoonInNav } from './coming-soon'
 import { LogoMark } from './logo-mark'
 import { NAV_ITEMS, SUPPORT_HREF, isActive } from './nav-items'
 import { useHideOnScroll } from './use-hide-on-scroll'
@@ -91,6 +92,17 @@ export function SiteHeader() {
 
           <nav aria-label="Main" className="flex items-center gap-1">
             {NAV_ITEMS.map((item) => {
+              if (item.soon) {
+                return (
+                  <span
+                    key={item.href}
+                    className="inline-flex h-11 items-center gap-1.5 px-3 text-[15px] font-medium text-muted-foreground"
+                  >
+                    {item.label}
+                    <ComingSoonInNav />
+                  </span>
+                )
+              }
               const active = isActive(pathname, item.href)
               return (
                 <Link
@@ -143,6 +155,17 @@ export function SiteHeader() {
           </div>
           <nav aria-label="Main" className="flex flex-col pt-2">
             {NAV_ITEMS.map((item) => {
+              if (item.soon) {
+                return (
+                  <span
+                    key={item.href}
+                    className="flex h-13 items-center gap-2 px-5 text-lg font-medium text-muted-foreground"
+                  >
+                    {item.label}
+                    <ComingSoon />
+                  </span>
+                )
+              }
               const active = isActive(pathname, item.href)
               return (
                 <Link

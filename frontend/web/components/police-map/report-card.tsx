@@ -77,7 +77,8 @@ export function ReportCard({
               : `${filtered?.noun ?? 'log entries'} here`}
         </span>
       </div>
-      {!trafficOnly && (
+      {/* A rank against filtered counts would compare unlike things, so it is left out. */}
+      {!trafficOnly && !filtered && (
         <div className="mt-1.5 text-sm text-muted-foreground">
           {rankLine(address.count, counts, address.kind)}
         </div>

@@ -118,7 +118,8 @@ export function PoliceViews({ addresses, stats }: Props) {
       {onMap ? (
         <FittedMap>
           <PoliceMap
-            addresses={derived && !isDefault(filters) ? derived.mapAddresses : addresses}
+            addresses={addresses}
+            shown={derived && !isDefault(filters) ? derived.mapAddresses : undefined}
             stats={derived && !isDefault(filters) ? derived.mapStats : stats}
             filtered={
               derived && !isDefault(filters)

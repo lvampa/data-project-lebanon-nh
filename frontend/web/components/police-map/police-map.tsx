@@ -13,27 +13,32 @@ import { PIN_COLOR } from '@/lib/police-map/map-style'
 import type { Address, StatsData } from '@/lib/types'
 
 interface Props {
+  // The year's rows. The selection, the hash and the search read these, so a filter change
+  // never moves the map or re-runs the selection.
   addresses: Address[]
   stats: StatsData
-  // Set while filters are on, for the card and the town summary.
+  // While filters are on: the filtered rows the pins, the card and the summary count from.
+  shown?: Address[]
   filtered?: FilteredCard | null
 }
 
 const NOTHING: Selection = { id: null, fly: false }
 
-export function PoliceMap({ addresses, stats, filtered = null }: Props) {
+export function PoliceMap({ addresses, stats, shown, filtered = null }: Props) {
   const [selection, setSelection] = useState<Selection>(NOTHING)
-  const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
+  const yearPlaces = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
+  const current = shown ?? addresses
+  const places = useMemo(() => new Map(current.map((a) => [a.id, a])), [current])
 
   useEffect(() => {
     const read = () => {
-      const id = idFromHash(window.location.hash, places)
+      const id = idFromHash(window.location.hash, yearPlaces)
       setSelection(id ? { id, fly: true } : NOTHING)
     }
     read()
     window.addEventListener('hashchange', read)
     return () => window.removeEventListener('hashchange', read)
-  }, [places])
+  }, [yearPlaces])
 
   const select = useCallback((id: string, fly: boolean) => {
     window.history.replaceState(null, '', `#${id}`)
@@ -58,7 +63,7 @@ export function PoliceMap({ addresses, stats, filtered = null }: Props) {
     <div className="police-map-stage overflow-hidden rounded-lg border border-border bg-card">
       <div className="relative min-h-90">
         <IncidentMap
-          addresses={addresses}
+          addresses={current}
           selection={selection}
           ringed={ringed}
           streets={streets}
@@ -82,7 +87,7 @@ export function PoliceMap({ addresses, stats, filtered = null }: Props) {
         aria-live="polite"
       >
         <SidePanel
-          addresses={addresses}
+          addresses={current}
           stats={stats}
           place={selected}
           onChoose={(id) => select(id, true)}

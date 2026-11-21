@@ -48,6 +48,7 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
   // The pins the map starts with. Later counts go into its source in place, so a filter
   // change does not rebuild the map.
   const addressesRef = useRef(addresses)
+  const flownTo = useRef<Selection | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [attempt, setAttempt] = useState(0)
   const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
@@ -181,7 +182,9 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
     map.setFilter('selected', ['==', ['get', 'id'], ringed ?? NO_PIN])
     if (map.getLayer('street')) map.setFilter('street', streetFilter(streets))
     const place = selection.id ? places.get(selection.id) : undefined
-    if (place && selection.fly) {
+    // Only a new selection flies. New counts from a filter change leave the view alone.
+    if (place && selection.fly && flownTo.current !== selection) {
+      flownTo.current = selection
       map.flyTo({
         center: [place.lng, place.lat],
         zoom: Math.max(map.getZoom(), 16),

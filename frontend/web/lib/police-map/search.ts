@@ -1,14 +1,17 @@
 import type { Address } from '../types'
 import { isTrafficOnly, pinCalls, pinName } from './map-style'
-import { SUFFIX } from './streets'
+import { DIRECTION, SUFFIX } from './streets'
 
 const MIN_QUERY = 2
 
-// One spelling per word, so "Mt" finds "Mount" and "road" finds "Rd".
+// One spelling per word, so "Mt" finds "Mount", "road" finds "Rd" and "north" finds "N".
 const SHORT_FORM: Record<string, string> = {
   mount: 'mt',
   ...Object.fromEntries(
-    Object.entries(SUFFIX).map(([short, long]) => [long.toLowerCase(), short.toLowerCase()]),
+    Object.entries({ ...SUFFIX, ...DIRECTION }).map(([short, long]) => [
+      long.toLowerCase(),
+      short.toLowerCase(),
+    ]),
   ),
 }
 

@@ -16,7 +16,7 @@ export const SUFFIX: Record<string, string> = {
   Ter: 'Terrace',
   Ext: 'Extension',
 }
-const DIRECTION: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+export const DIRECTION: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
 
 // A box around Lebanon, so a street of the same name in another town is not lit.
 export const CITY_BOX = {

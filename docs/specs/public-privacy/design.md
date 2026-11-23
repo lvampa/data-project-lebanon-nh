@@ -51,6 +51,8 @@ Both are created in one Alembic migration, the way `public_properties` is.
 
 For a flagged row, the pin is its street's, chosen the way `places.sql` already hangs an approximate place on its street (the `links` CTE): the busiest bare-street pin with the same `street`, then the lowest id.
 The view exposes the flag, and `places.sql` applies that one rule to both, so there is no second, weaker match on text.
+The view names the street from the same kind of row, picking the busiest by its entries over all dates, while `places.sql` picks the pin from the export window.
+They can pick a different title-case spelling of one street when two spellings have close counts, which changes only the display spelling, never a pin or any private text.
 So `places.sql` must keep flagged entries past its `lat IS NOT NULL` filter until they are linked.
 With no street pin, the entry is off the map, as an unplaced location is today.
 A row whose `normalized_address` is null (an AI miss) has no public name either, so it is treated like a flagged row with no street.

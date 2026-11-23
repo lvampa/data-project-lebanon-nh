@@ -24,13 +24,14 @@ down_revision: str | Sequence[str] | None = "b5e2a7c91d04"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# One row per address_normalizations row. A flagged row gives its street as its name, is a
-# road, and has no pin of its own: the export hangs its calls on its street's pin.
+# One row per address_normalizations row. A flagged row is named for its street, in the title
+# case of the bare-street row the export hangs its calls on (the busiest, then the first by
+# name), or has no name when its street has none. It is a road, and has no pin of its own.
 _PUBLIC_LOCATIONS = """
 CREATE VIEW public_locations AS
 SELECT
     an.raw_address,
-    CASE WHEN flag.flagged THEN an.street ELSE an.normalized_address END
+    CASE WHEN flag.flagged THEN street_pin.normalized_address ELSE an.normalized_address END
         AS normalized_address,
     CASE WHEN flag.flagged THEN 'road' ELSE an.kind END AS kind,
     an.street,
@@ -45,6 +46,29 @@ CROSS JOIN LATERAL (
         OR an.source IS NOT DISTINCT FROM 'human'
         OR an.normalized_address IS NULL AS flagged
 ) flag
+LEFT JOIN LATERAL (
+    SELECT bare.normalized_address
+    FROM address_normalizations bare
+    WHERE flag.flagged
+      AND an.street IS NOT NULL
+      AND bare.street = an.street
+      AND bare.normalized_address IS NOT NULL
+      -- A bare street, not a place, an address, an intersection or a highway.
+      AND bare.kind NOT IN ('intersection', 'highway')
+      AND strpos(bare.normalized_address, ', ') = 0
+      AND bare.normalized_address !~ '^\\d'
+      -- Not itself flagged, since a flagged row publishes nothing of its own.
+      AND NOT bare.names_person
+      AND bare.source IS DISTINCT FROM 'human'
+    ORDER BY (
+        SELECT COUNT(*)
+        FROM log_entries calls
+        JOIN address_normalizations spelling ON spelling.raw_address = calls.location
+        WHERE spelling.normalized_address = bare.normalized_address
+          AND calls.parse_error = false
+    ) DESC, bare.normalized_address
+    LIMIT 1
+) street_pin ON true
 """
 
 # The log's entries with the category from the log's own type, the plain type name, and the

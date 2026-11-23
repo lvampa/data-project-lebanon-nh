@@ -167,6 +167,7 @@ def test_incidents_publish_the_public_location(db_session):
     from postgres.models.address_normalization import AddressNormalization
 
     for raw, columns in [
+        ("MAIN STREET", {"normalized_address": "Main St"}),
         ("SHOP", {"normalized_address": "Shop, Main St"}),
         ("PERSON", {"normalized_address": "F and Child", "names_person": True}),
         (
@@ -208,7 +209,7 @@ def test_incidents_publish_the_public_location(db_session):
     by_case = {row["case_number"]: row["location"] for row in rows}
     assert by_case == {
         "case-0": "Shop, Main St",
-        "case-1": "MAIN ST",
+        "case-1": "Main St",
         "case-2": None,
         "case-3": None,
     }

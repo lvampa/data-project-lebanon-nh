@@ -42,7 +42,7 @@ Both are created in one Alembic migration, the way `public_properties` is.
 | Column | Unflagged row | Flagged row |
 |---|---|---|
 | `raw_address` | as stored; the join key, never selected for output | same |
-| `normalized_address` | as stored | its `street` |
+| `normalized_address` | as stored | the name of its street's pin, in title case, or null when it has none |
 | `kind` | as stored | `road` |
 | `street` | as stored | same |
 | `names_person` | false | true |

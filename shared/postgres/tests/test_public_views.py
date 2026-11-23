@@ -28,6 +28,15 @@ def add_location(session, raw: str, **columns) -> None:
     session.flush()
 
 
+def add_bare_street(session, raw: str = "MAIN STREET", **columns) -> None:
+    """The street's own row, which a flagged location takes its public name from."""
+    add_location(
+        session,
+        raw,
+        **{"normalized_address": "Main St", "street": "MAIN ST", **columns},
+    )
+
+
 def add_type(session, raw: str, normalized: str | None) -> None:
     session.add(
         IncidentTypeCategory(
@@ -93,15 +102,17 @@ def test_an_unflagged_row_is_published_as_it_is(db_session):
     assert row["coordinate_precision"] == "exact"
 
 
-def test_a_flagged_row_publishes_its_street_as_an_approximate_road_with_no_pin(
+def test_a_flagged_row_is_named_for_its_street_pin_as_an_approximate_road_with_no_pin(
     db_session,
 ):
+    add_bare_street(db_session)
     add_location(db_session, "F AND CHILD", names_person=True)
 
     row = location(db_session, "F AND CHILD")
 
+    # The bare street's own title-case name, never the canonical capitals.
     assert (row["normalized_address"], row["kind"], row["street"]) == (
-        "MAIN ST",
+        "Main St",
         "road",
         "MAIN ST",
     )
@@ -110,6 +121,7 @@ def test_a_flagged_row_publishes_its_street_as_an_approximate_road_with_no_pin(
 
 
 def test_a_row_that_becomes_human_after_the_migration_is_flagged(db_session):
+    add_bare_street(db_session)
     add_location(db_session, "SHOP")
     assert location(db_session, "SHOP")["names_person"] is False
 
@@ -123,7 +135,7 @@ def test_a_row_that_becomes_human_after_the_migration_is_flagged(db_session):
     row = location(db_session, "SHOP")
     assert (row["names_person"], row["normalized_address"], row["lat"]) == (
         True,
-        "MAIN ST",
+        "Main St",
         None,
     )
 
@@ -229,11 +241,12 @@ def test_an_entry_publishes_the_public_name_of_its_location(db_session):
     assert (row["location"], row["raw_location"]) == ("Shop", "SHOP")
 
 
-def test_an_entry_at_a_flagged_location_publishes_its_street(db_session):
+def test_an_entry_at_a_flagged_location_publishes_its_street_pins_name(db_session):
+    add_bare_street(db_session)
     add_location(db_session, "F AND CHILD", names_person=True)
     add_entry(db_session, 1, location="F AND CHILD")
 
-    assert entry(db_session, 1)["location"] == "MAIN ST"
+    assert entry(db_session, 1)["location"] == "Main St"
 
 
 def test_an_entry_with_no_normalization_has_a_null_location(db_session):
@@ -285,3 +298,67 @@ def test_the_view_leaves_out_the_columns_the_export_does_not_read(db_session, co
     )
 
     assert column not in columns
+
+
+# --- the name of a flagged location ---
+
+
+def test_a_flagged_row_with_no_street_pin_has_no_name(db_session):
+    add_location(db_session, "F AND CHILD", names_person=True)
+    add_entry(db_session, 1, location="F AND CHILD")
+
+    assert location(db_session, "F AND CHILD")["normalized_address"] is None
+    assert entry(db_session, 1)["location"] is None
+
+
+def test_a_place_on_the_street_is_not_its_street_pin(db_session):
+    add_location(db_session, "SHOP", normalized_address="Shop, Main St")
+    add_location(db_session, "F AND CHILD", names_person=True)
+
+    assert location(db_session, "F AND CHILD")["normalized_address"] is None
+
+
+def test_an_intersection_is_not_the_street_pin(db_session):
+    add_location(
+        db_session,
+        "CROSS",
+        normalized_address="Main St and Elm St",
+        kind="intersection",
+    )
+    add_location(db_session, "F AND CHILD", names_person=True)
+
+    assert location(db_session, "F AND CHILD")["normalized_address"] is None
+
+
+def test_a_flagged_or_hand_placed_street_row_is_not_the_street_pin(db_session):
+    add_bare_street(db_session, "FLAGGED STREET", names_person=True)
+    add_bare_street(db_session, "HAND STREET", source="human")
+    add_location(db_session, "F AND CHILD", names_person=True)
+
+    assert location(db_session, "F AND CHILD")["normalized_address"] is None
+
+
+def test_the_busiest_street_row_names_a_flagged_location(db_session):
+    add_bare_street(db_session, "MAIN STREET", normalized_address="Main Street")
+    add_bare_street(db_session, "MAIN ST", normalized_address="Main St")
+    add_location(db_session, "F AND CHILD", names_person=True)
+    for number in range(3):
+        add_entry(db_session, number, location="MAIN ST")
+    add_entry(db_session, 10, location="MAIN STREET")
+
+    assert location(db_session, "F AND CHILD")["normalized_address"] == "Main St"
+
+
+def test_a_tie_between_street_rows_goes_to_the_first_name(db_session):
+    add_bare_street(db_session, "MAIN STREET", normalized_address="Main Street")
+    add_bare_street(db_session, "MAIN ST", normalized_address="Main St")
+    add_location(db_session, "F AND CHILD", names_person=True)
+
+    assert location(db_session, "F AND CHILD")["normalized_address"] == "Main St"
+
+
+def test_an_unflagged_row_never_takes_a_street_name(db_session):
+    add_bare_street(db_session)
+    add_location(db_session, "SHOP")
+
+    assert location(db_session, "SHOP")["normalized_address"] == "Shop"

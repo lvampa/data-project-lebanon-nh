@@ -156,7 +156,7 @@ def test_a_human_row_is_never_rewritten_but_is_listed():
     assert [h.id for h in group.human] == [2]
 
 
-def test_every_row_takes_the_best_pin_exact_before_approximate_before_none():
+def test_every_row_takes_the_exact_pin_of_the_group():
     rows = [
         row(1, "Poverty Ln and Mechanic St"),
         placed(2, "Mechanic St and Poverty Ln", "approximate"),
@@ -171,10 +171,26 @@ def test_every_row_takes_the_best_pin_exact_before_approximate_before_none():
     assert pins[1][0] == 43.643
 
 
-def test_the_lowest_id_wins_among_equal_pins():
+def test_a_group_whose_only_pin_is_approximate_changes_its_text_and_copies_no_pin():
     rows = [
-        placed(5, "Poverty Ln and Mechanic St", "approximate"),
-        placed(3, "Mechanic St and Poverty Ln", "approximate"),
+        row(1, "Poverty Ln and Mechanic St"),
+        placed(2, "Mechanic St and Poverty Ln", "approximate"),
+    ]
+
+    [group] = plan_groups(rows)
+
+    by_id = {r.row.id: r for r in group.rewrites}
+    assert by_id[1].pin == rows[0].pin()
+    assert not by_id[1].pin_changed
+    assert not by_id[2].pin_changed
+    assert by_id[1].text_changed
+
+
+def test_an_approximate_pin_gives_way_to_an_exact_one_but_is_never_spread():
+    rows = [
+        placed(1, "Poverty Ln and Mechanic St", "approximate"),
+        placed(2, "Mechanic St and Poverty Ln", "exact"),
+        row(3, "poverty Ln and Mechanic St"),
     ]
 
     [group] = plan_groups(rows)
@@ -182,7 +198,18 @@ def test_the_lowest_id_wins_among_equal_pins():
     assert {r.pin for r in group.rewrites} == {rows[1].pin()}
 
 
-def test_a_human_rows_pin_is_the_best_pin_even_when_approximate():
+def test_the_lowest_id_wins_among_equal_pins():
+    rows = [
+        placed(5, "Poverty Ln and Mechanic St", "exact"),
+        placed(3, "Mechanic St and Poverty Ln", "exact"),
+    ]
+
+    [group] = plan_groups(rows)
+
+    assert {r.pin for r in group.rewrites} == {rows[1].pin()}
+
+
+def test_a_human_rows_pin_is_the_best_pin_whatever_its_precision():
     rows = [
         placed(1, "Poverty Ln and Mechanic St", "exact"),
         placed(2, "Mechanic St and Poverty Ln", "approximate", source="human"),

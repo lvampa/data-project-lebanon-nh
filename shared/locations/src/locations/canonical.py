@@ -156,7 +156,11 @@ def canonical_crossing(normalized: str) -> str:
 
 def crossing_key(normalized: str) -> str | None:
     """What two spellings of one crossing share: its legs in order, ignoring case. None
-    for text that is not exactly two legs joined by "and"."""
+    for text that is not exactly two legs joined by "and".
+
+    The whole text is casefolded, so two different streets that differ only in case would
+    be taken for one. No two streets in Lebanon do.
+    """
     legs = [leg for leg in _CROSSING_JOINER.split(normalized.strip()) if leg.strip()]
     if len(legs) != 2 or "," in normalized:
         return None

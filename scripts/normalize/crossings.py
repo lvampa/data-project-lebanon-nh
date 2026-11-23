@@ -132,18 +132,19 @@ def _target(members: list[CrossingRow], humans: list[CrossingRow]) -> str:
 def _best_pin(
     members: list[CrossingRow], humans: list[CrossingRow]
 ) -> tuple[object, ...] | None:
-    """The pin every row of the group takes: a person's first, then an exact one, then an
-    approximate one, then the lowest id. None when no row in the group has a pin."""
-    placed = [r for r in members if r.lat is not None and r.lng is not None]
+    """The pin every row of the group takes: a person's first, then an exact one, then the
+    lowest id. None when no row has one of those, and then only the text changes.
+
+    An approximate pin is never copied. These rows are all crossings, and a crossing takes
+    only a point, never the point of a street, so an approximate pin is not one to spread.
+    """
+    placed = [
+        r
+        for r in members
+        if r.lat is not None
+        and r.lng is not None
+        and (r in humans or r.coordinate_precision == "exact")
+    ]
     if not placed:
         return None
-    rank = {"exact": 0, "approximate": 1}
-
-    def order(row: CrossingRow) -> tuple[int, int, int]:
-        return (
-            0 if row in humans else 1,
-            rank.get(row.coordinate_precision or "", 2),
-            row.id,
-        )
-
-    return min(placed, key=order).pin()
+    return min(placed, key=lambda row: (0 if row in humans else 1, row.id)).pin()

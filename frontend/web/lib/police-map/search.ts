@@ -50,10 +50,13 @@ export function searchPlaces(addresses: Address[], query: string, limit = 8): Ad
   const matches = (name: string) =>
     name.toLowerCase().includes(typed) || ` ${searchForm(name)} `.includes(folded)
   const hidden = hiddenCallsByStreet(addresses)
-  return addresses
-    .filter((address) => matches(pinName(address)))
-    .sort(
-      (a, b) => pinTotal(b, hidden) - pinTotal(a, hidden) || pinName(a).localeCompare(pinName(b)),
-    )
-    .slice(0, limit)
+  return (
+    addresses
+      // A pin with nothing to count is off the map, so it is not a result either.
+      .filter((address) => pinTotal(address, hidden) > 0 && matches(pinName(address)))
+      .sort(
+        (a, b) => pinTotal(b, hidden) - pinTotal(a, hidden) || pinName(a).localeCompare(pinName(b)),
+      )
+      .slice(0, limit)
+  )
 }

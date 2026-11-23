@@ -100,6 +100,12 @@ describe('the two busiest lists', () => {
   })
 })
 
+describe('search and the map', () => {
+  it('never lists a pin with nothing to count, which the map leaves off', () => {
+    expect(searchPlaces([place('z', 'Zero Shop, Glen Rd', 0)], 'zero')).toEqual([])
+  })
+})
+
 describe('a traffic-only place in search', () => {
   const corner = { ...place('t', 'Corner Shop, Glen Rd', 0), traffic_count: 62 }
 

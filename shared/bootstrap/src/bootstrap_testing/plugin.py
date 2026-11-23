@@ -27,6 +27,10 @@ def _silence_bootstrap(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         telemetry, "logfire", SimpleNamespace(configure=mocks.configure)
     )
     monkeypatch.setattr(bootstrap, "attach_log_handlers", Mock())
+    # A shell that exports the operator's Logfire settings must not reach the tests,
+    # which expect none, so a pre-push run on the operator's Mac matches the sandbox.
+    for name in ("LOGFIRE_TOKEN", "LOGFIRE_ENVIRONMENT"):
+        monkeypatch.delenv(name, raising=False)
     telemetry.get_telemetry_settings.cache_clear()
     return mocks
 

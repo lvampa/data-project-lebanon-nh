@@ -275,11 +275,20 @@ def _log_name(row: AddressNormalization) -> str:
 
 
 def _reuse_place_code(session: Session, row: AddressNormalization) -> bool:
-    """A place code another row has already placed supplies its coordinates."""
-    if not row.place_code:
+    """A place code another row has already placed supplies its coordinates, when that row
+    is of the same kind on the same street.
+
+    Some dispatch codes name an area, not a place: code `E` covers a dozen streets. Two
+    places with one code are the same place only on one street. A row with no street gives
+    no way to tell an area from a place, so it is not given a code's pin.
+    """
+    if not row.place_code or not row.street:
         return False
     donor = _placed_donor(
-        session, row, AddressNormalization.place_code == row.place_code
+        session,
+        row,
+        AddressNormalization.place_code == row.place_code,
+        AddressNormalization.street == row.street,
     )
     if donor is None:
         return False
@@ -436,13 +445,15 @@ def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
             .order_by(AddressNormalization.id)
         )
     )
-    # Rows are joined through the keys they share, so a place code links two addresses.
+    # Rows are joined through the keys they share, so a place code links two addresses. A
+    # code joins rows of one kind on one street only, like `_reuse_place_code`: a code can
+    # name an area, and a row with no street is joined by its address alone.
     owner: dict[tuple[str, str], int] = {}
     groups: dict[int, list[AddressNormalization]] = {}
     for row in rows:
         keys = [("address", f"{row.normalized_address}|{row.kind}")]
-        if row.place_code:
-            keys.append(("code", row.place_code))
+        if row.place_code and row.street:
+            keys.append(("code", f"{row.place_code}|{row.kind}|{row.street}"))
         joined = {owner[key] for key in keys if key in owner}
         target = min(joined) if joined else row.id
         merged = groups.setdefault(target, [])
@@ -459,13 +470,23 @@ def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
 
 def _has_human_row(session: Session, group: list[AddressNormalization]) -> bool:
     pairs = {(row.normalized_address, row.kind) for row in group}
-    codes = {row.place_code for row in group if row.place_code}
+    codes = {
+        (row.place_code, row.kind, row.street)
+        for row in group
+        if row.place_code and row.street
+    }
     same_address = tuple_(
         AddressNormalization.normalized_address, AddressNormalization.kind
     ).in_(pairs)
     clauses = [same_address]
     if codes:
-        clauses.append(AddressNormalization.place_code.in_(codes))
+        clauses.append(
+            tuple_(
+                AddressNormalization.place_code,
+                AddressNormalization.kind,
+                AddressNormalization.street,
+            ).in_(codes)
+        )
     return (
         session.scalar(
             select(AddressNormalization.id)

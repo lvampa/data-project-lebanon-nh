@@ -96,7 +96,7 @@ describe('osmStreetNames', () => {
 describe('streetsToLight', () => {
   const place = {
     kind: 'place' as const,
-    traffic_count: 0,
+    nearby_traffic: 0,
     normalized_address: 'Lebanon Ford, 90 Miracle Mile',
     raw_address: 'LEBANON FORD',
   }
@@ -105,8 +105,9 @@ describe('streetsToLight', () => {
     expect(streetsToLight(place)).toEqual([])
   })
 
-  it('lights the street of a place that has traffic on it', () => {
-    expect(streetsToLight({ ...place, traffic_count: 4 })).toEqual(['Miracle Mile'])
+  // After the fold a place's traffic counts on its street, so only nearby_traffic says it has any.
+  it('lights the street of a place that has traffic on it, folded or not', () => {
+    expect(streetsToLight({ ...place, nearby_traffic: 4 })).toEqual(['Miracle Mile'])
   })
 
   it('lights a road', () => {

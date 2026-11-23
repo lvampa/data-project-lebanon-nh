@@ -38,7 +38,8 @@ export function TownSummary({
   const day = busiestDay(stats.by_weekday)
   const hour = busiestHour(stats.by_hour)
   // Every number on this page counts entries with a spot on the map, so the total does too.
-  const onMap = filtered ? stats.total : mappedTotal(addresses)
+  // The export counts it; an older stats.json without it is summed from the pins.
+  const onMap = filtered ? stats.total : (stats.mapped_total ?? mappedTotal(addresses))
   const unmapped = filtered ? 0 : stats.total - onMap
 
   return (

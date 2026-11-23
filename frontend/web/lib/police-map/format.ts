@@ -86,6 +86,14 @@ export function streetItselfLine(own: number): string {
   return `These lists cover the street itself, the whole year: ${own.toLocaleString('en-US')} ${own === 1 ? 'entry' : 'entries'}.`
 }
 
+// On a place's card: its traffic, which counts on its street's pin rather than the place's.
+export function nearbyTrafficLine(count: number, street: string | null): string {
+  const what = count === 1 ? 'traffic stop or call' : 'traffic stops and calls'
+  const they = count === 1 ? 'It counts' : 'They count'
+  const where = street ?? 'its street'
+  return `Not counted here: ${count.toLocaleString('en-US')} ${what} nearby. ${they} toward ${where}, highlighted on the map.`
+}
+
 // The heading over the places listed on a street's card.
 export function onStreetHeading(street: string): string {
   return `On ${street}, exact spot unknown`

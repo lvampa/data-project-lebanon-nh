@@ -57,10 +57,10 @@ export function streetFilter(names: string[]): ExpressionSpecification {
 // Only a road, or a place with traffic on its street, lights the street.
 export function streetsToLight(address: {
   kind: 'place' | 'road'
-  traffic_count: number
+  nearby_traffic: number
   normalized_address: string | null
   raw_address: string
 }): string[] {
-  if (address.kind !== 'road' && address.traffic_count === 0) return []
+  if (address.kind !== 'road' && address.nearby_traffic === 0) return []
   return osmStreetNames(address.normalized_address ?? address.raw_address)
 }

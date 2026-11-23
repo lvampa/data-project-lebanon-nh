@@ -11,6 +11,7 @@ import {
 import {
   alarmsLine,
   approximateLine,
+  nearbyTrafficLine,
   clusterHolds,
   entryWord,
   whoStartedLine,
@@ -111,6 +112,15 @@ describe("a street's total", () => {
   it('says a Places card leaves out all of its alarms, not only the false ones', () => {
     expect(alarmsLine(3, 1)).toBe('3 alarms, 1 false, not counted above')
     expect(alarmsLine(1, 0)).toBe('1 alarm, not counted above')
+  })
+
+  it("says a place's traffic counts toward its street, not the place", () => {
+    expect(nearbyTrafficLine(12, 'Main St')).toBe(
+      'Not counted here: 12 traffic stops and calls nearby. They count toward Main St, highlighted on the map.',
+    )
+    expect(nearbyTrafficLine(1, null)).toBe(
+      'Not counted here: 1 traffic stop or call nearby. It counts toward its street, highlighted on the map.',
+    )
   })
 
   it("says a street card's lists cover the street itself", () => {

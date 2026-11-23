@@ -11,6 +11,7 @@ import { isApproximatePlace, streetTotal } from '@/lib/police-map/approximate'
 import {
   approximateLine,
   nameOf,
+  nearbyTrafficLine,
   onStreetHeading,
   streetBreakdown,
   streetItselfLine,
@@ -57,7 +58,10 @@ export function ReportCard({
   filtered = null,
 }: Props) {
   const road = address.kind === 'road'
-  const trafficOnly = isTrafficOnly(address)
+  // A place whose own entries are all traffic: its card leads with that traffic, which now
+  // counts on its street. `traffic_count` keeps only what did not fold, so read nearby_traffic.
+  const trafficOnly =
+    isTrafficOnly(address) || (!road && address.count === 0 && address.nearby_traffic > 0)
   const total = streetTotal(address, onStreet)
   const name = pinName(address)
   const street = streetOf(name)
@@ -75,7 +79,7 @@ export function ReportCard({
       {/* 2. How many, and how that compares */}
       <div className="mt-4 flex items-baseline gap-2.5">
         <b className="text-display-2 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
-          {(trafficOnly ? address.traffic_count : total).toLocaleString('en-US')}
+          {(trafficOnly ? address.nearby_traffic : total).toLocaleString('en-US')}
         </b>
         <span className="text-muted-foreground">
           {trafficOnly
@@ -276,10 +280,9 @@ function CardDetails({
           <span className={ROW_VALUE}>{card.categories[kind.key]}</span>
         </div>
       ))}
-      {!road && address.count > 0 && address.traffic_count > 0 && (
+      {!road && address.count > 0 && address.nearby_traffic > 0 && (
         <p className="mt-3 border-l-4 border-highlight pl-3 text-sm text-muted-foreground">
-          Not counted here: {address.traffic_count.toLocaleString('en-US')} traffic stops and calls
-          {street ? ` on ${street}` : ''}, highlighted on the map.
+          {nearbyTrafficLine(address.nearby_traffic, street)}
         </p>
       )}
 

@@ -30,8 +30,8 @@ The prompt says when it is true: a person's name, or a description of a person (
 `LOCATION_PROMPT_VERSION` goes to `location-2`, so `uv run normalize --redo` re-asks every location.
 A migration adds `names_person boolean NOT NULL DEFAULT false` to `address_normalizations`.
 `normalize --redo` never touches a `human` row, and a row becomes `human` whenever a person places its pin (the place sheet, or `PATCH` with coordinates) while its text stays the AI's.
-So the migration sets `names_person = true` on every `human` row, and a human row is flagged until a person clears it: it fails closed.
-A flag-only AI pass over human rows can come later.
+So the view treats a row as flagged when `names_person OR source = 'human'`, which holds for a row that becomes human next month as well as today's: it fails closed, with no write path to remember.
+The cost: every hand-placed pin, businesses included, publishes as its street until a person-cleared state or a flag-only AI pass over human rows exists; both can come later.
 
 ## The views
 

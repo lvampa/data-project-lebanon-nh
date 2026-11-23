@@ -183,8 +183,8 @@ def test_dispositions_found_in_the_stored_pdfs_are_split_off(
 
 @pytest.mark.parametrize("disposition", DISPOSITIONS)
 def test_every_listed_disposition_is_matched_whole_and_never_cut_short(disposition):
-    # A shorter ending that the longer one ends with, such as "Warning" in "Verbal
-    # Warning", must not win, so each ending is found by its full text.
+    # The leftmost match that reaches the end of the text wins, so an ending that another
+    # ends with, such as "Warning" in "Verbal Warning", does not cut it short.
     assert split_reason_action(f"Some Type {disposition}") == (
         "Some Type",
         disposition,

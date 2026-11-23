@@ -1,5 +1,6 @@
 import type { Address } from '../types'
-import { isTrafficOnly, pinCalls, pinName } from './map-style'
+import { hiddenCallsByStreet } from './approximate'
+import { isTrafficOnly, pinName, pinTotal } from './map-style'
 import { DIRECTION, SUFFIX } from './streets'
 
 const MIN_QUERY = 2
@@ -30,9 +31,10 @@ function isShortened(word: string): boolean {
   return Object.hasOwn(SHORT_FORM, word)
 }
 
-// The number beside a result: its calls, or "62 traffic" for a place with only traffic.
-export function resultCount(address: Address): string {
-  const n = pinCalls(address).toLocaleString('en-US')
+// The number beside a result, the same as its pin and card: a street with its places, or
+// "62 traffic" for a place with only traffic.
+export function resultCount(address: Address, hidden: Map<string, number>): string {
+  const n = pinTotal(address, hidden).toLocaleString('en-US')
   return isTrafficOnly(address) ? `${n} traffic` : n
 }
 
@@ -47,8 +49,11 @@ export function searchPlaces(addresses: Address[], query: string, limit = 8): Ad
   const folded = ` ${searchForm(query)}${isShortened(lastWord) ? ' ' : ''}`
   const matches = (name: string) =>
     name.toLowerCase().includes(typed) || ` ${searchForm(name)} `.includes(folded)
+  const hidden = hiddenCallsByStreet(addresses)
   return addresses
     .filter((address) => matches(pinName(address)))
-    .sort((a, b) => pinCalls(b) - pinCalls(a) || pinName(a).localeCompare(pinName(b)))
+    .sort(
+      (a, b) => pinTotal(b, hidden) - pinTotal(a, hidden) || pinName(a).localeCompare(pinName(b)),
+    )
     .slice(0, limit)
 }

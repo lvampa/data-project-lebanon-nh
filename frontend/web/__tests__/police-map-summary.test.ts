@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { resultCount, searchPlaces } from '@/lib/police-map/search'
-import { busiestDay, busiestHour, busiestPlaces, hourLabel } from '@/lib/police-map/summary'
+import {
+  busiestDay,
+  busiestHour,
+  busiestPlaces,
+  busiestStreets,
+  hourLabel,
+  mappedTotal,
+} from '@/lib/police-map/summary'
 import type { Address } from '@/lib/types'
 
 function place(id: string, name: string, count: number): Address {
@@ -72,12 +79,32 @@ describe('busiestPlaces', () => {
   })
 })
 
+describe('the two busiest lists', () => {
+  const street = { ...place('s', 'Main St', 400), kind: 'road' as const }
+  const crossing = { ...place('x', 'Main St and Elm St', 900), kind: 'road' as const }
+  const hidden = { ...place('h', 'Bank, Main St', 300), street_id: 's', hidden: true }
+  const shop = { ...place('p', 'Shop, 2 Elm St', 500), traffic_count: 40 }
+  const pins = [street, crossing, hidden, shop]
+
+  it('lists places with a spot of their own, never one inside a street', () => {
+    expect(busiestPlaces(pins, 5).map((p) => p.id)).toEqual(['p'])
+  })
+
+  it('lists streets on their totals, with the places on them, and no crossings', () => {
+    expect(busiestStreets(pins, 5)).toEqual([{ address: street, total: 700 }])
+  })
+
+  it('counts every entry on the map once: roads, places, and traffic at places', () => {
+    expect(mappedTotal(pins)).toBe(400 + 900 + 300 + 500 + 40)
+  })
+})
+
 describe('a traffic-only place in search', () => {
   const corner = { ...place('t', 'Corner Shop, Glen Rd', 0), traffic_count: 62 }
 
   it('shows its traffic count with a label', () => {
-    expect(resultCount(corner)).toBe('62 traffic')
-    expect(resultCount(place('a', 'Mall', 1200))).toBe('1,200')
+    expect(resultCount(corner, new Map())).toBe('62 traffic')
+    expect(resultCount(place('a', 'Mall', 1200), new Map())).toBe('1,200')
   })
 
   it('sorts by that count', () => {

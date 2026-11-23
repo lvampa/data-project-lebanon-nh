@@ -10,7 +10,7 @@ import {
 } from '@/lib/police-map/approximate'
 import { approximateLine, onStreetHeading, streetBreakdown } from '@/lib/police-map/format'
 import { pinsGeoJson } from '@/lib/police-map/map-style'
-import { searchPlaces } from '@/lib/police-map/search'
+import { resultCount, searchPlaces } from '@/lib/police-map/search'
 import type { Address } from '@/lib/types'
 
 function pin(id: string, name: string, count: number, extra: Partial<Address> = {}): Address {
@@ -68,6 +68,13 @@ describe("a street's total", () => {
   it('ranks streets on their totals, and places on their own counts', () => {
     expect(rankCounts(ALL, 'road')).toEqual([1620])
     expect(rankCounts(ALL, 'place').sort((a, b) => a - b)).toEqual([50, 120, 400, 900])
+  })
+
+  it('is what search shows and sorts by, so a street ranks above its own places', () => {
+    const found = searchPlaces(ALL, 'mount support')
+
+    expect(found.map((a) => a.id)).toEqual(['mount-support-rd', 'quarry-hill', 'marek'])
+    expect(resultCount(found[0], hiddenCallsByStreet(ALL))).toBe('1,620')
   })
 
   it('says where the total comes from', () => {

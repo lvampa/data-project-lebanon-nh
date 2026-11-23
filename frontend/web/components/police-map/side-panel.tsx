@@ -26,7 +26,13 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose, filtered
 
   if (!place || !state) {
     return (
-      <TownSummary addresses={addresses} stats={stats} onChoose={onChoose} noun={filtered?.noun} />
+      <TownSummary
+        addresses={addresses}
+        stats={stats}
+        onChoose={onChoose}
+        noun={filtered?.noun}
+        filtered={filtered !== null}
+      />
     )
   }
   return (

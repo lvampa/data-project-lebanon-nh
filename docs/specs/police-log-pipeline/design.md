@@ -94,16 +94,28 @@ There is no Elasticsearch and no dbt.
   `--no-llm` skips the AI step.
   `--retry-approximate` looks again, from the snapshot only, at every `ai` or `rule` row on a street point, a group at a time (rows with one normalized address and kind, joined by a shared place code), and skips a group with a `human` row.
   A miss changes nothing, and a row is re-read under a lock before it is written.
+  `--retry-missed` does the same, from the snapshot only, for `ai` and `rule` rows with no point that are marked for review: a row that missed three times, and a bare highway that had no road.
+  A hit places the group and clears the review mark, and a miss changes nothing.
+  The two retries cannot be used together.
   Every run that places anything from the snapshot writes `tmp/geocode-matches-<date>.csv` with the old and new coordinates side by side, so a batch can be reverted from the file.
   It runs at 1 request per second, stops at 600 requests, and discards a result outside the city: state New Hampshire, city Lebanon or West Lebanon, and a coarse bounding box.
   After 3 misses a row is marked for review.
   A transient failure (a timeout, a connection error or a 5xx) skips the row without charging an attempt, and the next run tries it again.
   A 403 or 429 stops the run at once, and so do 5 transient failures in a row.
-  A bare highway with no cross street, exit or landmark is marked for review and never looked up.
+  A bare highway, one with no cross street, exit or landmark, is not looked up on Nominatim.
+  It gets an approximate point on the road the snapshot matches by name or route number, stored with `geocoded_via = 'osm'`, and is marked for review only when no road matches.
+  "ROCK CUT - ROUTE 120" is bare too, and gets the same point as "ROUTE 120".
+  A highway with an exit or a cross street keeps the old path.
+  Every run prints the share of parsed log entries that sit on a pin, by the kind of their location, and the export prints the share of in-range entries that are on the map.
 - **OpenStreetMap snapshot:** `uv run osm-snapshot` downloads every named or numbered feature and every named road inside Lebanon's own boundary (not a box, which takes in White River Junction, Vermont) in two Overpass requests, and writes `scripts/data/osm/snapshot-YYYY-MM-DD.json`, which is gitignored.
   Overpass answers 429 or 502 when busy, so a request is retried 4 times with waits of 10, 30, 90 and 180 seconds, then fails with the last status.
   The functions in `shared/locations/src/locations/osm.py` find a location in the newest snapshot with no network: a house address by number and street, an intersection by a node two named roads share, and a named place by candidates that share a meaningful word with the name and lie within 200 m of its street.
   Street names are compared through `canonical_address`, so OpenStreetMap's "Mount Support Road" and the log's "MT SUPPORT RD" are one street.
+  The roads query also takes ways that have a `ref` and no name, which is how Interstate 89 is stored, and a road keeps its `ref` as `route_ref`.
+  A snapshot saved before that still loads, with no route numbers.
+  The log names a highway by its number, so a road also matches by route: "ROUTE 120", "RT 120", "NH 120" and "STATE ROUTE 120" are NH 120, "INTERSTATE 89" and "I-89" are I 89, "US 4" is US 4, and a bare "ROUTE 4" is NH 4 or US 4, never an interstate.
+  A way's routes are its `ref` values, split on a semicolon, plus the one its name spells out.
+  A point on a road is the middle of its longest way, and is approximate.
 - **Placing by hand in bulk:** `uv run place-sheet export` writes a CSV of the places and house addresses still on a street point, busiest first, with the calls the map counts for them (every call but road traffic), a link to OpenStreetMap, and empty `lat` and `lng` columns.
   `uv run place-sheet import` reads it back under the `geocode` lock.
   A filled row sets every `ai` or `rule` row for that address, if it still sits on the sheet's point, to `source = 'human'`, `geocoded_via = 'manual'` and precision `exact`, the same fields the admin API writes for typed coordinates.

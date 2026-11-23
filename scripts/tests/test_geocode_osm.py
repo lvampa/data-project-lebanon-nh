@@ -2,12 +2,13 @@
 geocoder and a scripted AI. Nothing here touches the network."""
 
 import csv
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 from locations.geocode import GeocodeResult
 from locations.osm import Candidate, snapshot_from_replies
 from postgres.models.address_normalization import AddressNormalization
+from postgres.models.log_entry import LogEntry
 from pymongo.errors import PyMongoError
 from sqlalchemy import select
 
@@ -1351,3 +1352,93 @@ def test_main_missed_retry_without_a_snapshot_fails_and_says_why(
 
     assert geocode_job.main(["--retry-missed"]) == 1
     assert "--retry-missed needs a snapshot" in capsys.readouterr().err
+
+
+# --- coverage ---
+
+
+def add_log_entries(session, location: str | None, count: int, **columns) -> None:
+    for number in range(count):
+        session.add(
+            LogEntry(
+                case_number=f"26-{location}-{number}-{columns.get('parse_error', False)}",
+                source_url="https://example.com/a.pdf",
+                log_date=date(2026, 6, 1),
+                location=location,
+                created_at=NOW,
+                updated_at=NOW,
+                **columns,
+            )
+        )
+    session.commit()
+
+
+def test_coverage_counts_entries_with_a_pin_by_kind(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        **approximate(),
+    )
+    add_row(db_session, "A AND B", kind="intersection", normalized_address="A and B")
+    add_log_entries(db_session, "8 COMMERCE AVE", 3)
+    add_log_entries(db_session, "A AND B", 2)
+    add_log_entries(db_session, "NEVER NORMALIZED", 4)
+    add_log_entries(db_session, None, 1)
+
+    rows = geocode_job.coverage_by_kind(db_session)
+
+    assert [(r.kind, r.entries, r.pinned) for r in rows] == [
+        ("address", 3, 3),
+        ("intersection", 2, 0),
+        ("not normalized", 5, 0),
+    ]
+
+
+def test_coverage_leaves_out_entries_that_did_not_parse(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        **approximate(),
+    )
+    add_log_entries(db_session, "8 COMMERCE AVE", 2)
+    add_log_entries(db_session, "8 COMMERCE AVE", 5, parse_error=True)
+
+    [row] = geocode_job.coverage_by_kind(db_session)
+
+    assert (row.entries, row.pinned) == (2, 2)
+
+
+def test_the_coverage_line_gives_tenths_of_a_percent_overall_and_by_kind():
+    rows = [
+        geocode_job.Coverage("address", 990, 980),
+        geocode_job.Coverage("highway", 10, 1),
+        geocode_job.Coverage("not normalized", 500, 0),
+    ]
+
+    assert geocode_job.coverage_line(rows) == (
+        "Entries on a pin: 65.4% of 1,500 "
+        "(address 99.0%, highway 10.0%, not normalized 0.0%)"
+    )
+
+
+def test_the_coverage_line_with_no_entries_says_so():
+    assert geocode_job.coverage_line([]) == "Entries on a pin: no parsed entries."
+
+
+def test_main_prints_the_coverage_line_after_the_summary(
+    db_session, snapshot_dir, capsys
+):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        **approximate(),
+    )
+    add_log_entries(db_session, "8 COMMERCE AVE", 4)
+
+    geocode_job.main(["--retry-approximate", "--no-llm"])
+
+    out = capsys.readouterr().out
+    assert "Entries on a pin: 100.0% of 4 (address 100.0%)" in out

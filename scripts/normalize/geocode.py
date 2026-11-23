@@ -665,6 +665,54 @@ def main(
     return 0
 
 
+@dataclass(frozen=True)
+class Coverage:
+    """How many parsed log entries a kind of location has, and how many sit on a pin."""
+
+    kind: str
+    entries: int
+    pinned: int
+
+
+NOT_NORMALIZED = "not normalized"
+
+
+def coverage_by_kind(session: Session) -> list[Coverage]:
+    """The share of parsed log entries with a pin, by the kind of their location. An entry
+    with no location, or one the job has not normalized, counts under "not normalized"."""
+    rows = session.execute(
+        select(
+            func.coalesce(AddressNormalization.kind, NOT_NORMALIZED),
+            func.count(),
+            func.count(AddressNormalization.lat),
+        )
+        .select_from(LogEntry)
+        .outerjoin(
+            AddressNormalization, AddressNormalization.raw_address == LogEntry.location
+        )
+        .where(LogEntry.parse_error.is_(False))
+        .group_by(func.coalesce(AddressNormalization.kind, NOT_NORMALIZED))
+        .order_by(func.coalesce(AddressNormalization.kind, NOT_NORMALIZED))
+    ).all()
+    return [Coverage(kind, entries, pinned) for kind, entries, pinned in rows]
+
+
+def coverage_line(rows: Sequence[Coverage]) -> str:
+    """ "Entries on a pin: 91.2% of 1,000 (address 99.0%, intersection 80.0%)". Whole tenths
+    of a percent, with no float arithmetic."""
+    total = sum(row.entries for row in rows)
+    if total == 0:
+        return "Entries on a pin: no parsed entries."
+    pinned = sum(row.pinned for row in rows)
+    kinds = ", ".join(f"{row.kind} {_percent(row.pinned, row.entries)}" for row in rows)
+    return f"Entries on a pin: {_percent(pinned, total)} of {total:,} ({kinds})"
+
+
+def _percent(part: int, whole: int) -> str:
+    tenths = (part * 1000 + whole // 2) // whole
+    return f"{tenths // 10}.{tenths % 10}%"
+
+
 def _print_summary(
     counts: GeocodeCounts,
     locator: OsmLocator | None,
@@ -699,6 +747,8 @@ def _print_summary(
             )
     if review_file is not None:
         print(f"Review the placements in {review_file}.")
+    with open_session() as session:
+        print(coverage_line(coverage_by_kind(session)))
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:

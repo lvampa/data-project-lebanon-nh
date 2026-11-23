@@ -80,10 +80,21 @@ def plan_groups(rows: Iterable[CrossingRow]) -> list[Group]:
 
     groups = []
     for key, members in sorted(by_key.items()):
+        if not _is_split(members):
+            continue
         group = _plan_group(key, members)
         if any(r.text_changed or r.pin_changed for r in group.rewrites):
             groups.append(group)
     return groups
+
+
+def _is_split(members: list[CrossingRow]) -> bool:
+    """More than one spelling, or more than one pin. A crossing in one spelling with one pin
+    is left as it is, even when its streets are not in alphabetical order: a new spelling
+    of it takes the stored text, so it never splits."""
+    spellings = {row.normalized_address for row in members}
+    pins = {row.pin() for row in members if row.lat is not None}
+    return len(spellings) > 1 or len(pins) > 1
 
 
 def _plan_group(key: str, members: list[CrossingRow]) -> Group:

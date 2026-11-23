@@ -105,10 +105,28 @@ def test_a_crossing_already_in_one_spelling_and_one_pin_is_left_out():
     assert groups == []
 
 
-def test_a_single_row_in_the_wrong_order_is_put_in_order():
-    groups = plan_groups([row(1, "Poverty Ln and Mechanic St")])
+def test_a_crossing_in_one_spelling_is_left_alone_even_out_of_order():
+    # A new spelling of it takes this text, so it never splits, and rewriting it would
+    # only change the id of its pin.
+    assert plan_groups([row(1, "Poverty Ln and Mechanic St")]) == []
+    assert (
+        plan_groups(
+            [row(1, "Poverty Ln and Mechanic St"), row(2, "Poverty Ln and Mechanic St")]
+        )
+        == []
+    )
 
-    assert targets(groups) == {1: "Mechanic St and Poverty Ln"}
+
+def test_one_spelling_with_two_pins_is_brought_to_one_pin():
+    rows = [
+        placed(1, "Elm St and Main St", "exact"),
+        placed(2, "Elm St and Main St", "approximate"),
+    ]
+
+    [group] = plan_groups(rows)
+
+    assert [r.row.id for r in group.rewrites if r.pin_changed] == [2]
+    assert not any(r.text_changed for r in group.rewrites)
 
 
 def test_a_place_with_and_in_its_name_is_not_a_crossing():

@@ -349,7 +349,12 @@ def _length(points: list[tuple[float, float]]) -> float:
 
 
 def _halfway(points: list[tuple[float, float]]) -> tuple[float, float]:
-    """The vertex nearest the halfway point along the line, in meters, not in vertices."""
+    """The vertex nearest the halfway point along the line, in meters, not in vertices.
+
+    The points are the ones inside the city. A way that leaves the box and comes back has a
+    gap between two of them, and the length counts the jump across it. That is harmless: all
+    this needs is a point that does not move between runs.
+    """
     half = _length(points) / 2
     best, best_gap, walked = points[0], abs(half), 0.0
     for a, b in zip(points, points[1:], strict=False):

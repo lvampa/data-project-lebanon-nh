@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Float, Index, Integer, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    Text,
+    false,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from postgres.base import Base
@@ -35,6 +44,11 @@ class AddressNormalization(ProvenanceMixin, Base):
     # The street from the street list that the AI named, in canonical form.
     street: Mapped[str | None] = mapped_column(Text)
     geocode_query: Mapped[str | None] = mapped_column(Text)
+    # True when the AI found that the text names a person or describes one. The public
+    # views publish only the street of such a location, and of every `human` row.
+    names_person: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     lat: Mapped[float | None] = mapped_column(Float)
     lng: Mapped[float | None] = mapped_column(Float)
     # How the coordinates were found. `source` says who owns the row.

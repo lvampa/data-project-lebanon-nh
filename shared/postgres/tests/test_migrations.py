@@ -85,3 +85,31 @@ def test_the_osm_migration_resets_osm_pins_on_the_way_down(
         )
     ).scalars()
     assert not {"osm_ref", "geocode_source_url"} & set(columns)
+
+
+def test_the_names_person_migration_defaults_existing_rows_to_false(
+    alembic_config, db_connection
+):
+    command.downgrade(alembic_config, "f3b8d1a47c92")
+    db_connection.execute(
+        text(
+            "INSERT INTO address_normalizations (raw_address, source, created_at,"
+            " updated_at) VALUES ('A', 'ai', now(), now())"
+        )
+    )
+
+    command.upgrade(alembic_config, "head")
+
+    flag = db_connection.execute(
+        text("SELECT names_person FROM address_normalizations WHERE raw_address = 'A'")
+    ).scalar_one()
+    assert flag is False
+    command.downgrade(alembic_config, "f3b8d1a47c92")
+    columns = db_connection.execute(
+        text(
+            "SELECT column_name FROM information_schema.columns"
+            " WHERE table_name = 'address_normalizations'"
+        )
+    ).scalars()
+    assert "names_person" not in list(columns)
+    command.upgrade(alembic_config, "head")

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Tabs } from '@project/ui/components/ui/tabs'
 import { TypeLabel } from '@/components/police-map/labels'
 import type { Activity } from '@/lib/police-views/activity'
+import { leftOutLine } from '@/lib/police-views/findings'
 import { tally, topOf, typical, type Tally } from '@/lib/police-views/counts'
 import { HourStrip } from './hour-strip'
 
@@ -38,6 +39,7 @@ export function OfficersView({ activity, kept, noun, rangeLabel, coverage, onSho
   }, [activity, kept, unnamed])
 
   const nameOf = (officer: number) => activity.officers[officer] ?? ''
+  const few = [...officers.values()].filter((t) => t.n < MIN_ENTRIES)
   const shown = [...officers]
     .filter(([, t]) => t.n >= MIN_ENTRIES)
     .sort(([a, ta], [b, tb]) =>
@@ -53,8 +55,12 @@ export function OfficersView({ activity, kept, noun, rangeLabel, coverage, onSho
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {shown.length} officers with {MIN_ENTRIES} or more {noun} in {rangeLabel}.{' '}
-            {leftOut > 0 &&
-              `${leftOut.toLocaleString('en-US')} ${leftOut === 1 ? 'entry names' : 'entries name'} no officer and ${leftOut === 1 ? 'is' : 'are'} left out.`}
+            {leftOutLine(
+              leftOut,
+              few.length,
+              few.reduce((sum, t) => sum + t.n, 0),
+              MIN_ENTRIES,
+            )}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{coverage}</p>
         </div>

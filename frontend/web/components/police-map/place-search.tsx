@@ -1,6 +1,7 @@
 'use client'
 import { useId, useMemo, useState, type KeyboardEvent } from 'react'
 import { nameOf } from '@/lib/police-map/format'
+import { hiddenCallsByStreet } from '@/lib/police-map/approximate'
 import { pinName } from '@/lib/police-map/map-style'
 import { resultCount, searchPlaces } from '@/lib/police-map/search'
 import type { Address } from '@/lib/types'
@@ -17,6 +18,7 @@ export function PlaceSearch({ addresses, onChoose }: Props) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
   const matches = useMemo(() => searchPlaces(addresses, query), [addresses, query])
+  const hidden = useMemo(() => hiddenCallsByStreet(addresses), [addresses])
   const showing = open && matches.length > 0
 
   const choose = (place: Address) => {
@@ -85,7 +87,9 @@ export function PlaceSearch({ addresses, onChoose }: Props) {
               className="flex cursor-pointer justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm aria-selected:bg-secondary"
             >
               {pinName(place)}
-              <span className="font-mono text-xs text-muted-foreground">{resultCount(place)}</span>
+              <span className="font-mono text-xs text-muted-foreground">
+                {resultCount(place, hidden)}
+              </span>
             </li>
           ))}
         </ul>

@@ -71,9 +71,18 @@ export function pinCalls(address: Pick<Address, 'count' | 'traffic_count'>): num
   return isTrafficOnly(address) ? address.traffic_count : address.count
 }
 
+// A pin's number everywhere it is shown: a street's own calls plus those of the places listed
+// on it, which have no pin of their own. `hidden` is hiddenCallsByStreet of the same pins.
+export function pinTotal(
+  address: Pick<Address, 'id' | 'count' | 'traffic_count'>,
+  hidden: Map<string, number>,
+): number {
+  return pinCalls(address) + (hidden.get(address.id) ?? 0)
+}
+
 // A place hidden under its street has no pin, so its calls ride on the street's pin: they add
 // to its size (`w`), and to the "N calls" a tooltip or a group shows (`h`), so those match the
-// town's totals. `n` stays the street's own count, which is what its card says.
+// town's totals. `n` stays the street's own count; the card leads with the total, as `w` is.
 export function pinsGeoJson(addresses: Address[]): PinCollection {
   const hiddenCalls = hiddenCallsByStreet(addresses)
   return {
@@ -81,14 +90,14 @@ export function pinsGeoJson(addresses: Address[]): PinCollection {
     // A pin with nothing to show, such as one a filter emptied, is left off the map.
     features: addresses
       .filter((address) => !address.hidden)
-      .filter((address) => pinCalls(address) + (hiddenCalls.get(address.id) ?? 0) > 0)
+      .filter((address) => pinTotal(address, hiddenCalls) > 0)
       .map((address) => ({
         type: 'Feature',
         properties: {
           id: address.id,
           name: pinName(address),
           n: address.count,
-          w: pinCalls(address) + (hiddenCalls.get(address.id) ?? 0),
+          w: pinTotal(address, hiddenCalls),
           t: isTrafficOnly(address) ? 1 : 0,
           a: isApproximatePlace(address) ? 1 : 0,
           h: hiddenCalls.get(address.id) ?? 0,

@@ -87,11 +87,13 @@ export function streetItselfLine(own: number): string {
 }
 
 // On a place's card: its traffic, which counts on its street's pin rather than the place's.
-export function nearbyTrafficLine(count: number, street: string | null): string {
+// When the street has no pin, the traffic did not fold, so it counts toward no street.
+export function nearbyTrafficLine(count: number, street: string | null, folded: boolean): string {
   const what = count === 1 ? 'traffic stop or call' : 'traffic stops and calls'
+  const lead = `Not counted here: ${count.toLocaleString('en-US')} ${what} nearby`
+  if (!folded) return `${lead}, highlighted on the map.`
   const they = count === 1 ? 'It counts' : 'They count'
-  const where = street ?? 'its street'
-  return `Not counted here: ${count.toLocaleString('en-US')} ${what} nearby. ${they} toward ${where}, highlighted on the map.`
+  return `${lead}. ${they} toward ${street ?? 'its street'}, highlighted on the map.`
 }
 
 // The heading over the places listed on a street's card.

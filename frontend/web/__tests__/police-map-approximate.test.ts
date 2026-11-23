@@ -115,11 +115,18 @@ describe("a street's total", () => {
   })
 
   it("says a place's traffic counts toward its street, not the place", () => {
-    expect(nearbyTrafficLine(12, 'Main St')).toBe(
+    expect(nearbyTrafficLine(12, 'Main St', true)).toBe(
       'Not counted here: 12 traffic stops and calls nearby. They count toward Main St, highlighted on the map.',
     )
-    expect(nearbyTrafficLine(1, null)).toBe(
+    expect(nearbyTrafficLine(1, null, true)).toBe(
       'Not counted here: 1 traffic stop or call nearby. It counts toward its street, highlighted on the map.',
+    )
+  })
+
+  // With no street pin to fold onto, the traffic stays on the place and counts toward no street.
+  it('names no street when the traffic did not fold', () => {
+    expect(nearbyTrafficLine(5, 'Main St', false)).toBe(
+      'Not counted here: 5 traffic stops and calls nearby, highlighted on the map.',
     )
   })
 

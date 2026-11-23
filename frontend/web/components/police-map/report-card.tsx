@@ -282,7 +282,7 @@ function CardDetails({
       ))}
       {!road && address.count > 0 && address.nearby_traffic > 0 && (
         <p className="mt-3 border-l-4 border-highlight pl-3 text-sm text-muted-foreground">
-          {nearbyTrafficLine(address.nearby_traffic, street)}
+          {nearbyTrafficLine(address.nearby_traffic, street, address.traffic_count === 0)}
         </p>
       )}
 

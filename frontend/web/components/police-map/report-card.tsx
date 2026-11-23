@@ -7,8 +7,14 @@ import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
 import type { CardState } from '@/components/police-map/use-place-card'
 import { categoriesFor } from '@/lib/police-map/categories'
 import { remainder } from '@/lib/police-map/card'
-import { isApproximatePlace } from '@/lib/police-map/approximate'
-import { approximateLine, nameOf, onStreetHeading, streetOf } from '@/lib/police-map/format'
+import { isApproximatePlace, streetTotal } from '@/lib/police-map/approximate'
+import {
+  approximateLine,
+  nameOf,
+  onStreetHeading,
+  streetBreakdown,
+  streetOf,
+} from '@/lib/police-map/format'
 import { isTrafficOnly, pinName } from '@/lib/police-map/map-style'
 import { rankLine } from '@/lib/police-map/rank'
 import type { Address, PlaceCard } from '@/lib/types'
@@ -51,6 +57,7 @@ export function ReportCard({
 }: Props) {
   const road = address.kind === 'road'
   const trafficOnly = isTrafficOnly(address)
+  const total = streetTotal(address, onStreet)
   const name = pinName(address)
   const street = streetOf(name)
   const subtitle = isApproximatePlace(address)
@@ -67,7 +74,7 @@ export function ReportCard({
       {/* 2. How many, and how that compares */}
       <div className="mt-4 flex items-baseline gap-2.5">
         <b className="text-display-2 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
-          {(trafficOnly ? address.traffic_count : address.count).toLocaleString('en-US')}
+          {(trafficOnly ? address.traffic_count : total).toLocaleString('en-US')}
         </b>
         <span className="text-muted-foreground">
           {trafficOnly
@@ -77,10 +84,18 @@ export function ReportCard({
               : `${filtered?.noun ?? 'log entries'} here`}
         </span>
       </div>
+      {!trafficOnly && onStreet.length > 0 && (
+        <a
+          href="#on-this-street"
+          className="mt-1 block text-sm text-muted-foreground hover:text-primary"
+        >
+          {streetBreakdown(address.count, onStreet)} ↓
+        </a>
+      )}
       {/* A rank against filtered counts would compare unlike things, so it is left out. */}
       {!trafficOnly && !filtered && (
         <div className="mt-1.5 text-sm text-muted-foreground">
-          {rankLine(address.count, counts, address.kind)}
+          {rankLine(total, counts, address.kind)}
         </div>
       )}
       {filtered && (
@@ -147,7 +162,9 @@ function OnThisStreet({
   )
   return (
     <section>
-      <h3 className={SECTION_HEADING}>{onStreetHeading(street)}</h3>
+      <h3 id="on-this-street" className={SECTION_HEADING}>
+        {onStreetHeading(street)}
+      </h3>
       <ul>{first.map(row)}</ul>
       {rest.length > 0 && (
         <details>

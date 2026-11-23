@@ -23,6 +23,21 @@ export function hiddenCallsByStreet(addresses: Address[]): Map<string, number> {
   return calls
 }
 
+// What a pin's card leads with: a street counts the places listed on it too, as its pin's
+// size and tooltip do. A place has no list, so it is its own count.
+export function streetTotal(address: Address, onStreet: Address[]): number {
+  return address.count + onStreet.reduce((sum, place) => sum + place.count, 0)
+}
+
+// The counts a card's rank compares against, on the same footing as its headline.
+export function rankCounts(addresses: Address[], kind: Address['kind']): number[] {
+  const hidden = kind === 'road' ? hiddenCallsByStreet(addresses) : new Map<string, number>()
+  return addresses
+    .filter((a) => a.kind === kind)
+    .map((a) => a.count + (hidden.get(a.id) ?? 0))
+    .filter((count) => count > 0)
+}
+
 // The places listed on a street's card, busiest first.
 export function placesOnStreet(addresses: Address[], streetId: string): Address[] {
   return addresses

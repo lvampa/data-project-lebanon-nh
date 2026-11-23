@@ -3,10 +3,12 @@ import {
   hiddenCallsByStreet,
   isApproximatePlace,
   placesOnStreet,
+  rankCounts,
   streetNameOf,
   streetPinOf,
+  streetTotal,
 } from '@/lib/police-map/approximate'
-import { approximateLine, onStreetHeading } from '@/lib/police-map/format'
+import { approximateLine, onStreetHeading, streetBreakdown } from '@/lib/police-map/format'
 import { pinsGeoJson } from '@/lib/police-map/map-style'
 import { searchPlaces } from '@/lib/police-map/search'
 import type { Address } from '@/lib/types'
@@ -46,6 +48,35 @@ const LONELY = pin('lonely', 'Lonely Shop, 12 Elm St', 50, { precision: 'approxi
 const FORD = pin('ford', 'Lebanon Ford, Miracle Mile', 400)
 const ALL = [FORD, MAREK, STREET, QUARRY, LONELY]
 const PLACES = new Map(ALL.map((a) => [a.id, a]))
+
+describe("a street's total", () => {
+  // The pin you click and the card you read must show the same number.
+  it('is the street plus the places listed on it, as the tooltip counts', () => {
+    const onStreet = placesOnStreet(ALL, 'mount-support-rd')
+    const tooltip = pinsGeoJson(ALL).features.find((f) => f.properties.id === 'mount-support-rd')
+
+    expect(streetTotal(STREET, onStreet)).toBe(1620)
+    expect(streetTotal(STREET, onStreet)).toBe(
+      (tooltip?.properties.n ?? 0) + (tooltip?.properties.h ?? 0),
+    )
+  })
+
+  it('is just its own count for a place', () => {
+    expect(streetTotal(FORD, [])).toBe(400)
+  })
+
+  it('ranks streets on their totals, and places on their own counts', () => {
+    expect(rankCounts(ALL, 'road')).toEqual([1620])
+    expect(rankCounts(ALL, 'place').sort((a, b) => a - b)).toEqual([50, 120, 400, 900])
+  })
+
+  it('says where the total comes from', () => {
+    expect(streetBreakdown(600, placesOnStreet(ALL, 'mount-support-rd'))).toBe(
+      '600 at the street itself · 1,020 at 2 places on it',
+    )
+    expect(streetBreakdown(600, [MAREK])).toBe('600 at the street itself · 120 at 1 place on it')
+  })
+})
 
 describe('hidden places on the map', () => {
   it('leave no pin of their own', () => {

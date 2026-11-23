@@ -45,6 +45,13 @@ export function approximateLine(street: string | null): string {
 }
 
 // The heading over the places listed on a street's card.
+// "389 at the street itself · 313 at 19 places on it", under a street's total.
+export function streetBreakdown(own: number, onStreet: { count: number }[]): string {
+  const theirs = onStreet.reduce((sum, place) => sum + place.count, 0)
+  const places = onStreet.length === 1 ? '1 place' : `${onStreet.length} places`
+  return `${own.toLocaleString('en-US')} at the street itself · ${theirs.toLocaleString('en-US')} at ${places} on it`
+}
+
 export function onStreetHeading(street: string): string {
   return `On ${street}, exact spot unknown`
 }

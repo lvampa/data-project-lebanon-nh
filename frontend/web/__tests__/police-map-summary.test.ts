@@ -118,6 +118,15 @@ describe('searchPlaces', () => {
     expect(searchPlaces(places, 'west').map((p) => p.id)).toEqual(['w'])
   })
 
+  it('matches a shortened word only as a whole word', () => {
+    const places = [place('s', 'S Main St', 10), place('t', 'Support St', 5)]
+    expect(searchPlaces(places, 'south').map((p) => p.id)).toEqual(['s'])
+  })
+
+  it('reads nothing off the prototype for a word like constructor', () => {
+    expect(searchPlaces([place('c', 'Main St', 10)], 'constructor')).toEqual([])
+  })
+
   it('still matches inside a word as typed', () => {
     expect(searchPlaces([place('h', 'Hannaford', 10)], 'anna').map((p) => p.id)).toEqual(['h'])
   })

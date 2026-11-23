@@ -21,8 +21,13 @@ function searchForm(text: string): string {
     .replace(/[.,]/g, '')
     .split(/\s+/)
     .filter((word) => word !== '')
-    .map((word) => SHORT_FORM[word] ?? word)
+    .map((word) => (isShortened(word) ? SHORT_FORM[word] : word))
     .join(' ')
+}
+
+// Own keys only, so a word like "constructor" is not read off the object's prototype.
+function isShortened(word: string): boolean {
+  return Object.hasOwn(SHORT_FORM, word)
 }
 
 // The number beside a result: its calls, or "62 traffic" for a place with only traffic.
@@ -33,13 +38,15 @@ export function resultCount(address: Address): string {
 
 // Places and streets whose name holds what was typed, busiest first.
 // The text as typed matches anywhere, and the one spelling per word matches where a word
-// starts, since "west" folds to "w", which is in every other name.
+// starts, since "west" folds to "w", which is in every other name. A word that was
+// shortened was typed in full, so it must end there too, or "south" finds every "St".
 export function searchPlaces(addresses: Address[], query: string, limit = 8): Address[] {
   const typed = query.trim().toLowerCase()
   if (typed.length < MIN_QUERY) return []
-  const folded = ` ${searchForm(query)}`
+  const lastWord = typed.replace(/[.,]/g, '').split(/\s+/).at(-1) ?? ''
+  const folded = ` ${searchForm(query)}${isShortened(lastWord) ? ' ' : ''}`
   const matches = (name: string) =>
-    name.toLowerCase().includes(typed) || ` ${searchForm(name)}`.includes(folded)
+    name.toLowerCase().includes(typed) || ` ${searchForm(name)} `.includes(folded)
   return addresses
     .filter((address) => matches(pinName(address)))
     .sort((a, b) => pinCalls(b) - pinCalls(a) || pinName(a).localeCompare(pinName(b)))

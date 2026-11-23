@@ -10,6 +10,7 @@ const stats: StatsData = {
   by_type: [],
   by_weekday: [],
   by_hour: [],
+  mapped_total: 0,
 }
 
 // Everything above the map or the view: the eyebrow, the title, the tabs and the filters.

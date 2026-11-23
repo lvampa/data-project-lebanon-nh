@@ -209,6 +209,25 @@ def street_key(street: str) -> str:
     return canonical_address(street)
 
 
+def names_the_road(
+    requested: str, *, name: str | None, ref: str | None, anywhere: bool = False
+) -> bool:
+    """Whether a road called `name`, with route number `ref`, is the road `requested` names.
+
+    The names are equal once spelled the same way, or the route numbers overlap: "ROUTE 120"
+    is a road with ref "NH 120". With `anywhere`, the request may hold the route among other
+    words. A geocoder that cannot find a road can answer with another one, so an answer with
+    no name and no ref is not the road asked for either.
+    """
+    if name and street_key(name) == street_key(requested):
+        return True
+    wanted = route_refs(requested, anywhere=anywhere)
+    have = {r for value in (ref or "").split(";") for r in ref_values(value)}
+    if name:
+        have |= route_refs(name)
+    return bool(wanted & have)
+
+
 def snapshot_from_replies(
     fetched_at: str, features_reply: dict[str, Any], roads_reply: dict[str, Any]
 ) -> Snapshot:
@@ -307,13 +326,15 @@ def _route_alternatives(text: str, *, anywhere: bool) -> list[tuple[str, ...]]:
 
 def _routes_of(road: Road) -> set[str]:
     """Every route number a way has: its `ref` values, and the one its name spells out."""
-    routes = {ref for value in road.route_ref.split(";") for ref in _ref_values(value)}
+    routes = {ref for value in road.route_ref.split(";") for ref in ref_values(value)}
     if road.name:
         routes |= route_refs(road.name)
     return routes
 
 
-def _ref_values(value: str) -> set[str]:
+def ref_values(value: str) -> set[str]:
+    """The refs one `ref` value gives, such as "I 89", or the value itself when it is not
+    a route the log can name."""
     cleaned = " ".join(value.upper().replace(".", "").replace("-", " ").split())
     return route_refs(cleaned) or ({cleaned} if cleaned else set())
 

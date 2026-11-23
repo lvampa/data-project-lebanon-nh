@@ -53,7 +53,7 @@ from locations.geocode import (
     geocode,
     in_city_bounds,
 )
-from locations.osm import Candidate, Match, Snapshot
+from locations.osm import Candidate, Match, Snapshot, names_the_road
 from mongo.ai_calls import AiCallLog, ai_calls_collection
 from mongo.client import get_db
 from postgres import get_engine, open_session
@@ -82,9 +82,13 @@ Geocoder = Callable[[str], GeocodeResult | None]
 
 DEFAULT_SNAPSHOT_DIR = Path(__file__).parents[1] / "data" / "osm"
 
-# A highway names a point when it gives a cross street, an exit, or a landmark. The
-# last is a guess: anything that says "near" or "at".
-_NAMES_A_POINT = re.compile(r"\b(and|exit|near|at)\b|&", re.IGNORECASE)
+# A highway names a point when it gives a cross street, an exit, a mile marker, a rest area,
+# a road it passes over or under, or a landmark. The last is a guess: anything that says
+# "near" or "at".
+_NAMES_A_POINT = re.compile(
+    r"\b(and|exits?|near|at|over|under|mile\s*post|mile\s+marker|rest\s+area|mm\s*\d+)\b|&",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -374,10 +378,15 @@ def _look_up(
     nominatim = found if found and in_city_bounds(found.lat, found.lng) else None
     if nominatim is not None and nominatim.precision == "exact":
         return Placement(nominatim.lat, nominatim.lng, "exact", "nominatim"), False
+    if nominatim is not None and not _is_the_road_asked_for(row, nominatim):
+        # A search that cannot find a road can answer with another, such as Hanover Street
+        # for an exit on Interstate 89.
+        nominatim = None
     if locator is not None and (match := locator.locate(row)) is not None:
         return _from_match(match), False
-    if row.kind == "intersection":
-        # A street point is the middle of one of the two streets, not where they cross.
+    if row.kind == "intersection" or _is_point_highway(row):
+        # A street point is the middle of one of the two streets, not where they cross, and
+        # a road point is not an exit, a mile marker or a rest area.
         return None, False
     if nominatim is not None:
         # Only a street point came back, and the snapshot has nothing better.
@@ -391,10 +400,39 @@ def _look_up(
         return None, True
     counts.requests += 1
     street = geocoder(f"{row.street}, Lebanon, NH")
-    if street is not None and in_city_bounds(street.lat, street.lng):
+    if (
+        street is not None
+        and in_city_bounds(street.lat, street.lng)
+        and _is_the_road_asked_for(row, street, street_alone=True)
+    ):
         # A street with no point on it is approximate, whatever the match said.
         return Placement(street.lat, street.lng, "approximate", "nominatim"), False
     return None, False
+
+
+def _is_the_road_asked_for(
+    row: AddressNormalization, result: GeocodeResult, *, street_alone: bool = False
+) -> bool:
+    """Whether an approximate answer is the street the row is on, by its name or its route
+    number. The street alone is asked for by `row.street`. The row's own query also stands
+    for its normalized address, which a highway row may use too."""
+    highway = row.kind == "highway"
+    return any(
+        names_the_road(requested, name=result.name, ref=result.ref, anywhere=highway)
+        for requested in _requested_streets(row, street_alone=street_alone)
+    )
+
+
+def _requested_streets(row: AddressNormalization, *, street_alone: bool) -> list[str]:
+    streets = [row.street] if row.street else []
+    normalized = row.normalized_address or ""
+    if not street_alone and row.kind == "highway" and normalized:
+        streets.append(normalized)
+    if not streets and not street_alone and normalized:
+        # No street is known, so the street part of the address, with no house number.
+        part = re.sub(r"^\d+[A-Za-z]?(-\d+)?\s+", "", normalized.rpartition(", ")[2])
+        streets.append(part)
+    return [street for street in streets if street]
 
 
 def _from_match(match: Match) -> Placement:
@@ -402,10 +440,16 @@ def _from_match(match: Match) -> Placement:
 
 
 def _is_bare_highway(row: AddressNormalization) -> bool:
-    return row.kind == "highway" and not _names_a_point(row.normalized_address or "")
+    return row.kind == "highway" and not names_a_point(row.normalized_address or "")
 
 
-def _names_a_point(normalized_address: str) -> bool:
+def _is_point_highway(row: AddressNormalization) -> bool:
+    """A highway that names an exit, a mile marker, a rest area or a road it crosses takes
+    only an exact point."""
+    return row.kind == "highway" and names_a_point(row.normalized_address or "")
+
+
+def names_a_point(normalized_address: str) -> bool:
     return _NAMES_A_POINT.search(normalized_address) is not None
 
 

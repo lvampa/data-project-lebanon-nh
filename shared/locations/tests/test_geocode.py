@@ -96,6 +96,8 @@ def test_the_query_is_sent_as_given_with_one_result_and_the_us_only():
         "limit": 1,
         "countrycodes": "us",
         "addressdetails": 1,
+        "namedetails": 1,
+        "extratags": 1,
     }
 
 
@@ -359,3 +361,52 @@ def test_a_failed_lookup_still_counts_against_the_limit():
         geocode("a, Lebanon, NH", limiter=limiter)
 
     assert limiter.waits == 1
+
+
+# --- the road an answer names ---
+
+
+def road_reply(**fields: object) -> MagicMock:
+    return nominatim_reply(**{"class": "highway", "osm_type": "way", **fields})
+
+
+def test_a_road_answer_keeps_its_name_and_its_route_number():
+    reply = road_reply(
+        name="Dartmouth College Highway", extratags={"ref": "NH 120;US 4"}
+    )
+
+    with patch("locations.geocode.httpx.get", return_value=reply):
+        found = look_up()
+
+    assert found is not None
+    assert (found.precision, found.name, found.ref) == (
+        "approximate",
+        "Dartmouth College Highway",
+        "NH 120;US 4",
+    )
+
+
+def test_the_name_falls_back_to_the_name_details():
+    reply = road_reply(namedetails={"name": "Hanover Street", "ref": "NH 10"})
+
+    with patch("locations.geocode.httpx.get", return_value=reply):
+        found = look_up()
+
+    assert found is not None
+    assert (found.name, found.ref) == ("Hanover Street", "NH 10")
+
+
+def test_an_answer_with_no_name_or_ref_has_neither():
+    with patch("locations.geocode.httpx.get", return_value=nominatim_reply()):
+        found = look_up()
+
+    assert found is not None
+    assert (found.name, found.ref) == (None, None)
+
+
+def test_the_request_asks_for_name_details_and_extra_tags():
+    with patch("locations.geocode.httpx.get", return_value=nominatim_reply()) as get:
+        look_up()
+
+    params = get.call_args.kwargs["params"]
+    assert (params["namedetails"], params["extratags"]) == (1, 1)

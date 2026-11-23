@@ -205,7 +205,11 @@ def test_a_miss_in_the_snapshot_falls_back_to_the_street(db_session):
         street="COMMERCE AVE",
     )
     geocoder = NoNominatim(
-        {"COMMERCE AVE, Lebanon, NH": GeocodeResult(43.65, -72.25, "exact")}
+        {
+            "COMMERCE AVE, Lebanon, NH": GeocodeResult(
+                43.65, -72.25, "exact", name="Commerce Avenue"
+            )
+        }
     )
 
     geocode_job.run(geocoder, locator=OsmLocator(SNAPSHOT))
@@ -255,7 +259,11 @@ def test_a_named_place_goes_to_the_ai_with_its_candidates_and_takes_its_pick(
 def test_a_none_from_the_ai_leaves_the_street_fallback(db_session):
     place_row(db_session)
     geocoder = NoNominatim(
-        {"MOUNT SUPPORT RD, Lebanon, NH": GeocodeResult(*STREET_POINT, "exact")}
+        {
+            "MOUNT SUPPORT RD, Lebanon, NH": GeocodeResult(
+                *STREET_POINT, "exact", name="Mount Support Road"
+            )
+        }
     )
 
     geocode_job.run(geocoder, locator=OsmLocator(SNAPSHOT, Picks(None)))
@@ -744,7 +752,11 @@ def test_an_approximate_nominatim_answer_is_tried_against_the_snapshot(db_sessio
         street="COMMERCE AVE",
     )
     geocoder = NoNominatim(
-        {"8 COMMERCE AVE, Lebanon, NH": GeocodeResult(43.65, -72.25, "approximate")}
+        {
+            "8 COMMERCE AVE, Lebanon, NH": GeocodeResult(
+                43.65, -72.25, "approximate", name="Commerce Avenue"
+            )
+        }
     )
 
     counts = geocode_job.run(geocoder, locator=OsmLocator(SNAPSHOT))
@@ -766,7 +778,11 @@ def test_an_approximate_answer_is_kept_when_the_snapshot_has_nothing(db_session)
         street="COMMERCE AVE",
     )
     geocoder = NoNominatim(
-        {"9 COMMERCE AVE, Lebanon, NH": GeocodeResult(43.65, -72.25, "approximate")}
+        {
+            "9 COMMERCE AVE, Lebanon, NH": GeocodeResult(
+                43.65, -72.25, "approximate", name="Commerce Avenue"
+            )
+        }
     )
 
     counts = geocode_job.run(geocoder, locator=OsmLocator(SNAPSHOT))
@@ -1092,10 +1108,12 @@ def highway_row(session, raw: str, normalized: str, **columns) -> AddressNormali
     return add_row(
         session,
         raw,
-        kind="highway",
-        normalized_address=normalized,
-        street=None,
-        **columns,
+        **{
+            "kind": "highway",
+            "normalized_address": normalized,
+            "street": None,
+            **columns,
+        },
     )
 
 
@@ -1476,3 +1494,180 @@ def test_a_road_pin_is_stored_approximate_end_to_end(db_session):
     db_session.expire_all()
 
     assert the_row(db_session, "ROUTE 120").coordinate_precision == "approximate"
+
+
+# --- the road an answer names, and a highway that names a point ---
+
+HANOVER_ST_POINT = (43.6833197, -72.2687263)
+
+
+def road_answer(name: str | None, ref: str | None = None) -> GeocodeResult:
+    return GeocodeResult(*HANOVER_ST_POINT, "approximate", name=name, ref=ref)
+
+
+def test_an_approximate_answer_that_is_another_road_is_a_miss(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+    geocoder = NoNominatim(
+        {
+            "8 COMMERCE AVE, Lebanon, NH": road_answer("Hanover Street"),
+            "COMMERCE AVE, Lebanon, NH": road_answer("Hanover Street"),
+        }
+    )
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "8 COMMERCE AVE")
+    assert (row.lat, row.geocode_attempts, counts.missed) == (None, 1, 1)
+
+
+def test_an_approximate_answer_that_is_the_road_asked_for_is_kept(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+    geocoder = NoNominatim(
+        {"8 COMMERCE AVE, Lebanon, NH": road_answer("Commerce Avenue")}
+    )
+
+    geocode_job.run(geocoder)
+
+    row = the_row(db_session, "8 COMMERCE AVE")
+    assert (row.lat, row.coordinate_precision, row.geocoded_via) == (
+        HANOVER_ST_POINT[0],
+        "approximate",
+        "nominatim",
+    )
+
+
+def test_the_street_alone_must_be_the_street_too(db_session):
+    add_row(
+        db_session,
+        "9 COMMERCE AVE",
+        normalized_address="9 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+    geocoder = NoNominatim({"COMMERCE AVE, Lebanon, NH": road_answer("Hanover Street")})
+
+    geocode_job.run(geocoder)
+
+    assert the_row(db_session, "9 COMMERCE AVE").lat is None
+    assert geocoder.queries == [
+        "9 COMMERCE AVE, Lebanon, NH",
+        "COMMERCE AVE, Lebanon, NH",
+    ]
+
+
+def test_a_route_number_in_the_answer_is_the_road_asked_for(db_session):
+    add_row(
+        db_session,
+        "ROUTE 120 STORE",
+        normalized_address="Sample Store, Route 120",
+        street="ROUTE 120",
+    )
+    geocoder = NoNominatim(
+        {
+            "ROUTE 120 STORE, Lebanon, NH": road_answer(
+                "Dartmouth College Highway", "NH 120"
+            )
+        }
+    )
+
+    geocode_job.run(geocoder)
+
+    assert the_row(db_session, "ROUTE 120 STORE").lat == HANOVER_ST_POINT[0]
+
+
+def test_with_no_street_the_street_part_of_the_address_is_what_was_asked_for(
+    db_session,
+):
+    add_row(
+        db_session,
+        "SAMPLE SHOP",
+        normalized_address="Sample Shop, 12 Commerce Ave",
+        street=None,
+    )
+    geocoder = NoNominatim({"SAMPLE SHOP, Lebanon, NH": road_answer("Commerce Avenue")})
+
+    geocode_job.run(geocoder)
+
+    assert the_row(db_session, "SAMPLE SHOP").lat == HANOVER_ST_POINT[0]
+
+
+def test_with_no_street_and_no_address_there_is_nothing_to_compare():
+    row = AddressNormalization(
+        raw_address="M", normalized_address=None, street=None, kind="place"
+    )
+
+    assert geocode_job._requested_streets(row, street_alone=False) == []
+    assert not geocode_job._is_the_road_asked_for(row, road_answer("Hanover Street"))
+
+
+def test_an_answer_with_no_name_or_route_is_not_the_road_asked_for(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+    geocoder = NoNominatim({"8 COMMERCE AVE, Lebanon, NH": road_answer(None)})
+
+    geocode_job.run(geocoder)
+
+    assert the_row(db_session, "8 COMMERCE AVE").lat is None
+
+
+def test_the_hanover_street_pin_for_an_interstate_exit_is_a_miss(db_session):
+    # 283 highway rows with street "ROUTE I-89" were all pinned here.
+    highway_row(
+        db_session,
+        "I-89 EXIT 19",
+        "I-89 exit 19",
+        street="ROUTE I-89",
+        geocode_query="I-89 EXIT 19, Lebanon, NH",
+    )
+    geocoder = NoNominatim(
+        {
+            "I-89 EXIT 19, Lebanon, NH": road_answer("Hanover Street"),
+            "ROUTE I-89, Lebanon, NH": road_answer("Hanover Street"),
+        }
+    )
+
+    geocode_job.run(geocoder, locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "I-89 EXIT 19")
+    assert (row.lat, row.geocode_attempts) == (None, 1)
+    assert geocoder.queries == ["I-89 EXIT 19, Lebanon, NH"]
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "I-89 exit 19",
+        "I-89 exits 18 to 20",
+        "I-89 mile marker 19",
+        "I-89 milepost 19",
+        "I-89 NB MM 19",
+        "I-89 rest area",
+        "Walking bridge over I-89",
+        "Route 120 under I-89",
+        "I-89 near Route 4",
+        "I-89 and Route 4",
+    ],
+)
+def test_these_highways_name_a_point(address):
+    assert geocode_job.names_a_point(address)
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["Route 120", "I-89", "I-89 northbound", "Rock Cut - Route 120", "Interstate 89"],
+)
+def test_these_highways_are_bare(address):
+    assert not geocode_job.names_a_point(address)

@@ -100,13 +100,16 @@ There is no Elasticsearch and no dbt.
   The two retries cannot be used together.
   Every run that places anything from the snapshot writes `tmp/geocode-matches-<date>.csv` with the old and new coordinates side by side, so a batch can be reverted from the file.
   It runs at 1 request per second, stops at 600 requests, and discards a result outside the city: state New Hampshire, city Lebanon or West Lebanon, and a coarse bounding box.
+  An approximate answer, a road with no point on it, is accepted only when the road it names is the road the row is on: its name equals the street's once spelled the same way, or its route number matches, as "ROUTE 120" matches a road with `ref` "NH 120".
+  A search that cannot find a road can answer with another, and 283 highway rows on Interstate 89 were all once pinned on Hanover Street.
+  The street is the row's `street`, or the street part of its normalized address with the house number dropped, and an answer with no name and no route is a miss.
   After 3 misses a row is marked for review.
   A transient failure (a timeout, a connection error or a 5xx) skips the row without charging an attempt, and the next run tries it again.
   A 403 or 429 stops the run at once, and so do 5 transient failures in a row.
   A bare highway, one with no cross street, exit or landmark, is not looked up on Nominatim.
   Before, it was only marked for review. It now gets an approximate point on the road the snapshot matches by name or route number, stored with `geocoded_via = 'osm'` and precision `approximate`, and is marked for review only when no road matches.
   "ROCK CUT - ROUTE 120" is bare too, and gets the same point as "ROUTE 120".
-  A highway with an exit or a cross street keeps the old path.
+  A highway that names a point, with an exit, a mile marker or milepost, a rest area, "over" or "under" a road, a cross street, "near" or "at", is looked up on Nominatim and takes only an exact point, never a road point or a street point, as an intersection does.
   Every run prints the share of parsed log entries that sit on a pin, by the kind of their location, and the export prints the share of in-range entries that are on the map.
 - **OpenStreetMap snapshot:** `uv run osm-snapshot` downloads every named or numbered feature and every named road inside Lebanon's own boundary (not a box, which takes in White River Junction, Vermont) in two Overpass requests, and writes `scripts/data/osm/snapshot-YYYY-MM-DD.json`, which is gitignored.
   Overpass answers 429 or 502 when busy, so a request is retried 4 times with waits of 10, 30, 90 and 180 seconds, then fails with the last status.

@@ -7,6 +7,7 @@ from locations.osm import (
     locate_address,
     locate_intersection,
     locate_road,
+    names_the_road,
     place_candidates,
     route_refs,
     snapshot_from_replies,
@@ -685,3 +686,45 @@ def test_a_snapshot_saved_with_a_null_name_loads():
 
     assert loaded.roads[0].name == ""
     assert loaded.roads_named("HANOVER ST") == []
+
+
+# --- is this the road that was asked for ---
+
+
+@pytest.mark.parametrize(
+    ("requested", "name", "ref"),
+    [
+        ("MAIN ST", "Main Street", None),
+        ("ROUTE 120", "Dartmouth College Highway", "NH 120"),
+        ("ROUTE 120", None, "NH 120;US 4"),
+        ("RT 4", None, "NH 120;US 4"),
+        ("I-89", None, "I 89"),
+        ("INTERSTATE 89", "Interstate 89", None),
+        ("US 4", "State Route 4", "US 4"),
+        ("ROUTE 120", "State Route 120", None),
+    ],
+)
+def test_a_road_with_the_same_name_or_route_is_the_road_asked_for(requested, name, ref):
+    assert names_the_road(requested, name=name, ref=ref)
+
+
+@pytest.mark.parametrize(
+    ("requested", "name", "ref"),
+    [
+        ("I-89", "Hanover Street", None),
+        ("ROUTE 120", "Hanover Street", "NH 10"),
+        ("ROUTE 4", None, "NH 4A"),
+        ("ROUTE 120", None, None),
+        ("MAIN ST", None, None),
+        ("ROUTE 89", None, "I 89"),
+    ],
+)
+def test_another_road_or_an_answer_with_no_name_is_not_the_road_asked_for(
+    requested, name, ref
+):
+    assert not names_the_road(requested, name=name, ref=ref)
+
+
+def test_a_route_inside_other_words_is_found_only_when_asked():
+    assert names_the_road("ROUTE I-89", name=None, ref="I 89", anywhere=True)
+    assert not names_the_road("ROUTE I-89", name=None, ref="I 89")

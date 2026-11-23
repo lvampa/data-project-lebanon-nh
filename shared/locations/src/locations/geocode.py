@@ -54,6 +54,11 @@ class GeocodeResult:
     lat: float
     lng: float
     precision: Precision
+    # The road's own name and its `ref` tag (such as "NH 120"), for a caller that has to
+    # check the answer is the road it asked for. A street answer is only a point on a road,
+    # and a search that cannot find a road can return a different one.
+    name: str | None = None
+    ref: str | None = None
 
 
 def in_city_bounds(lat: float, lng: float) -> bool:
@@ -119,6 +124,8 @@ def _get(query: str, contact: str | None, limiter: Waiter) -> httpx.Response:
                 "limit": 1,
                 "countrycodes": "us",
                 "addressdetails": 1,
+                "namedetails": 1,
+                "extratags": 1,
             },
             headers={"User-Agent": _user_agent(contact)},
             timeout=_TIMEOUT_S,
@@ -144,8 +151,14 @@ def _is_in_lebanon(match: dict[str, Any]) -> bool:
 
 
 def _result_of(match: dict[str, Any]) -> GeocodeResult:
+    names = match.get("namedetails") or {}
+    extras = match.get("extratags") or {}
     return GeocodeResult(
-        lat=float(match["lat"]), lng=float(match["lon"]), precision=_precision(match)
+        lat=float(match["lat"]),
+        lng=float(match["lon"]),
+        precision=_precision(match),
+        name=match.get("name") or names.get("name") or None,
+        ref=extras.get("ref") or names.get("ref") or None,
     )
 
 

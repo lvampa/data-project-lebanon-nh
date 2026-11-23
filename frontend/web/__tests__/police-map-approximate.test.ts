@@ -9,7 +9,9 @@ import {
   streetTotal,
 } from '@/lib/police-map/approximate'
 import {
+  alarmsLine,
   approximateLine,
+  fromPublicLine,
   onStreetHeading,
   streetBreakdown,
   streetItselfLine,
@@ -80,6 +82,20 @@ describe("a street's total", () => {
 
     expect(found.map((a) => a.id)).toEqual(['mount-support-rd', 'quarry-hill', 'marek'])
     expect(resultCount(found[0], hiddenCallsByStreet(ALL))).toBe('1,620')
+  })
+
+  it('says how many of a filtered place count were calls from the public', () => {
+    expect(fromPublicLine(119)).toBe(
+      '119 of these were calls from the public. The rest were started by officers.',
+    )
+    expect(fromPublicLine(1)).toBe(
+      '1 of these was a call from the public. The rest were started by officers.',
+    )
+  })
+
+  it('says a Places card leaves out all of its alarms, not only the false ones', () => {
+    expect(alarmsLine(3, 1)).toBe('3 alarms, 1 false, not counted above')
+    expect(alarmsLine(1, 0)).toBe('1 alarm, not counted above')
   })
 
   it("says a street card's lists cover the street itself", () => {

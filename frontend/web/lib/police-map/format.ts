@@ -52,6 +52,23 @@ export function streetBreakdown(own: number, onStreet: { count: number }[]): str
   return `${own.toLocaleString('en-US')} at the street itself · ${theirs.toLocaleString('en-US')} at ${places} on it`
 }
 
+// Under a Places card: its alarms, none of which the card counts. "3 alarms, 1 false, not
+// counted above".
+export function alarmsLine(alarms: number, falseAlarms: number): string {
+  const noun = alarms === 1 ? 'alarm' : 'alarms'
+  const falseNote = falseAlarms > 0 ? `, ${falseAlarms.toLocaleString('en-US')} false` : ''
+  return `${alarms.toLocaleString('en-US')} ${noun}${falseNote}, not counted above`
+}
+
+// Under a place's filtered count, matching the number its Places card shows.
+export function fromPublicLine(fromPublic: number): string {
+  const these =
+    fromPublic === 1
+      ? '1 of these was a call'
+      : `${fromPublic.toLocaleString('en-US')} of these were calls`
+  return `${these} from the public. The rest were started by officers.`
+}
+
 // Over a street card's lists, which cover the street itself and not the places on it.
 export function streetItselfLine(own: number, atPlaces: number, street: string): string {
   return `At the street itself: ${own.toLocaleString('en-US')}. The ${atPlaces.toLocaleString('en-US')} at places on ${street} are listed below.`

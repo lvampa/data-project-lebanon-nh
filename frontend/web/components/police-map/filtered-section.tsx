@@ -1,4 +1,5 @@
 import { HourStrip } from '@/components/police-views/hour-strip'
+import { fromPublicLine } from '@/lib/police-map/format'
 
 // One pin's kept entries, for its card while filters are on.
 export interface PinSummary {
@@ -9,6 +10,9 @@ export interface PinSummary {
   sceneTimed: number
   response: number | null
   responseTimed: number
+  // With the place filter on: how many were calls from the public, which is the Places tab's
+  // count, so a place opened from there explains its bigger number. Otherwise null.
+  fromPublic: number | null
 }
 
 // What the card needs from the views when filters are on.
@@ -47,6 +51,9 @@ export function FilteredSection({
   }
   return (
     <section>
+      {summary.fromPublic !== null && summary.fromPublic < summary.n && (
+        <p className="mt-1.5 text-sm text-muted-foreground">{fromPublicLine(summary.fromPublic)}</p>
+      )}
       <h3 className={SECTION_HEADING}>Time of day, with your filters</h3>
       <HourStrip hours={summary.hours} />
       {summary.scene !== null && (

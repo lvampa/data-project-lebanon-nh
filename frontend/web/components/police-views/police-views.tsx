@@ -209,6 +209,8 @@ function useDerived(
     const pins = tally(activity, kept, (i) => activity.pin[i])
     // A street's filtered numbers count the places listed on it, as its headline does.
     const cards = tally(activity, kept, cardGroupOf(activity, addresses))
+    const publicPins = tally(activity, publicKept, (i) => activity.pin[i])
+    const publicCards = tally(activity, publicKept, cardGroupOf(activity, addresses))
     const town = tally(activity, kept, wholeTown).get(TOWN)
     const pinIndex = new Map(addresses.map((address, index) => [address.id, index]))
 
@@ -246,8 +248,10 @@ function useDerived(
           onClear,
           summaryOf(pinId: string): PinSummary | null {
             const index = pinIndex.get(pinId) ?? -1
-            const t = addresses[index]?.hidden ? pins.get(index) : cards.get(index)
+            const own = addresses[index]?.hidden
+            const t = own ? pins.get(index) : cards.get(index)
             if (!t) return null
+            const fromPublic = (own ? publicPins : publicCards).get(index)?.n ?? 0
             return {
               n: t.n,
               hours: t.hours,
@@ -255,6 +259,7 @@ function useDerived(
               sceneTimed: t.scenes.length,
               response: typical(t.responses),
               responseTimed: t.responses.length,
+              fromPublic: filters.kind === 'place' ? fromPublic : null,
             }
           },
         }

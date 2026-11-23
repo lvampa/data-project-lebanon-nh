@@ -4,6 +4,7 @@ from typing import Any
 
 import pypdf
 import pytest
+from parsers.dispositions import DISPOSITIONS, split_reason_action
 from parsers.police_log import (
     EXTRACTOR_VERSION,
     PARSER_VERSION,
@@ -45,8 +46,8 @@ def nov_5() -> dict[str, dict[str, Any]]:
     return entries_by_case("2026-11-05")
 
 
-def test_parser_version_is_3_and_the_extractor_version_is_pypdfs():
-    assert PARSER_VERSION == 3
+def test_parser_version_is_4_and_the_extractor_version_is_pypdfs():
+    assert PARSER_VERSION == 4
     assert pypdf.__version__ == EXTRACTOR_VERSION
 
 
@@ -143,6 +144,31 @@ def test_a_type_that_is_also_a_disposition_keeps_its_real_ending(nov_1):
             "Civil Matter",
             "Paperwork NOT Served",
         ),
+        (
+            "Welfare Check Cancelled Prior to Arrival",
+            "Welfare Check",
+            "Cancelled Prior to Arrival",
+        ),
+        ("MV Complaint Follow Up Needed", "MV Complaint", "Follow Up Needed"),
+        # The log prints this one in capitals, and it is stored as listed.
+        (
+            "Property Lost PROPERTY NOT RETURNED",
+            "Property Lost",
+            "Property NOT Returned",
+        ),
+        # A type that is also a disposition keeps its own name, and the ending is the
+        # longer one: "Property NOT Returned" is not cut short to a match on "Returned".
+        (
+            "Property Returned PROPERTY NOT RETURNED",
+            "Property Returned",
+            "Property NOT Returned",
+        ),
+        ("CAR FIRE Extinguished", "CAR FIRE", "Extinguished"),
+        (
+            "Unsecure Building Building Checked/Secured",
+            "Unsecure Building",
+            "Building Checked/Secured",
+        ),
     ],
 )
 def test_dispositions_found_in_the_stored_pdfs_are_split_off(
@@ -153,6 +179,20 @@ def test_dispositions_found_in_the_stored_pdfs_are_split_off(
     assert entry["incident_type"] == incident_type
     assert entry["disposition"] == disposition
     assert entry["disposition_unmatched"] is False
+
+
+@pytest.mark.parametrize("disposition", DISPOSITIONS)
+def test_every_listed_disposition_is_matched_whole_and_never_cut_short(disposition):
+    # A shorter ending that the longer one ends with, such as "Warning" in "Verbal
+    # Warning", must not win, so each ending is found by its full text.
+    assert split_reason_action(f"Some Type {disposition}") == (
+        "Some Type",
+        disposition,
+    )
+    assert split_reason_action(f"Some Type {disposition.upper()}") == (
+        "Some Type",
+        disposition,
+    )
 
 
 def test_an_unknown_disposition_keeps_the_unsplit_text_and_is_marked():

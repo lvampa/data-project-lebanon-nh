@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { decodeActivity } from '@/lib/police-views/activity'
-import { filteredAddresses, tally, typical, wholeTown, TOWN } from '@/lib/police-views/counts'
+import {
+  cardGroupOf,
+  filteredAddresses,
+  tally,
+  typical,
+  wholeTown,
+  TOWN,
+} from '@/lib/police-views/counts'
 import {
   DEFAULT_FILTERS,
   inTimeOfDay,
@@ -203,6 +210,27 @@ describe('tally', () => {
     expect(town.responses).toEqual([6])
     expect(town.scenes).toEqual([20, 10, 5])
     expect(town.initiated).toBe(1)
+  })
+
+  it("puts a listed place's entries on its street's card, and keeps the rest on their own", () => {
+    const bank = address('bank', { hidden: true, street_id: 'main-st' })
+    const pins = [FORD, MAIN, bank]
+    const activity = decodeActivity(
+      activityFile(
+        pins.map((a) => a.id),
+        [
+          { pin: 'main-st', day: 1 },
+          { pin: 'bank', day: 1 },
+          { pin: 'bank', day: 2 },
+          { pin: 'ford', day: 1 },
+        ],
+      ),
+      pins,
+    )
+    const cards = tally(activity, new Uint8Array(4).fill(1), cardGroupOf(activity, pins))
+    expect(cards.get(1)?.n).toBe(3)
+    expect(cards.get(0)?.n).toBe(1)
+    expect(cards.has(2)).toBe(false)
   })
 
   it('counts night as 7pm to 7am', () => {

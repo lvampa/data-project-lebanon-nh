@@ -38,10 +38,11 @@ export function rankCounts(addresses: Address[], kind: Address['kind']): number[
     .filter((count) => count > 0)
 }
 
-// The places listed on a street's card, busiest first.
+// The places listed on a street's card, busiest first, leaving out any with no entries of
+// their own, which would read as "0" next to a total they add nothing to.
 export function placesOnStreet(addresses: Address[], streetId: string): Address[] {
   return addresses
-    .filter((a) => a.hidden && a.street_id === streetId)
+    .filter((a) => a.hidden && a.street_id === streetId && a.count > 0)
     .sort((a, b) => b.count - a.count || nameFor(a).localeCompare(nameFor(b)))
 }
 

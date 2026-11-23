@@ -106,6 +106,16 @@ export function tally(
 export const TOWN = 0
 export const wholeTown = () => TOWN
 
+// Groups entries by the card that shows them: a place listed on its street counts on the
+// street's card, as its pin and headline do. `pins` is in activity's pin order.
+export function cardGroupOf(activity: Activity, pins: Address[]): (entry: number) => number {
+  const index = new Map(pins.map((pin, i) => [pin.id, i]))
+  const card = pins.map((pin, i) =>
+    pin.hidden && pin.street_id ? (index.get(pin.street_id) ?? i) : i,
+  )
+  return (entry) => card[activity.pin[entry]] ?? -1
+}
+
 // The middle value, or null when there are too few to trust.
 export function typical(values: number[], least = MIN_TIMED): number | null {
   if (values.length < least) return null

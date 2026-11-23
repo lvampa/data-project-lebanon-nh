@@ -5,6 +5,7 @@ import { Tabs } from '@project/ui/components/ui/tabs'
 import type { FilteredCard, PinSummary } from '@/components/police-map/filtered-section'
 import type { Activity } from '@/lib/police-views/activity'
 import {
+  cardGroupOf,
   filteredAddresses,
   tally,
   topOf,
@@ -206,6 +207,8 @@ function useDerived(
       : shown
 
     const pins = tally(activity, kept, (i) => activity.pin[i])
+    // A street's filtered numbers count the places listed on it, as its headline does.
+    const cards = tally(activity, kept, cardGroupOf(activity, addresses))
     const town = tally(activity, kept, wholeTown).get(TOWN)
     const pinIndex = new Map(addresses.map((address, index) => [address.id, index]))
 
@@ -242,7 +245,8 @@ function useDerived(
           noun: nounFor(filters.kind),
           onClear,
           summaryOf(pinId: string): PinSummary | null {
-            const t = pins.get(pinIndex.get(pinId) ?? -1)
+            const index = pinIndex.get(pinId) ?? -1
+            const t = addresses[index]?.hidden ? pins.get(index) : cards.get(index)
             if (!t) return null
             return {
               n: t.n,

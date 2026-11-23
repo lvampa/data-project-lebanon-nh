@@ -8,7 +8,12 @@ import {
   streetPinOf,
   streetTotal,
 } from '@/lib/police-map/approximate'
-import { approximateLine, onStreetHeading, streetBreakdown } from '@/lib/police-map/format'
+import {
+  approximateLine,
+  onStreetHeading,
+  streetBreakdown,
+  streetItselfLine,
+} from '@/lib/police-map/format'
 import { pinsGeoJson } from '@/lib/police-map/map-style'
 import { resultCount, searchPlaces } from '@/lib/police-map/search'
 import type { Address } from '@/lib/types'
@@ -77,6 +82,12 @@ describe("a street's total", () => {
     expect(resultCount(found[0], hiddenCallsByStreet(ALL))).toBe('1,620')
   })
 
+  it("says a street card's lists cover the street itself", () => {
+    expect(streetItselfLine(409, 766, 'Mechanic St')).toBe(
+      'At the street itself: 409. The 766 at places on Mechanic St are listed below.',
+    )
+  })
+
   it('says where the total comes from', () => {
     expect(streetBreakdown(600, placesOnStreet(ALL, 'mount-support-rd'))).toBe(
       '600 at the street itself · 1,020 at 2 places on it',
@@ -133,6 +144,19 @@ describe('placesOnStreet', () => {
 
   it('lists nothing for a street with none', () => {
     expect(placesOnStreet(ALL, 'elm-st')).toEqual([])
+  })
+
+  // A "0" row reads as an error, and its card then says "10 traffic stops nearby".
+  it('leaves out a place with no entries of its own, such as one with only traffic', () => {
+    const trafficOnly = pin('lot', 'Parking Lot, Mount Support Rd', 0, {
+      traffic_count: 10,
+      street_id: 'mount-support-rd',
+      hidden: true,
+    })
+    expect(placesOnStreet([...ALL, trafficOnly], 'mount-support-rd').map((a) => a.id)).toEqual([
+      'quarry-hill',
+      'marek',
+    ])
   })
 
   it('does not reorder the list it is given', () => {

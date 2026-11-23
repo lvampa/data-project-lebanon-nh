@@ -52,6 +52,11 @@ export function streetBreakdown(own: number, onStreet: { count: number }[]): str
   return `${own.toLocaleString('en-US')} at the street itself · ${theirs.toLocaleString('en-US')} at ${places} on it`
 }
 
+// Over a street card's lists, which cover the street itself and not the places on it.
+export function streetItselfLine(own: number, atPlaces: number, street: string): string {
+  return `At the street itself: ${own.toLocaleString('en-US')}. The ${atPlaces.toLocaleString('en-US')} at places on ${street} are listed below.`
+}
+
 export function onStreetHeading(street: string): string {
   return `On ${street}, exact spot unknown`
 }

@@ -13,6 +13,7 @@ import {
   nameOf,
   onStreetHeading,
   streetBreakdown,
+  streetItselfLine,
   streetOf,
 } from '@/lib/police-map/format'
 import { isTrafficOnly, pinName } from '@/lib/police-map/map-style'
@@ -122,7 +123,13 @@ export function ReportCard({
         </div>
       )}
       {state.status === 'ready' && (
-        <CardDetails address={address} card={state.card} street={street} />
+        <CardDetails
+          address={address}
+          card={state.card}
+          street={street}
+          name={nameOf(name)}
+          onStreet={onStreet}
+        />
       )}
 
       {/* 7. Method */}
@@ -221,22 +228,34 @@ function CardDetails({
   address,
   card,
   street,
+  name,
+  onStreet,
 }: {
   address: Address
   card: PlaceCard
   street: string | null
+  name: string
+  onStreet: Address[]
 }) {
   const road = address.kind === 'road'
   const kinds = categoriesFor(address.kind, card.categories)
-  // A place lists the incidents at the place, and a street lists every call.
-  const otherTypes = remainder(card.types, road ? address.count : card.categories.premises)
+  // A place lists the incidents at the place, and a street lists every call. The card's own
+  // count, not a filtered one, since these lists are the whole year's.
+  const otherTypes = remainder(card.types, road ? card.count : card.categories.premises)
   const otherOutcomes = remainder(
     card.outcomes,
-    road ? address.count : card.categories.premises + card.categories.alarms,
+    road ? card.count : card.categories.premises + card.categories.alarms,
   )
+  const atPlaces = onStreet.reduce((sum, place) => sum + place.count, 0)
 
   return (
     <>
+      {/* The lists below cover the street itself; its places have their own list further down. */}
+      {road && atPlaces > 0 && (
+        <p className="mt-6 text-sm text-muted-foreground">
+          {streetItselfLine(card.count, atPlaces, name)}
+        </p>
+      )}
       {/* 3. What kinds of calls */}
       <div className="my-4 flex h-2.5 gap-0.5" role="img" aria-label="Calls by kind">
         {kinds.map((kind) => (

@@ -112,6 +112,41 @@ def test_a_query_that_misses_falls_back_to_the_street_and_is_approximate(db_sess
     assert counts.requests == 2
 
 
+def test_an_intersection_that_finds_only_a_street_point_is_a_miss(db_session):
+    raw = "MAIN ST + HANOVER ST"
+    add_row(db_session, raw, kind="intersection", street="MAIN ST")
+    geocoder = FakeGeocoder({f"{raw}, Lebanon, NH": hit(precision="approximate")})
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, raw)
+    # The middle of one of its streets is not the crossing.
+    assert (row.lat, row.geocode_attempts) == (None, 1)
+    assert (counts.placed, counts.missed) == (0, 1)
+
+
+def test_an_intersection_that_misses_never_falls_back_to_its_street(db_session):
+    raw = "MAIN ST + HANOVER ST"
+    add_row(db_session, raw, kind="intersection", street="MAIN ST")
+    geocoder = FakeGeocoder({"MAIN ST, Lebanon, NH": hit()})
+
+    geocode_job.run(geocoder)
+
+    assert the_row(db_session, raw).lat is None
+    assert geocoder.queries == [f"{raw}, Lebanon, NH"]
+
+
+def test_an_intersection_with_a_point_from_the_geocoder_is_placed(db_session):
+    raw = "MAIN ST + HANOVER ST"
+    add_row(db_session, raw, kind="intersection", street="MAIN ST")
+    geocoder = FakeGeocoder({f"{raw}, Lebanon, NH": hit(precision="exact")})
+
+    geocode_job.run(geocoder)
+
+    row = the_row(db_session, raw)
+    assert (row.lat, row.coordinate_precision) == (IN_CITY[0], "exact")
+
+
 def test_a_result_outside_the_city_is_discarded_and_the_street_is_tried(db_session):
     add_row(db_session, "12 MAIN ST", street="MAIN ST")
     geocoder = FakeGeocoder(
@@ -613,6 +648,30 @@ def test_a_place_does_not_inherit_the_coordinates_of_an_address(db_session):
 
     row = the_row(db_session, "HANNAFORDS")
     assert (row.lat, row.lng) == IN_CITY
+    assert counts.reused == 0
+
+
+def test_an_intersection_does_not_copy_a_street_point_from_another_spelling(db_session):
+    add_row(
+        db_session,
+        "MAIN ST + HANOVER ST",
+        normalized_address="Main St and Hanover St",
+        kind="intersection",
+        lat=43.6001,
+        lng=-72.2001,
+        geocoded_via="nominatim",
+        coordinate_precision="approximate",
+    )
+    add_row(
+        db_session,
+        "MAIN ST & HANOVER ST",
+        normalized_address="Main St and Hanover St",
+        kind="intersection",
+    )
+
+    counts = geocode_job.run(FakeGeocoder())
+
+    assert the_row(db_session, "MAIN ST & HANOVER ST").lat is None
     assert counts.reused == 0
 
 

@@ -86,6 +86,7 @@ There is no Elasticsearch and no dbt.
   `--retry-approximate` joins rows by a shared place code under the same rule.
   A hand-placed donor is used too, so two spellings of one address never land on different spots; the copy keeps its `source`, and `geocoded_via` says how the pin was found.
   Otherwise it tries the geocode query, then the newest OpenStreetMap snapshot, then the street alone (an `approximate` result).
+  An intersection takes only a point, from the geocoder or the snapshot; a street point is a miss for one, since the middle of a street is not where it crosses another.
   From the snapshot, a house address is matched by number and street, and an intersection by a node its two roads share, both with no AI.
   A named place gets up to 8 real features that share a meaningful word with its name and lie within 200 m of its street, and the AI answers with one number or 0.
   The AI never gives coordinates, an out-of-range answer is a failed call, and the job makes at most 100 such calls a run.

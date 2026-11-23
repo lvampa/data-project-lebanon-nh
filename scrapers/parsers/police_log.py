@@ -7,7 +7,7 @@ import pypdf
 from .dispositions import split_reason_action
 
 # Bump when parsing behavior changes, then reprocess so stored entries pick it up.
-PARSER_VERSION = 3
+PARSER_VERSION = 4
 
 # The text extractor's version. A pypdf upgrade can change the extracted text, so it
 # counts as a parser change: bump PARSER_VERSION with it, then reprocess.

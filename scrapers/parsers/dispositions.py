@@ -17,7 +17,10 @@ DISPOSITIONS = (
     "Taken/Referred to Other Agency",
     "Referred to Other Agency",
     "Traffic Citation Issued",
+    "Building Checked/Secured",
+    "Cancelled Prior to Arrival",
     "Paperwork NOT Served",
+    "Property NOT Returned",
     "Transported/Relayed",
     "Gone on Arrival",
     "Arrest(s) Made",
@@ -32,10 +35,12 @@ DISPOSITIONS = (
     "Transport/Escort",
     "Field Interview",
     "Verbal Warning",
+    "Follow Up Needed",
     "Vehicle Towed",
     "Paperwork Served",
     "Summons Issued",
     "Removed Hazard",
+    "Extinguished",
     "Property Returned",
     "Investigated",
     "False Alarm",
@@ -48,11 +53,11 @@ DISPOSITIONS = (
 # The log sometimes types an ending in capitals, so a match is stored as listed.
 _LISTED_SPELLING = {d.lower(): d for d in DISPOSITIONS}
 
-# Longest first, so a suffix such as "Paperwork NOT Served" is not cut short.
+# The search takes the leftmost start that reaches the end of the text, so the longest
+# ending that fits wins, such as "Paperwork NOT Served" over "Paperwork Served", whatever
+# order the list is in.
 _DISPOSITION_AT_END = re.compile(
-    r"\s+("
-    + "|".join(re.escape(d) for d in sorted(DISPOSITIONS, key=len, reverse=True))
-    + r")\s*$",
+    r"\s+(" + "|".join(re.escape(d) for d in DISPOSITIONS) + r")\s*$",
     re.IGNORECASE,
 )
 

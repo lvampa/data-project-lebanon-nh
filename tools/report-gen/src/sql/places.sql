@@ -8,6 +8,7 @@
 WITH entries AS (
     SELECT
         le.location,
+        le.log_date,
         le.reported_at,
         le.incident_type,
         le.disposition,
@@ -205,7 +206,24 @@ SELECT
                 LIMIT 10
             ) latest
         )
-    )::text AS card
+    )::text AS card,
+    -- Every entry of the pin, for activity.json, in log order. An entry with no report time
+    -- falls back to its log day, so it still counts toward the day and the week.
+    (
+        SELECT COALESCE(jsonb_agg(jsonb_build_array(
+            COALESCE(reported_at, log_date::timestamp),
+            category,
+            incident_type,
+            disposition,
+            call_source,
+            officer,
+            dispatched_at,
+            arrived_at,
+            cleared_at
+        ) ORDER BY COALESCE(reported_at, log_date::timestamp), source_url, case_number), '[]')
+        FROM tagged
+        WHERE pin_id = pins.id
+    )::text AS entries
 FROM pins
 JOIN counted ON counted.pin_id = pins.id
 LEFT JOIN links ON links.pin_id = pins.id

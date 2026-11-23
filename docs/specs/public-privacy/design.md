@@ -7,12 +7,12 @@
 ## What it is
 
 Two rules for the public static site, applied in two database views that report-gen reads instead of the tables.
-A location that names or describes a person publishes only its street.
-An incident type seen fewer than 3 times publishes as "Other".
+A location that names or describes a person publishes only its street; that one is privacy.
+Counts, charts and type lists show the AI's plain name for a type, or "Other" when it has none; that one is presentation.
+The log's own type text still shows in a place card's details, since the city's report carries it anyway.
 The tables, the admin app and the future API keep the full text.
 
-On dev, 674 types appear under 3 times, covering 749 of 27,462 entries (2.7%).
-They are mostly dispatch notes: "DEP INFO - M-ARTHUR", "14 MONTH F, FALLS HIT HEAD", "INFANT WITH BLOOD IN MOUTH".
+On dev, the AI has a plain name for 351 of 877 raw types ("73 YOM CPR" is "Cardiac arrest"), and about 13,500 entries have a type it has not named yet, so the type normalize run must finish before this ships.
 
 ## Data flow
 
@@ -29,7 +29,9 @@ report-gen         every SQL file reads the two views, never the tables
 The prompt says when it is true: a person's name, or a description of a person (age, sex, relation, "juv", "child"), and not a business or building named after someone.
 `LOCATION_PROMPT_VERSION` goes to `location-2`, so `uv run normalize --redo` re-asks every location.
 A migration adds `names_person boolean NOT NULL DEFAULT false` to `address_normalizations`.
-A `human` row keeps false until the admin can set it.
+`normalize --redo` never touches a `human` row, and a row becomes `human` whenever a person places its pin (the place sheet, or `PATCH` with coordinates) while its text stays the AI's.
+So the migration sets `names_person = true` on every `human` row, and a human row is flagged until a person clears it: it fails closed.
+A flag-only AI pass over human rows can come later.
 
 ## The views
 
@@ -43,16 +45,20 @@ Both are created in one Alembic migration, the way `public_properties` is.
 | `normalized_address` | as stored | its `street` |
 | `kind` | as stored | `road` |
 | `street` | as stored | same |
-| `lat`, `lng` | as stored | its street's pin, or null |
+| `names_person` | false | true |
+| `lat`, `lng` | as stored | null; `places.sql` puts its calls on its street's pin |
 | `coordinate_precision` | as stored | `approximate` |
 
-For a flagged row, the pin is the street's: the first placed `address_normalizations` row whose `normalized_address` is the flagged row's `street`.
-With no such row, `lat` and `lng` are null, so the place and activity queries leave the entry off the map, as they already do for an unplaced location.
-The precision is `approximate`.
+For a flagged row, the pin is its street's, chosen the way `places.sql` already hangs an approximate place on its street (the `links` CTE): the busiest bare-street pin with the same `street`, then the lowest id.
+The view exposes the flag, and `places.sql` applies that one rule to both, so there is no second, weaker match on text.
+So `places.sql` must keep flagged entries past its `lat IS NOT NULL` filter until they are linked.
+With no street pin, the entry is off the map, as an unplaced location is today.
+A row whose `normalized_address` is null (an AI miss) has no public name either, so it is treated like a flagged row with no street.
 
 `public_log_entries` is `log_entries` with three columns replaced:
 - `category` is `call_category(incident_type, call_source)` on the full type, so category counts are unchanged.
-- `incident_type` is "Other" when the type appears under 3 times among parsed entries.
+- `incident_type` is `incident_type_categories.normalized_type`, or "Other" when the type has no plain name.
+- `raw_incident_type` is the log's text, which only the place card's details select.
 - `location` is the public `normalized_address`, joined through `public_locations`, or null when the location was never normalized, since text with no flag may still name someone.
 
 `raw_location` keeps the log text for the join to `public_locations`, and no export selects it.
@@ -60,16 +66,15 @@ The precision is `approximate`.
 ## Export changes
 
 Each file in `tools/report-gen/src/sql/` swaps `log_entries` for `public_log_entries` and `address_normalizations` for `public_locations`.
-`places.sql` already takes `MODE()` of the location for the pin's spelling, which becomes the public name.
-A Rust test reads every `.sql` file and fails if one names either table, so a new query cannot skip the rules.
+Every query reads the view's `category` and never calls `call_category()` itself, since the view's type may be "Other" and a recomputed category would move a rare traffic or alarm entry to premises.
+Both `addresses.json` and `activity.json` count off that one column, so they keep matching.
+`places.sql` joins on `raw_location` and takes `MODE()` of the public `location` for the pin's spelling, so the exported `raw_address` is public too.
+A Rust test reads every `.sql` file and fails if one names either table or calls `call_category(`, so a new query cannot skip the rules.
+"Other" is listed last in type lists and charts, whatever its count.
 
 ## Rejected
 
 - Dropping flagged text at normalize: the API needs it.
 - Rules on words for people ("yo", "juv", "male"): they miss plain names.
-- An AI pass over incident types: it costs calls and a review step, and the count rule catches the one-offs.
-- Counting types within the export window: the public type of an entry would change as the window moves.
-
-## Open questions
-
-- Should the threshold count distinct days, so one busy night of a one-off note does not reach 3?
+- Showing a raw type as "Other" when it is seen under 3 times: it hides useful one-offs, and passes a repeated note like "DEP INFO - <name>", which is poor presentation whatever its count.
+- Hiding the raw type everywhere: the card's details are where a reader looks for the log's own words.

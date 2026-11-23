@@ -114,8 +114,8 @@ Rules:
 - Use a street from the street list when the location is on one. Leave street empty \
 if none fits.
 - Set names_person to true when the location names a person or describes one: a name, \
-or an age, a sex, a relation or a role beside a name, as in "F and 3 Yo Child, Mount \
-Support Rd" or "Councilman Smith - Church St". Set it to false for a business, school, \
+or an age, a sex, a relation or a role beside a name, as in "F and 2 Yo Child, Example \
+St" or "Councilman Doe - Example St". Set it to false for a business, school, \
 church, park or building, even when it is named after a person, such as "Carter \
 Community Building".
 - Set unsure to true when you are guessing.

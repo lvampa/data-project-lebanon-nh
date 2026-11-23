@@ -819,24 +819,24 @@ def test_every_published_entry_is_on_exactly_one_pin(db_session):
 
 # --- the public rules: a flagged location, and plain type names ---
 
-PERSON = "F and 3 Yo Child, Mount Support Rd"
+PERSON = "F and 2 Yo Child, Example St"
 STREET_POINT = ("43.6741", "-72.2657")
 
 
-def add_bare_street(session, calls: int = 3, raw: str = "MT SUPPORT RD") -> None:
+def add_bare_street(session, calls: int = 3, raw: str = "EX ST") -> None:
     add_place(
         session,
-        "Mount Support Rd",
+        "Example St",
         STREET_POINT,
         raw,
         kind="place",
         precision="exact",
-        street="MOUNT SUPPORT RD",
+        street="EXAMPLE ST",
     )
     add_entries(session, raw, *["Welfare Check"] * calls)
 
 
-def add_flagged(session, raw: str = "F AND 3 YO CHILD", calls: int = 2) -> None:
+def add_flagged(session, raw: str = "F AND 2 YO CHILD", calls: int = 2) -> None:
     add_place(
         session,
         PERSON,
@@ -844,7 +844,7 @@ def add_flagged(session, raw: str = "F AND 3 YO CHILD", calls: int = 2) -> None:
         raw,
         kind="place",
         precision="exact",
-        street="MOUNT SUPPORT RD",
+        street="EXAMPLE ST",
     )
     session.execute(
         text(
@@ -864,7 +864,7 @@ def test_a_flagged_locations_calls_count_on_its_streets_pin(db_session):
     add_bare_street(db_session, calls=3)
     add_flagged(db_session, calls=2)
 
-    found = pin(db_session, "Mount Support Rd")
+    found = pin(db_session, "Example St")
 
     assert found["count"] == 5
     assert len(rows(db_session)) == 1
@@ -877,8 +877,8 @@ def test_a_flagged_location_has_no_pin_and_no_name_of_its_own(db_session):
     published = everything_published(db_session)
 
     assert "Child" not in published and "CHILD" not in published
-    assert "F and 3 Yo" not in published
-    assert [p["normalized_address"] for p in rows(db_session)] == ["Mount Support Rd"]
+    assert "F and 2 Yo" not in published
+    assert [p["normalized_address"] for p in rows(db_session)] == ["Example St"]
 
 
 def test_a_flagged_locations_calls_are_in_its_streets_card_and_activity(db_session):
@@ -914,19 +914,19 @@ def test_a_flagged_location_with_no_street_is_off_the_map(db_session):
     )
     add_entries(db_session, "NO STREET", "Alarm")
 
-    assert pin(db_session, "Mount Support Rd")["count"] == 3
+    assert pin(db_session, "Example St")["count"] == 3
 
 
 def test_a_human_row_publishes_only_its_street(db_session):
     add_bare_street(db_session)
     add_place(
         db_session,
-        "Hand Placed Shop, Mount Support Rd",
+        "Hand Placed Shop, Example St",
         ("43.6745", "-72.2640"),
         "HAND",
         kind="place",
         precision="exact",
-        street="MOUNT SUPPORT RD",
+        street="EXAMPLE ST",
     )
     db_session.execute(
         text(
@@ -935,37 +935,37 @@ def test_a_human_row_publishes_only_its_street(db_session):
     )
     add_entries(db_session, "HAND", "Alarm")
 
-    assert [p["normalized_address"] for p in rows(db_session)] == ["Mount Support Rd"]
+    assert [p["normalized_address"] for p in rows(db_session)] == ["Example St"]
     assert "Hand Placed" not in everything_published(db_session)
 
 
 def test_a_flagged_location_hangs_on_the_busiest_bare_street_pin(db_session):
-    add_bare_street(db_session, calls=2, raw="MT SUPPORT RD")
+    add_bare_street(db_session, calls=2, raw="EX ST")
     add_place(
         db_session,
-        "Mount Support Road",
+        "Example Road",
         ("43.6750", "-72.2660"),
         "MT SUPPORT ROAD",
         kind="place",
         precision="exact",
-        street="MOUNT SUPPORT RD",
+        street="EXAMPLE ST",
     )
     add_entries(db_session, "MT SUPPORT ROAD", *["Welfare Check"] * 4)
     add_flagged(db_session, calls=1)
 
-    assert pin(db_session, "Mount Support Road")["count"] == 5
-    assert pin(db_session, "Mount Support Rd")["count"] == 2
+    assert pin(db_session, "Example Road")["count"] == 5
+    assert pin(db_session, "Example St")["count"] == 2
 
 
 def test_an_intersection_is_never_the_pin_a_flagged_location_hangs_on(db_session):
     add_place(
         db_session,
-        "Mount Support Rd and Dartmouth Ave",
+        "Example St and Sample Ave",
         ("43.6742", "-72.2650"),
         "CROSS",
         kind="intersection",
         precision="exact",
-        street="MOUNT SUPPORT RD",
+        street="EXAMPLE ST",
     )
     add_entries(db_session, "CROSS", *["Alarm"] * 9)
     add_flagged(db_session)
@@ -977,9 +977,9 @@ def test_a_type_with_no_plain_name_is_other_and_keeps_its_category(db_session):
     add_bare_street(db_session, calls=0)
     add_entries(
         db_session,
-        "MT SUPPORT RD",
-        "DEP INFO - M-ARTHUR",
-        "Motor Vehicle Stop - M-ARTHUR",
+        "EX ST",
+        "DEP INFO - DOE",
+        "Motor Vehicle Stop - DOE",
         plain=False,
     )
 
@@ -990,21 +990,21 @@ def test_a_type_with_no_plain_name_is_other_and_keeps_its_category(db_session):
     assert result["categories"]["traffic"] == 1
     assert result["categories"]["premises"] == 1
     assert result["types"] == []
-    assert "ARTHUR" not in json.dumps(json.loads(found["entries"]))
+    assert "DOE" not in json.dumps(json.loads(found["entries"]))
     assert [e[2] for e in json.loads(found["entries"])] == ["Other", "Other"]
 
 
 def test_the_cards_calls_carry_the_logs_own_type_for_the_details(db_session):
     add_bare_street(db_session, calls=0)
-    add_type_name(db_session, "73 YOM CPR", "Cardiac arrest")
-    add_entries(db_session, "MT SUPPORT RD", "73 YOM CPR", plain=False)
+    add_type_name(db_session, "80 YOM CPR", "Cardiac arrest")
+    add_entries(db_session, "EX ST", "80 YOM CPR", plain=False)
 
     [found] = rows(db_session)
     [call] = json.loads(found["card"])["calls"]
 
     assert (call["incident_type"], call["raw_incident_type"]) == (
         "Cardiac arrest",
-        "73 YOM CPR",
+        "80 YOM CPR",
     )
     assert json.loads(found["card"])["types"] == [["Cardiac arrest", 1]]
 

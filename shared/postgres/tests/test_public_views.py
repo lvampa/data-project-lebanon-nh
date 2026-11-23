@@ -192,19 +192,19 @@ def test_the_view_has_one_row_per_normalization(db_session):
 
 def test_a_type_with_a_plain_name_reads_it_and_keeps_its_category(db_session):
     add_location(db_session, "SHOP")
-    add_type(db_session, "73 YOM CPR", "Cardiac arrest")
-    add_entry(db_session, 1, incident_type="73 YOM CPR")
+    add_type(db_session, "80 YOM CPR", "Cardiac arrest")
+    add_entry(db_session, 1, incident_type="80 YOM CPR")
 
     row = entry(db_session, 1)
 
     assert row["incident_type"] == "Cardiac arrest"
-    assert row["raw_incident_type"] == "73 YOM CPR"
+    assert row["raw_incident_type"] == "80 YOM CPR"
     assert row["category"] == "premises"
 
 
 def test_a_type_with_no_plain_name_reads_other_and_keeps_its_category(db_session):
-    add_type(db_session, "MV STOP - M-ARTHUR", None)
-    add_entry(db_session, 1, incident_type="Motor Vehicle Stop - M-ARTHUR")
+    add_type(db_session, "MV STOP - DOE", None)
+    add_entry(db_session, 1, incident_type="Motor Vehicle Stop - DOE")
     add_entry(
         db_session, 2, incident_type="Some Unnamed Alarm", call_source="Alarm System"
     )
@@ -213,7 +213,7 @@ def test_a_type_with_no_plain_name_reads_other_and_keeps_its_category(db_session
 
     assert (traffic["incident_type"], traffic["category"]) == ("Other", "traffic")
     assert (alarm["incident_type"], alarm["category"]) == ("Other", "alarms")
-    assert traffic["raw_incident_type"] == "Motor Vehicle Stop - M-ARTHUR"
+    assert traffic["raw_incident_type"] == "Motor Vehicle Stop - DOE"
 
 
 def test_an_entry_with_no_type_at_all_reads_other(db_session):

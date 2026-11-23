@@ -12,7 +12,7 @@ Counts, charts and type lists show the AI's plain name for a type, or "Other" wh
 The log's own type text still shows in a place card's details, since the city's report carries it anyway.
 The tables, the admin app and the future API keep the full text.
 
-On dev, the AI has a plain name for 351 of 877 raw types ("73 YOM CPR" is "Cardiac arrest"), and about 13,500 entries have a type it has not named yet, so the type normalize run must finish before this ships.
+On dev, the AI has a plain name for 351 of 877 raw types (an age-and-symptom note becomes "Cardiac arrest"), and about 13,500 entries have a type it has not named yet, so the type normalize run must finish before this ships.
 
 ## Data flow
 

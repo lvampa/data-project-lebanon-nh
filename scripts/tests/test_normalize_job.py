@@ -923,12 +923,12 @@ def test_a_stored_answer_resets_the_failed_attempts(db_session, call_log):
 
 def test_the_flag_the_ai_gives_is_stored_with_the_location(db_session, call_log):
     add_parcels(db_session, "7 Main St")
-    add_locations(db_session, "F AND 3 YO CHILD - MOUNT SUPPORT RD")
+    add_locations(db_session, "F AND 2 YO CHILD - EXAMPLE ST")
     backend = FakeBackend(
         replies=[
             location_answer(
-                "F AND 3 YO CHILD - MOUNT SUPPORT RD",
-                normalized_address="F and 3 Yo Child, Mount Support Rd",
+                "F AND 2 YO CHILD - EXAMPLE ST",
+                normalized_address="F and 2 Yo Child, Example St",
                 names_person=True,
             )
         ]
@@ -936,7 +936,7 @@ def test_the_flag_the_ai_gives_is_stored_with_the_location(db_session, call_log)
 
     run(backend, call_log, fields=("location",))
 
-    assert the_address(db_session, "F AND 3 YO CHILD - MOUNT SUPPORT RD").names_person
+    assert the_address(db_session, "F AND 2 YO CHILD - EXAMPLE ST").names_person
 
 
 def test_a_location_the_ai_clears_is_stored_unflagged(db_session, call_log):

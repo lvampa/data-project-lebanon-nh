@@ -151,7 +151,7 @@ def test_an_abbreviation_matches_only_as_a_whole_word(name, expected):
 
 
 def test_the_location_prompt_asks_for_the_names_person_flag():
-    prompt = location_prompt(["F AND 3 YO CHILD - MOUNT SUPPORT RD"], streets=STREETS)
+    prompt = location_prompt(["F AND 2 YO CHILD - EXAMPLE ST"], streets=STREETS)
 
     assert "names_person" in prompt
     assert "describes one" in prompt

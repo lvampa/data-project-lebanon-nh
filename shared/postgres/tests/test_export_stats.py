@@ -116,7 +116,7 @@ def test_incidents_leave_out_before_the_day_and_put_unreported_ones_last(
 
 
 def test_a_type_with_no_plain_name_is_counted_as_other(db_session):
-    add_entry(db_session, 1, date(2026, 6, 1), "DEP INFO - M-ARTHUR", None, plain=False)
+    add_entry(db_session, 1, date(2026, 6, 1), "DEP INFO - DOE", None, plain=False)
     add_entry(db_session, 2, date(2026, 6, 1), "Alarm", None)
     db_session.flush()
 

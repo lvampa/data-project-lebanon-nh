@@ -1202,7 +1202,7 @@ def missed(**columns) -> dict:
     return {"needs_review": True, "geocode_attempts": 3, **columns}
 
 
-def test_the_missed_retry_places_a_bare_highway_that_had_no_road_and_clears_the_mark(
+def test_the_missed_retry_places_a_bare_highway_that_had_no_road_and_resets_attempts(
     db_session,
 ):
     highway_row(db_session, "ROUTE 120", "Route 120", **missed())
@@ -1214,7 +1214,9 @@ def test_the_missed_retry_places_a_bare_highway_that_had_no_road_and_clears_the_
         ROUTE_120_POINT,
         "approximate",
     )
-    assert (row.geocoded_via, row.needs_review) == ("osm", False)
+    assert (row.geocoded_via, row.geocode_attempts) == ("osm", 0)
+    # The review mark stays, since normalize sets it for text a person should check too.
+    assert row.needs_review is True
     assert (counts.placed, counts.requests, counts.groups_kept) == (1, 0, 0)
 
 
@@ -1233,7 +1235,7 @@ def test_the_missed_retry_places_an_address_after_three_misses(db_session):
     assert (row.osm_ref, row.coordinate_precision, row.needs_review) == (
         "way/10",
         "exact",
-        False,
+        True,
     )
 
 
@@ -1260,7 +1262,7 @@ def test_the_missed_retry_places_every_spelling_of_the_group(db_session):
     counts = geocode_job.run_retry(OsmLocator(SNAPSHOT), missed=True)
 
     assert counts.placed == 2
-    assert not the_row(db_session, "8 COMMERCE AV").needs_review
+    assert the_row(db_session, "8 COMMERCE AV").lat == 43.6501
 
 
 def test_a_human_row_blocks_a_missed_group(db_session):
@@ -1335,7 +1337,7 @@ def test_main_runs_the_missed_retry_and_says_so(db_session, snapshot_dir, capsys
 
     assert status == 0
     assert "Retry: 1 rows placed" in capsys.readouterr().out
-    assert the_row(db_session, "ROUTE 120").needs_review is False
+    assert the_row(db_session, "ROUTE 120").lat is not None
 
 
 def test_main_refuses_both_retries_at_once(snapshot_dir):
@@ -1442,3 +1444,35 @@ def test_main_prints_the_coverage_line_after_the_summary(
 
     out = capsys.readouterr().out
     assert "Entries on a pin: 100.0% of 4 (address 100.0%)" in out
+
+
+# --- the road pin and an intersection ---
+
+
+def test_an_intersection_with_no_shared_node_is_never_given_a_point_on_a_road(
+    db_session,
+):
+    add_row(
+        db_session,
+        "ROUTE 120 & NOWHERE ST",
+        kind="intersection",
+        normalized_address="Route 120 and Nowhere St",
+        street="ROUTE 120",
+    )
+    geocoder = NoNominatim(
+        {"ROUTE 120, Lebanon, NH": GeocodeResult(43.65, -72.25, "exact")}
+    )
+
+    geocode_job.run(geocoder, locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "ROUTE 120 & NOWHERE ST")
+    assert (row.lat, row.geocoded_via, row.osm_ref) == (None, None, None)
+
+
+def test_a_road_pin_is_stored_approximate_end_to_end(db_session):
+    highway_row(db_session, "ROUTE 120", "Route 120")
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+    db_session.expire_all()
+
+    assert the_row(db_session, "ROUTE 120").coordinate_precision == "approximate"

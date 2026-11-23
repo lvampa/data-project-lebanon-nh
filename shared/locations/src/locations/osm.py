@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from locations.canonical import canonical_address
+from locations.geocode import in_city_bounds
 
 # Nodes of two roads this close together are one crossing, such as a divided road's.
 INTERSECTION_SPREAD_M = 150
@@ -149,9 +150,22 @@ class Snapshot:
         found = {
             road.ref: road for road in self._roads_by_street.get(street_key(text), [])
         }
-        for route in route_refs(text, anywhere=anywhere):
-            for road in self._roads_by_route.get(route, []):
-                found.setdefault(road.ref, road)
+        for alternatives in _route_alternatives(text, anywhere=anywhere):
+            by_route = [
+                self._roads_by_route[route]
+                for route in sorted(alternatives)
+                if route in self._roads_by_route
+            ]
+            if (
+                len(by_route) > 1
+                and len({tuple(r.ref for r in roads) for roads in by_route}) > 1
+            ):
+                # A bare "ROUTE 4" that finds both a state and a federal road does not say
+                # which one, so it matches neither.
+                continue
+            for roads in by_route:
+                for road in roads:
+                    found.setdefault(road.ref, road)
         return list(found.values())
 
     def to_json(self) -> str:
@@ -172,7 +186,7 @@ class Snapshot:
             [
                 Road(
                     r["ref"],
-                    r["name"],
+                    r["name"] or "",
                     tuple(r["nodes"]),
                     tuple((p[0], p[1]) for p in r["points"]),
                     r.get("route_ref", ""),
@@ -260,25 +274,35 @@ def route_refs(text: str, *, anywhere: bool = False) -> set[str]:
     "I-89" is "I 89", "US 4" is "US 4". A bare "ROUTE", "RT" or "HWY" can be a state or a
     federal route, never an interstate. With `anywhere`, the route number may sit inside
     other words, as in "ROCK CUT - ROUTE 120". Otherwise the text must be only the route.
+    The number is a whole token with its letter, so "4" never matches "4A".
     """
+    return {
+        ref
+        for alternatives in _route_alternatives(text, anywhere=anywhere)
+        for ref in alternatives
+    }
+
+
+def _route_alternatives(text: str, *, anywhere: bool) -> list[tuple[str, ...]]:
+    """One tuple per route in the text. A bare route has two refs to choose between."""
     cleaned = " ".join(text.upper().replace(".", "").replace("-", " ").split())
     matches = (
         list(_ROUTE.finditer(cleaned))
         if anywhere
         else [m for m in [_ROUTE.fullmatch(cleaned)] if m is not None]
     )
-    refs: set[str] = set()
+    alternatives: list[tuple[str, ...]] = []
     for match in matches:
         prefix, number = match["prefix"], match["number"]
         if prefix in ("I", "INTERSTATE"):
-            refs.add(f"I {number}")
+            alternatives.append((f"I {number}",))
         elif prefix.startswith(("US", "U S")):
-            refs.add(f"US {number}")
+            alternatives.append((f"US {number}",))
         elif prefix.startswith(("NH", "NEW HAMPSHIRE", "STATE")):
-            refs.add(f"NH {number}")
+            alternatives.append((f"NH {number}",))
         else:
-            refs.update({f"NH {number}", f"US {number}"})
-    return refs
+            alternatives.append((f"NH {number}", f"US {number}"))
+    return alternatives
 
 
 def _routes_of(road: Road) -> set[str]:
@@ -298,22 +322,41 @@ def locate_road(snapshot: Snapshot, text: str) -> Match | None:
     """A point on the road a highway row names, or None.
 
     A road is often many ways, and a point on it is only somewhere along it, so the match is
-    approximate: the middle vertex of the longest way, which does not move between runs.
+    approximate. It is the point halfway along the longest way, measured in meters along the
+    part of the way inside the city, which does not move between runs. A way is fetched
+    whole, so one that runs out of town, as I-89 does, is cut at the city's edge first.
     """
-    roads = snapshot.roads_in(text)
-    if not roads:
+    parts = [
+        (road, inside)
+        for road in snapshot.roads_in(text)
+        if (inside := [p for p in road.points if in_city_bounds(*p)])
+    ]
+    if not parts:
         return None
-    longest = max(roads, key=lambda road: (_road_length(road), road.ref))
-    lat, lng = longest.points[len(longest.points) // 2]
-    name = longest.name or longest.route_ref
-    return Match(lat, lng, longest.ref, "road", name, "", precision="approximate")
+    road, inside = max(parts, key=lambda part: (_length(part[1]), part[0].ref))
+    lat, lng = _halfway(inside)
+    if not in_city_bounds(lat, lng):
+        return None
+    name = road.name or road.route_ref
+    return Match(lat, lng, road.ref, "road", name, "", precision="approximate")
 
 
-def _road_length(road: Road) -> float:
+def _length(points: list[tuple[float, float]]) -> float:
     return sum(
         meters_between(a[0], a[1], b[0], b[1])
-        for a, b in zip(road.points, road.points[1:], strict=False)
+        for a, b in zip(points, points[1:], strict=False)
     )
+
+
+def _halfway(points: list[tuple[float, float]]) -> tuple[float, float]:
+    """The vertex nearest the halfway point along the line, in meters, not in vertices."""
+    half = _length(points) / 2
+    best, best_gap, walked = points[0], abs(half), 0.0
+    for a, b in zip(points, points[1:], strict=False):
+        walked += meters_between(a[0], a[1], b[0], b[1])
+        if abs(walked - half) < best_gap:
+            best, best_gap = b, abs(walked - half)
+    return best
 
 
 def locate_address(snapshot: Snapshot, housenumber: str, street: str) -> Match | None:

@@ -22,8 +22,8 @@ street point, a group of rows at a time. A miss changes nothing, and a group wit
 `human` row in it is left alone.
 
 `--retry-missed` does the same for rows with no point that the job marked for review:
-three misses, or a bare highway that had no road. A hit places the row and clears the
-mark. A miss changes nothing.
+three misses, or a bare highway that had no road. A hit places the row and resets its
+attempts, and leaves the review mark, which normalize sets too. A miss changes nothing.
 
 A bare highway, one that names no exit and no cross street, gets an approximate point on
 the road the snapshot matches by name or by route number, and is marked for review only
@@ -415,7 +415,7 @@ def run_retry(locator: OsmLocator, *, missed: bool = False) -> GeocodeCounts:
     By default these are the rows that sit on a street point. With `missed` they are the
     rows with no point at all that the job gave up on and marked for review. A group is the
     rows that share a normalized address and kind, joined by any place code they share. One
-    lookup places the whole group, and a missed group has its review mark cleared. A group
+    lookup places the whole group, and a missed group gets its attempts reset. A group
     with a `human` row in it is left alone, and so is a group the snapshot cannot place.
     """
     counts = GeocodeCounts()
@@ -438,7 +438,9 @@ def run_retry(locator: OsmLocator, *, missed: bool = False) -> GeocodeCounts:
             for row in rows:
                 _apply(row, _from_match(match), counts)
                 if missed:
-                    row.needs_review = False
+                    # The review mark is left alone: normalize sets it too, for an unsure
+                    # answer or a street off the list, and a placed row can still need it.
+                    row.geocode_attempts = 0
                 counts.placed += 1
             session.commit()
     logfire.info(

@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from locations.geocode import in_city_bounds
 from locations.osm import (
     Snapshot,
     locate_address,
@@ -582,3 +583,105 @@ def test_a_way_with_neither_a_name_nor_a_ref_is_dropped():
     )
 
     assert snapshot.roads == []
+
+
+# --- a road pin stays in town, and a bare route must be unambiguous ---
+
+
+def test_a_road_that_runs_out_of_town_gets_a_point_inside_the_city():
+    # The way starts in town and runs 10 km north past the city's edge.
+    way_out = route_way(
+        1,
+        None,
+        "I 89",
+        (1, 43.60, -72.25),
+        (2, 43.65, -72.25),
+        (3, 43.69, -72.25),
+        (4, 43.80, -72.25),
+        (5, 43.90, -72.25),
+    )
+
+    match = locate_road(route_snapshot([way_out]), "I-89")
+
+    assert match is not None
+    assert in_city_bounds(match.lat, match.lng)
+    assert match.lat <= 43.69
+
+
+def test_a_road_wholly_out_of_town_has_no_point():
+    way_out = route_way(1, None, "I 89", (1, 43.80, -72.25), (2, 43.90, -72.25))
+
+    assert locate_road(route_snapshot([way_out]), "I-89") is None
+
+
+def test_the_point_is_halfway_in_meters_not_in_vertices():
+    # One long segment, then three vertices crowded at the north end. The middle vertex by
+    # count is the second of the crowd, and the halfway point by distance is where the long
+    # segment ends.
+    ways = [
+        route_way(
+            1,
+            "Crowded Road",
+            None,
+            (1, 43.600, -72.25),
+            (2, 43.680, -72.25),
+            (3, 43.681, -72.25),
+            (4, 43.682, -72.25),
+            (5, 43.683, -72.25),
+        )
+    ]
+
+    match = locate_road(route_snapshot(ways), "Crowded Road")
+
+    assert match is not None
+    assert match.lat == 43.680
+
+
+def test_a_bare_route_that_finds_both_a_state_and_a_federal_road_is_a_miss():
+    ways = [
+        route_way(1, "Maple Rd", "NH 9", (1, 43.60, -72.30), (2, 43.62, -72.30)),
+        route_way(2, "Oak Rd", "US 9", (3, 43.64, -72.20), (4, 43.66, -72.20)),
+    ]
+    snapshot = route_snapshot(ways)
+
+    assert snapshot.roads_named("ROUTE 9") == []
+    assert locate_road(snapshot, "ROUTE 9") is None
+    # A route that says which it is still matches.
+    assert [r.ref for r in snapshot.roads_named("NH 9")] == ["way/1"]
+    assert [r.ref for r in snapshot.roads_named("US 9")] == ["way/2"]
+
+
+def test_a_bare_route_whose_two_refs_are_one_road_is_not_ambiguous():
+    ways = [
+        route_way(1, "Maple Rd", "NH 9;US 9", (1, 43.60, -72.30), (2, 43.62, -72.30))
+    ]
+
+    assert [r.ref for r in route_snapshot(ways).roads_named("ROUTE 9")] == ["way/1"]
+
+
+def test_a_route_number_is_matched_with_its_letter():
+    ways = [route_way(1, "Maple Rd", "NH 4A", (1, 43.60, -72.30), (2, 43.62, -72.30))]
+    snapshot = route_snapshot(ways)
+
+    assert snapshot.roads_named("ROUTE 4") == []
+    assert [r.ref for r in snapshot.roads_named("ROUTE 4A")] == ["way/1"]
+
+
+def test_a_snapshot_saved_with_a_null_name_loads():
+    old = {
+        "fetched_at": "2026-11-20",
+        "features": [],
+        "roads": [
+            {
+                "ref": "way/1",
+                "name": None,
+                "nodes": [1, 2],
+                "points": [[43.64, -72.25], [43.65, -72.25]],
+            }
+        ],
+    }
+
+    loaded = Snapshot.from_json(json.dumps(old))
+
+    assert loaded.roads[0].name == ""
+    assert loaded.roads_named("HANOVER ST") == []

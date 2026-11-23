@@ -47,6 +47,26 @@ fn names(code: &str, word: &str) -> bool {
     })
 }
 
+/// The Rust sources other than this one, whose strings may hold an inline query.
+fn rust_sources() -> Vec<(String, String)> {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files: Vec<(String, String)> = fs::read_dir(&dir)
+        .expect("src is readable")
+        .map(|entry| entry.expect("a directory entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name != "public_rules.rs")
+        })
+        .map(|path| {
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            (name, fs::read_to_string(&path).expect("a readable source"))
+        })
+        .collect();
+    files.sort();
+    files
+}
+
 #[test]
 fn there_are_queries_to_check() {
     assert!(sql_files().len() >= 6);
@@ -60,6 +80,36 @@ fn no_query_reads_a_table_directly() {
             assert!(
                 !names(&code, table),
                 "{name} reads {table}. Read the public view instead."
+            );
+        }
+    }
+}
+
+/// A query written inside a Rust file would skip the check above. This is a crude search of
+/// the whole file, comments included, so the sources never name the two tables at all.
+#[test]
+fn no_rust_source_names_a_table_for_an_inline_query() {
+    for (name, source) in rust_sources() {
+        for table in TABLES {
+            assert!(
+                !names(&source, table),
+                "{name} names {table}. Put the query in src/sql and read the public view."
+            );
+        }
+    }
+}
+
+/// `raw_location` is the log's own location text, kept in the view for the join only. A
+/// query may use it in an `ON` clause and nowhere else, so it cannot be published by name.
+#[test]
+fn no_query_selects_the_raw_location() {
+    for (name, sql) in sql_files() {
+        for line in code_of(&sql).lines().filter(|l| names(l, "raw_location")) {
+            let joins_on_it = line.trim_start().to_uppercase().starts_with("ON ");
+            assert!(
+                joins_on_it,
+                "{name} uses raw_location outside an ON clause: {}",
+                line.trim()
             );
         }
     }

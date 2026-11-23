@@ -1192,3 +1192,162 @@ def test_a_crossing_on_route_120_is_placed_from_the_snapshot(db_session):
     row = the_row(db_session, "ROUTE 120 & HANOVER ST")
     assert ((row.lat, row.lng), row.coordinate_precision) == (ROUTE_120_POINT, "exact")
     assert row.osm_ref == "node/2"
+
+
+# --- --retry-missed ---
+
+
+def missed(**columns) -> dict:
+    return {"needs_review": True, "geocode_attempts": 3, **columns}
+
+
+def test_the_missed_retry_places_a_bare_highway_that_had_no_road_and_clears_the_mark(
+    db_session,
+):
+    highway_row(db_session, "ROUTE 120", "Route 120", **missed())
+
+    counts = geocode_job.run_retry(OsmLocator(ROUTE_SNAPSHOT), missed=True)
+
+    row = the_row(db_session, "ROUTE 120")
+    assert ((row.lat, row.lng), row.coordinate_precision) == (
+        ROUTE_120_POINT,
+        "approximate",
+    )
+    assert (row.geocoded_via, row.needs_review) == ("osm", False)
+    assert (counts.placed, counts.requests, counts.groups_kept) == (1, 0, 0)
+
+
+def test_the_missed_retry_places_an_address_after_three_misses(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        **missed(),
+    )
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT), missed=True)
+
+    row = the_row(db_session, "8 COMMERCE AVE")
+    assert (row.osm_ref, row.coordinate_precision, row.needs_review) == (
+        "way/10",
+        "exact",
+        False,
+    )
+
+
+def test_a_miss_in_the_missed_retry_changes_nothing(db_session):
+    highway_row(db_session, "ROUTE 9", "Route 9", **missed())
+
+    counts = geocode_job.run_retry(OsmLocator(ROUTE_SNAPSHOT), missed=True)
+
+    row = the_row(db_session, "ROUTE 9")
+    assert (row.lat, row.needs_review, row.geocode_attempts) == (None, True, 3)
+    assert counts.groups_kept == 1
+
+
+def test_the_missed_retry_places_every_spelling_of_the_group(db_session):
+    for raw in ("8 COMMERCE AVE", "8 COMMERCE AV"):
+        add_row(
+            db_session,
+            raw,
+            normalized_address="8 Commerce Ave",
+            street="COMMERCE AVE",
+            **missed(),
+        )
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT), missed=True)
+
+    assert counts.placed == 2
+    assert not the_row(db_session, "8 COMMERCE AV").needs_review
+
+
+def test_a_human_row_blocks_a_missed_group(db_session):
+    add_row(
+        db_session,
+        "8 COMMERCE AVE",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        **missed(),
+    )
+    add_row(
+        db_session,
+        "8 COMMERCE AV",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        source="human",
+    )
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT), missed=True)
+
+    assert the_row(db_session, "8 COMMERCE AVE").lat is None
+    assert counts.groups_kept == 1
+
+
+def test_the_missed_retry_leaves_out_rows_that_are_placed_or_not_in_review(db_session):
+    add_row(
+        db_session,
+        "PLACED",
+        normalized_address="8 Commerce Ave",
+        street="COMMERCE AVE",
+        lat=43.6,
+        lng=-72.2,
+        coordinate_precision="exact",
+        needs_review=True,
+    )
+    add_row(
+        db_session,
+        "WAITING",
+        normalized_address="9 Commerce Ave",
+        street="COMMERCE AVE",
+    )
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT), missed=True)
+
+    assert counts.groups_retried == 0
+
+
+def test_the_missed_retry_does_not_pin_a_highway_with_an_exit(db_session):
+    highway_row(
+        db_session, "I-89 NB EXIT 18", "I-89 northbound near exit 18", **missed()
+    )
+
+    counts = geocode_job.run_retry(OsmLocator(ROUTE_SNAPSHOT), missed=True)
+
+    assert the_row(db_session, "I-89 NB EXIT 18").lat is None
+    assert counts.groups_kept == 1
+
+
+def test_the_approximate_retry_still_leaves_highways_alone(db_session):
+    highway_row(db_session, "ROUTE 120", "Route 120", **approximate())
+
+    assert geocode_job.run_retry(OsmLocator(ROUTE_SNAPSHOT)).groups_retried == 0
+
+
+def test_main_runs_the_missed_retry_and_says_so(db_session, snapshot_dir, capsys):
+    snapshot_dir.joinpath("snapshot-2026-11-23.json").write_text(
+        ROUTE_SNAPSHOT.to_json()
+    )
+    highway_row(db_session, "ROUTE 120", "Route 120", **missed())
+
+    status = geocode_job.main(["--retry-missed", "--no-llm"])
+
+    assert status == 0
+    assert "Retry: 1 rows placed" in capsys.readouterr().out
+    assert the_row(db_session, "ROUTE 120").needs_review is False
+
+
+def test_main_refuses_both_retries_at_once(snapshot_dir):
+    with pytest.raises(SystemExit) as stopped:
+        geocode_job.main(["--retry-missed", "--retry-approximate"])
+
+    assert stopped.value.code == 2
+
+
+def test_main_missed_retry_without_a_snapshot_fails_and_says_why(
+    db_session, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.setattr(geocode_job, "DEFAULT_SNAPSHOT_DIR", tmp_path / "none")
+
+    assert geocode_job.main(["--retry-missed"]) == 1
+    assert "--retry-missed needs a snapshot" in capsys.readouterr().err

@@ -1002,3 +1002,159 @@ def test_a_redo_leaves_a_human_row_and_its_flag_alone(db_session, call_log):
         "Hand Placed, Main St",
         False,
     )
+
+
+# --- crossings in one order and one spelling ---
+
+
+def test_an_intersection_is_stored_with_its_streets_in_order(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "POVERTY LN + MECHANIC ST")
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "POVERTY LN + MECHANIC ST",
+                kind="intersection",
+                normalized_address="Poverty Ln and Mechanic St",
+                geocode_query="Poverty Ln and Mechanic St, Lebanon, NH",
+                street="",
+            )
+        ]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    row = the_address(db_session, "POVERTY LN + MECHANIC ST")
+    assert row.normalized_address == "Mechanic St and Poverty Ln"
+    assert row.geocode_query == "Mechanic St and Poverty Ln, Lebanon, NH"
+
+
+def test_a_new_spelling_of_a_stored_crossing_takes_its_text(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_address_row(
+        db_session,
+        "MECHANIC ST + POVERTY LN",
+        kind="intersection",
+        normalized_address="Mechanic St and Poverty LN",
+        source="ai",
+    )
+    add_locations(db_session, "POVERTY LN + MECHANIC ST")
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "POVERTY LN + MECHANIC ST",
+                kind="intersection",
+                normalized_address="Poverty Ln and Mechanic St",
+                street="",
+            )
+        ]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    # The case of the crossing's existing text, so two spellings never make two pins.
+    row = the_address(db_session, "POVERTY LN + MECHANIC ST")
+    assert row.normalized_address == "Mechanic St and Poverty LN"
+
+
+def test_two_spellings_answered_in_one_run_agree(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "A + B", "B + A")
+    backend = FakeBackend(
+        replies=[
+            {
+                "items": [
+                    location_item(
+                        "A + B",
+                        kind="intersection",
+                        normalized_address="Lahaye St and Main St",
+                        street="",
+                    ),
+                    location_item(
+                        "B + A",
+                        kind="intersection",
+                        normalized_address="Main St and LaHaye St",
+                        street="",
+                    ),
+                ]
+            }
+        ]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    assert (
+        the_address(db_session, "A + B").normalized_address
+        == the_address(db_session, "B + A").normalized_address
+    )
+
+
+def test_a_human_rows_spelling_is_the_one_a_new_spelling_takes(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_address_row(
+        db_session,
+        "HAND",
+        kind="intersection",
+        normalized_address="Main St and LaHaye St",
+        source="human",
+    )
+    add_address_row(
+        db_session,
+        "EARLIER",
+        kind="intersection",
+        normalized_address="Main St and Lahaye St",
+        source="ai",
+    )
+    add_locations(db_session, "NEW")
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "NEW",
+                kind="intersection",
+                normalized_address="Lahaye St and Main St",
+                street="",
+            )
+        ]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    assert the_address(db_session, "NEW").normalized_address == "Main St and LaHaye St"
+
+
+def test_a_place_with_and_in_its_name_is_left_alone(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "WRIGHT AND SONS - MAIN ST")
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "WRIGHT AND SONS - MAIN ST",
+                kind="place",
+                normalized_address="Wright and Sons, Main St",
+                geocode_query="Wright and Sons, Main St, Lebanon, NH",
+            )
+        ]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    row = the_address(db_session, "WRIGHT AND SONS - MAIN ST")
+    assert row.normalized_address == "Wright and Sons, Main St"
+    assert row.geocode_query == "Wright and Sons, Main St, Lebanon, NH"
+
+
+def test_a_crossing_settled_by_a_rule_reuses_the_stored_spelling(db_session, call_log):
+    add_parcels(db_session, "7 Main St", "9 Elm St")
+    add_address_row(
+        db_session,
+        "OLD",
+        kind="intersection",
+        normalized_address="Elm St and MAIN St",
+        source="ai",
+    )
+    add_locations(db_session, "MAIN ST & ELM ST")
+
+    run(FakeBackend(replies=[]), call_log, fields=("location",))
+
+    row = the_address(db_session, "MAIN ST & ELM ST")
+    assert (row.source, row.normalized_address) == ("rule", "Elm St and MAIN St")

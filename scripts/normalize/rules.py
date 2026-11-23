@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from locations.canonical import (
     RULES_VERSION,
+    canonical_crossing,
     split_house_number,
     strip_unit,
 )
@@ -136,7 +137,7 @@ def _intersection_of_listed_streets(
     parts = item.canonical.split(_INTERSECTION_JOINER)
     if len(parts) != 2 or not all(part in streets for part in parts):
         return None
-    shown = display_form(" and ".join(parts))
+    shown = canonical_crossing(display_form(" and ".join(parts)))
     return _rule(item, "intersection", shown, street=parts[0])
 
 

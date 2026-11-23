@@ -13,7 +13,8 @@ import re
 from importlib import resources
 
 # 2: rule rows now read in title case and carry their street.
-RULES_VERSION = "2"
+# 3: a rule row for a crossing puts its two streets in alphabetical order.
+RULES_VERSION = "3"
 
 _SEGMENT_JOINERS = re.compile(r"( & | - )")
 # A slash joins two streets only between words, not in "N/B" or "S/B".
@@ -131,3 +132,36 @@ def _with_standard_suffixes(words: list[str]) -> list[str]:
     ):
         words[end - 1] = _SUFFIXES.get(words[end - 1], words[end - 1])
     return words
+
+
+_CROSSING_JOINER = re.compile(r"\s+and\s+", re.IGNORECASE)
+
+
+def canonical_crossing(normalized: str) -> str:
+    """A crossing with its two streets in alphabetical order, as "A St and B St".
+
+    "Poverty Ln and Mechanic St" and "Mechanic St and Poverty Ln" are one crossing, and
+    sorting the legs makes them one text. The order ignores case, and each leg keeps its
+    own spelling. Text that is not exactly two legs joined by "and" comes back unchanged,
+    so a name with an "and" inside it is never taken apart. A caller applies this to
+    intersections only: "Wright and Sons, Main St" is a place.
+    """
+    legs = [leg.strip() for leg in _CROSSING_JOINER.split(normalized.strip())]
+    # A comma means a place and its street, "Wright and Sons, Main St", not two streets.
+    if len(legs) != 2 or not all(legs) or "," in normalized:
+        return normalized
+    first, second = sorted(legs, key=lambda leg: (leg.casefold(), leg))
+    return f"{first} and {second}"
+
+
+def crossing_key(normalized: str) -> str | None:
+    """What two spellings of one crossing share: its legs in order, ignoring case. None
+    for text that is not exactly two legs joined by "and".
+
+    The whole text is casefolded, so two different streets that differ only in case would
+    be taken for one. No two streets in Lebanon do.
+    """
+    legs = [leg for leg in _CROSSING_JOINER.split(normalized.strip()) if leg.strip()]
+    if len(legs) != 2 or "," in normalized:
+        return None
+    return canonical_crossing(normalized).casefold()

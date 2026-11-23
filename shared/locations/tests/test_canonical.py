@@ -5,6 +5,8 @@ import pytest
 from locations.canonical import (
     RULES_VERSION,
     canonical_address,
+    canonical_crossing,
+    crossing_key,
     split_house_number,
     strip_unit,
 )
@@ -140,7 +142,7 @@ def test_a_street_named_like_a_unit_word_is_not_stripped():
 # The hash of street_suffixes.csv when RULES_VERSION was last set. Changing the file
 # changes parsed values, so it comes with a RULES_VERSION bump (rule rows record it).
 SUFFIX_FILE_SHA256 = "543097cf3545ba8d71b438aeec217a68c9bdbdfb17900ae1f43e0d3a0d6a0bd2"
-SUFFIX_FILE_VERSION = "2"
+SUFFIX_FILE_VERSION = "3"
 
 
 def test_the_rules_version_is_bumped_when_the_suffix_file_changes():
@@ -154,3 +156,61 @@ def test_the_rules_version_is_bumped_when_the_suffix_file_changes():
             f"({digest})."
         )
     assert RULES_VERSION == SUFFIX_FILE_VERSION
+
+
+# --- crossings ---
+
+
+@pytest.mark.parametrize(
+    ("text", "ordered"),
+    [
+        ("Mechanic St and Poverty Ln", "Mechanic St and Poverty Ln"),
+        ("Poverty Ln and Mechanic St", "Mechanic St and Poverty Ln"),
+        ("poverty Ln and Mechanic St", "Mechanic St and poverty Ln"),
+        ("Lahaye St and Main St", "Lahaye St and Main St"),
+        ("Main St AND Elm St", "Elm St and Main St"),
+        ("  Main St   and   Elm St ", "Elm St and Main St"),
+    ],
+)
+def test_a_crossing_has_its_two_streets_in_alphabetical_order(text, ordered):
+    assert canonical_crossing(text) == ordered
+
+
+def test_each_leg_keeps_its_own_spelling():
+    assert canonical_crossing("Poverty Ln and LaHaye St") == "LaHaye St and Poverty Ln"
+    assert canonical_crossing("Poverty Ln and Lahaye St") == "Lahaye St and Poverty Ln"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Main St",
+        "Wright and Sons, Main St",
+        "A St and B St and C St",
+        "A St and ",
+        "and B St",
+        "Handy Rd",
+        "Sandy Ln and",
+    ],
+)
+def test_text_that_is_not_two_legs_is_left_alone(text):
+    assert canonical_crossing(text) == text
+    assert crossing_key(text) is None or text.count(" and ") == 1
+
+
+def test_a_three_way_split_of_one_crossing_has_one_key():
+    spellings = [
+        "Mechanic St and Poverty Ln",
+        "Poverty Ln and Mechanic St",
+        "poverty ln and MECHANIC ST",
+    ]
+
+    assert len({crossing_key(text) for text in spellings}) == 1
+
+
+def test_the_key_ignores_case_and_order_but_not_the_streets():
+    assert crossing_key("LaHaye St and Main St") == crossing_key(
+        "Main St and Lahaye St"
+    )
+    assert crossing_key("Main St and Elm St") != crossing_key("Main St and Oak St")
+    assert crossing_key("Main St") is None

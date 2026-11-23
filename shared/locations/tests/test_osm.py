@@ -1,9 +1,13 @@
+import json
+
 import pytest
 from locations.osm import (
     Snapshot,
     locate_address,
     locate_intersection,
+    locate_road,
     place_candidates,
+    route_refs,
     snapshot_from_replies,
 )
 
@@ -342,3 +346,239 @@ def test_a_node_in_the_shape_overpass_returns_is_parsed():
         "leisure=park",
     )
     assert (feature.lat, feature.lng) == (43.665725, -72.2501)
+
+
+# --- roads named by route number ---
+
+
+def route_way(
+    way_id: int, name: str | None, ref: str | None, *nodes: tuple[int, float, float]
+) -> dict:
+    tags = {"highway": "primary"}
+    if name:
+        tags["name"] = name
+    if ref:
+        tags["ref"] = ref
+    return {
+        "type": "way",
+        "id": way_id,
+        "tags": tags,
+        "nodes": [n[0] for n in nodes],
+        "geometry": [{"lat": n[1], "lon": n[2]} for n in nodes],
+    }
+
+
+# Route 120 is a named highway with a ref. Interstate 89 has a ref and no name. Hanover St
+# crosses both. A short way and a longer way share the ref "NH 4A;US 4".
+ROUTES = [
+    route_way(
+        1,
+        "Dartmouth College Highway",
+        "NH 120",
+        (1, 43.65, -72.30),
+        (2, 43.65, -72.25),
+        (3, 43.65, -72.20),
+    ),
+    route_way(
+        2, None, "I 89", (10, 43.60, -72.30), (11, 43.64, -72.25), (12, 43.68, -72.20)
+    ),
+    route_way(3, "Hanover St", None, (20, 43.64, -72.25), (2, 43.65, -72.25)),
+    route_way(4, "Hanover St", None, (11, 43.64, -72.25), (21, 43.60, -72.25)),
+    route_way(5, "Short Road", "NH 4A;US 4", (30, 43.66, -72.28), (31, 43.661, -72.28)),
+    route_way(
+        6,
+        "Long Road",
+        "NH 4A;US 4",
+        (40, 43.66, -72.24),
+        (41, 43.67, -72.24),
+        (42, 43.69, -72.24),
+    ),
+]
+
+
+def route_snapshot(ways: list[dict] | None = None) -> Snapshot:
+    return snapshot_from_replies(
+        "2026-11-23", {"elements": []}, {"elements": ROUTES if ways is None else ways}
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "refs"),
+    [
+        ("ROUTE 120", {"NH 120", "US 120"}),
+        ("RT 120", {"NH 120", "US 120"}),
+        ("RTE 120", {"NH 120", "US 120"}),
+        ("NH 120", {"NH 120"}),
+        ("NH ROUTE 120", {"NH 120"}),
+        ("STATE ROUTE 120", {"NH 120"}),
+        ("State Route 4A", {"NH 4A"}),
+        ("INTERSTATE 89", {"I 89"}),
+        ("I-89", {"I 89"}),
+        ("I 89", {"I 89"}),
+        ("US 4", {"US 4"}),
+        ("U.S. 4", {"US 4"}),
+        ("US ROUTE 4", {"US 4"}),
+        ("ROUTE 4", {"NH 4", "US 4"}),
+        ("ROUTE 12A", {"NH 12A", "US 12A"}),
+    ],
+)
+def test_a_route_written_the_way_the_log_writes_it_has_its_refs(text, refs):
+    assert route_refs(text) == refs
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Main St",
+        "ROUTE",
+        "ROUTE 1200",
+        "BUS 4",
+        "ROCK CUT - ROUTE 120",
+        "120",
+        "I",
+        "ROUTE 120 NORTH",
+    ],
+)
+def test_text_that_is_not_only_a_route_has_no_refs(text):
+    assert route_refs(text) == set()
+
+
+def test_a_route_number_is_found_inside_other_words_when_asked():
+    assert route_refs("ROCK CUT - ROUTE 120", anywhere=True) == {"NH 120", "US 120"}
+    assert route_refs("I-89 NORTHBOUND", anywhere=True) == {"I 89"}
+    assert route_refs("BUS 4 STOP", anywhere=True) == set()
+
+
+def test_an_interstate_never_matches_a_state_or_federal_route():
+    assert "I 89" not in route_refs("ROUTE 89")
+    assert route_refs("I 89") == {"I 89"}
+
+
+def test_a_log_route_finds_the_way_with_that_ref_whatever_its_name():
+    found = route_snapshot().roads_named("ROUTE 120")
+
+    assert [road.name for road in found] == ["Dartmouth College Highway"]
+
+
+def test_a_way_with_a_ref_and_no_name_is_found_by_its_route():
+    snapshot = route_snapshot()
+
+    assert [r.ref for r in snapshot.roads_named("INTERSTATE 89")] == ["way/2"]
+    assert [r.ref for r in snapshot.roads_named("I-89")] == ["way/2"]
+    assert snapshot.roads_named("ROUTE 89") == []
+
+
+def test_a_ref_with_several_values_matches_each_of_them():
+    snapshot = route_snapshot()
+
+    assert {r.ref for r in snapshot.roads_named("US 4")} == {"way/5", "way/6"}
+    assert {r.ref for r in snapshot.roads_named("NH 4A")} == {"way/5", "way/6"}
+    assert {r.ref for r in snapshot.roads_named("ROUTE 4")} == {"way/5", "way/6"}
+
+
+def test_a_way_named_for_its_route_matches_with_no_ref():
+    snapshot = route_snapshot(
+        [route_way(1, "State Route 120", None, (1, 43.65, -72.30), (2, 43.65, -72.25))]
+    )
+
+    assert [r.ref for r in snapshot.roads_named("RT 120")] == ["way/1"]
+
+
+def test_a_name_still_matches_by_name():
+    snapshot = route_snapshot()
+
+    assert [r.ref for r in snapshot.roads_named("DARTMOUTH COLLEGE HWY")] == ["way/1"]
+    assert [r.ref for r in snapshot.roads_named("HANOVER ST")] == ["way/3", "way/4"]
+
+
+def test_a_crossing_on_route_120_is_found():
+    match = locate_intersection(route_snapshot(), "ROUTE 120", "HANOVER ST")
+
+    assert match is not None
+    assert (match.lat, match.lng, match.osm_ref) == (43.65, -72.25, "node/2")
+
+
+def test_a_crossing_on_interstate_89_is_found():
+    match = locate_intersection(route_snapshot(), "I-89", "HANOVER ST")
+
+    assert match is not None
+    assert (match.lat, match.lng, match.osm_ref) == (43.64, -72.25, "node/11")
+
+
+def test_a_place_on_route_120_gets_candidates():
+    features = [
+        feature("node", 1, 43.6502, -72.26, name="Sample Outlet Mall"),
+        feature("node", 2, 43.70, -72.26, name="Sample Outlet Annex"),
+    ]
+    snapshot = snapshot_from_replies(
+        "2026-11-23", {"elements": features}, {"elements": ROUTES}
+    )
+
+    found = place_candidates(snapshot, "Sample Outlet Mall", "ROUTE 120")
+
+    # The annex is 5 km from the road, so only the mall is a candidate.
+    assert [c.feature.ref for c in found] == ["node/1"]
+
+
+def test_a_road_pin_is_the_middle_of_the_longest_way_and_approximate():
+    match = locate_road(route_snapshot(), "ROUTE 4")
+
+    # Long Road is the longer of the two ways that share the ref.
+    assert match is not None
+    assert (match.lat, match.lng, match.osm_ref) == (43.67, -72.24, "way/6")
+    assert (match.precision, match.via) == ("approximate", "road")
+
+
+def test_a_road_pin_is_found_from_words_around_the_route():
+    match = locate_road(route_snapshot(), "ROCK CUT - ROUTE 120")
+
+    assert match is not None and match.osm_ref == "way/1"
+
+
+def test_a_road_that_is_not_in_the_snapshot_has_no_pin():
+    assert locate_road(route_snapshot(), "ROUTE 9") is None
+    assert locate_road(route_snapshot(), "Nowhere Rd") is None
+
+
+def test_the_road_the_same_name_gets_when_it_is_named_not_numbered():
+    match = locate_road(route_snapshot(), "Dartmouth College Highway")
+
+    assert match is not None and match.osm_ref == "way/1"
+
+
+def test_the_route_ref_survives_a_round_trip_through_json():
+    original = route_snapshot()
+
+    again = Snapshot.from_json(original.to_json())
+
+    assert [r.route_ref for r in again.roads] == [r.route_ref for r in original.roads]
+    assert [r.ref for r in again.roads_named("I-89")] == ["way/2"]
+
+
+def test_a_snapshot_saved_before_routes_were_kept_still_loads():
+    old = {
+        "fetched_at": "2026-11-20",
+        "features": [],
+        "roads": [
+            {
+                "ref": "way/1",
+                "name": "Hanover St",
+                "nodes": [1, 2],
+                "points": [[43.64, -72.25], [43.65, -72.25]],
+            }
+        ],
+    }
+
+    loaded = Snapshot.from_json(json.dumps(old))
+
+    assert loaded.roads[0].route_ref == ""
+    assert [r.ref for r in loaded.roads_named("HANOVER ST")] == ["way/1"]
+    assert loaded.roads_named("ROUTE 120") == []
+
+
+def test_a_way_with_neither_a_name_nor_a_ref_is_dropped():
+    snapshot = route_snapshot(
+        [route_way(1, None, None, (1, 43.6, -72.2), (2, 43.7, -72.2))]
+    )
+
+    assert snapshot.roads == []

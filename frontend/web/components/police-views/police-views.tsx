@@ -1,6 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Tabs } from '@project/ui/components/ui/tabs'
 import type { FilteredCard, PinSummary } from '@/components/police-map/filtered-section'
 import type { Activity } from '@/lib/police-views/activity'
@@ -52,9 +52,6 @@ interface Props {
   stats: StatsData
 }
 
-// Space kept under the map, so its bottom edge shows.
-const BELOW_MAP = 16
-
 export function PoliceViews({ addresses, stats }: Props) {
   const [{ view, filters }, setState] = useState<{ view: View; filters: Filters }>({
     view: 'map',
@@ -96,15 +93,17 @@ export function PoliceViews({ addresses, stats }: Props) {
   const showOfficer = (officer: string) => go({ view: 'map', filters: { ...filters, officer } })
 
   const onMap = view === 'map'
-  const width = onMap ? '' : 'mx-auto max-w-7xl'
 
+  // The header keeps the layout's width on every tab, so switching tabs never moves it.
+  // Only the map runs the full width of the window, keeping the page's side padding; the
+  // body clips the scrollbar overflow of w-screen.
   return (
-    <div>
-      <div className={width}>
+    <div className={onMap ? 'police-map-page' : undefined}>
+      <div className="shrink-0">
         <div className="eyebrow">Public safety · Updated {updatedOf(stats)}</div>
         <h1 className="mb-3 mt-1.5 text-display-2">Police activity in Lebanon</h1>
         <Tabs
-          className="mb-3.5 w-full overflow-x-auto"
+          className="mb-3.5 w-full"
           items={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
           value={view}
           onChange={(id) => go({ view: id as View, filters })}
@@ -119,7 +118,7 @@ export function PoliceViews({ addresses, stats }: Props) {
       </div>
 
       {onMap ? (
-        <FittedMap>
+        <div className="relative left-1/2 min-h-0 w-screen flex-1 -translate-x-1/2 px-5 md:px-8">
           <PoliceMap
             addresses={addresses}
             shown={derived && !isDefault(filters) ? derived.mapAddresses : undefined}
@@ -130,9 +129,9 @@ export function PoliceViews({ addresses, stats }: Props) {
                 : null
             }
           />
-        </FittedMap>
+        </div>
       ) : (
-        <div className={width}>
+        <div>
           {state.status === 'error' ? (
             <LoadError onRetry={() => setAttempt((n) => n + 1)} />
           ) : !activity || !derived ? (
@@ -276,32 +275,6 @@ function updatedOf(stats: StatsData): string {
     month: 'short',
     day: 'numeric',
   }).format(new Date(stats.generated_at))
-}
-
-// The map fills the window under the tabs and filters, so the whole map shows at the top
-// of the page. Measured, and measured again when the bar above it wraps or unwraps.
-function FittedMap({ children }: { children: React.ReactNode }) {
-  const box = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const node = box.current
-    if (!node) return
-    const fit = () => {
-      const top = node.getBoundingClientRect().top + window.scrollY
-      node.style.setProperty(
-        '--map-height',
-        `${Math.round(window.innerHeight - top - BELOW_MAP)}px`,
-      )
-    }
-    fit()
-    window.addEventListener('resize', fit)
-    const observer = new ResizeObserver(fit)
-    if (node.previousElementSibling) observer.observe(node.previousElementSibling)
-    return () => {
-      window.removeEventListener('resize', fit)
-      observer.disconnect()
-    }
-  }, [])
-  return <div ref={box}>{children}</div>
 }
 
 function LoadError({ onRetry }: { onRetry: () => void }) {

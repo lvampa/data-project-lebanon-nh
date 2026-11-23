@@ -1,5 +1,7 @@
 -- One row per pin, with its report card as JSON. Calls are grouped by the place's
 -- normalized address and coordinates, so two spellings of one place make one pin.
+-- It reads the public views only. A location the views flag has no pin and no name of its
+-- own: its calls count on its street's pin, and are left out when the street has none.
 -- A road is decided in this order: a ", " in the name means a place; else any spelling
 -- the AI called an intersection or highway means a road; else a leading house number
 -- means a place; else a bare name is a road. "12 Main St" and "Lebanon Ford, Miracle
@@ -11,6 +13,7 @@ WITH entries AS (
         le.log_date,
         le.reported_at,
         le.incident_type,
+        le.raw_incident_type,
         le.disposition,
         le.call_source,
         le.source_url,
@@ -19,27 +22,31 @@ WITH entries AS (
         le.arrived_at,
         le.cleared_at,
         le.officer,
-        an.normalized_address,
-        an.kind AS address_kind,
-        an.coordinate_precision,
-        an.street,
-        an.lat,
-        an.lng,
-        call_category(le.incident_type, le.call_source) AS category
-    FROM log_entries le
-    JOIN address_normalizations an
-        ON le.location = an.raw_address
+        pl.normalized_address,
+        pl.kind AS address_kind,
+        pl.coordinate_precision,
+        pl.street,
+        pl.lat,
+        pl.lng,
+        pl.names_person AS flagged,
+        le.category
+    FROM public_log_entries le
+    JOIN public_locations pl
+        ON le.raw_location = pl.raw_address
     WHERE le.parse_error = false
       AND le.log_date >= $1
-      AND an.lat IS NOT NULL
-      AND an.lng IS NOT NULL
+      -- A flagged location has no pin, and stays until its street's pin takes it in.
+      AND (pl.names_person OR (pl.lat IS NOT NULL AND pl.lng IS NOT NULL))
+),
+own AS (
+    SELECT * FROM entries WHERE NOT flagged
 ),
 groups AS (
     SELECT
         normalized_address,
         lat,
         lng,
-        -- The most common spelling of the place, the first in sort order on a tie.
+        -- The most common public spelling of the place, the first in sort order on a tie.
         MODE() WITHIN GROUP (ORDER BY location) AS raw_address,
         CASE
             WHEN normalized_address IS NULL
@@ -56,7 +63,7 @@ groups AS (
         END AS coordinate_precision,
         MODE() WITHIN GROUP (ORDER BY street) AS street,
         bool_or(address_kind IN ('intersection', 'highway')) AS junction
-    FROM entries
+    FROM own
     GROUP BY normalized_address, lat, lng
 ),
 slugs AS (
@@ -86,13 +93,41 @@ pins AS (
     FROM slugs
     WINDOW w AS (PARTITION BY slug ORDER BY lat, lng, normalized_address)
 ),
-tagged AS (
-    SELECT entries.*, pins.id AS pin_id, pins.kind
-    FROM entries
+own_tagged AS (
+    SELECT own.*, pins.id AS pin_id, pins.kind
+    FROM own
     JOIN pins
-        ON entries.normalized_address IS NOT DISTINCT FROM pins.normalized_address
-       AND entries.lat = pins.lat
-       AND entries.lng = pins.lng
+        ON own.normalized_address IS NOT DISTINCT FROM pins.normalized_address
+       AND own.lat = pins.lat
+       AND own.lng = pins.lng
+),
+own_counted AS (
+    SELECT pin_id, COUNT(*) FILTER (WHERE category <> 'traffic' OR kind = 'road') AS count
+    FROM own_tagged
+    GROUP BY pin_id
+),
+street_pins AS (
+    -- The pin of a street: the bare street with that street, the busiest by its own calls
+    -- if there are several, and the lowest id on a tie. An intersection has a first street
+    -- too, but is not it. A place on a street's point, and a flagged location, both hang
+    -- on this one pin, so there is one rule for both.
+    SELECT DISTINCT ON (road.street) road.street, road.id AS pin_id
+    FROM pins road
+    JOIN own_counted ON own_counted.pin_id = road.id
+    WHERE road.kind = 'road'
+      AND NOT road.junction
+      AND road.street IS NOT NULL
+    ORDER BY road.street, own_counted.count DESC, road.id
+),
+tagged AS (
+    SELECT * FROM own_tagged
+    UNION ALL
+    -- A flagged entry is counted on its street's pin as a road call. With no street pin it
+    -- is in no place card, and the town totals still hold it.
+    SELECT entries.*, street_pins.pin_id, 'road' AS kind
+    FROM entries
+    JOIN street_pins ON street_pins.street = entries.street
+    WHERE entries.flagged
 ),
 counted AS (
     SELECT
@@ -107,25 +142,12 @@ counted AS (
     GROUP BY pin_id
 ),
 links AS (
-    -- A place on a street's point has no spot of its own. It hangs on its street's card
-    -- instead: the bare street with the same street, the busiest if there are several,
-    -- and the lowest id on a tie. An intersection has a first street too, but is not it.
-    SELECT
-        place.id AS pin_id,
-        (
-            SELECT road.id
-            FROM pins road
-            JOIN counted road_count ON road_count.pin_id = road.id
-            WHERE road.kind = 'road'
-              AND NOT road.junction
-              AND road.street = place.street
-            ORDER BY road_count.count DESC, road.id
-            LIMIT 1
-        ) AS street_id
+    -- A place on a street's point has no spot of its own. It hangs on its street's card.
+    SELECT place.id AS pin_id, street_pins.pin_id AS street_id
     FROM pins place
+    JOIN street_pins ON street_pins.street = place.street
     WHERE place.kind = 'place'
       AND place.coordinate_precision = 'approximate'
-      AND place.street IS NOT NULL
 )
 SELECT
     pins.id,
@@ -160,7 +182,9 @@ SELECT
                 SELECT incident_type, COUNT(*) AS n
                 FROM tagged
                 WHERE pin_id = pins.id
-                  AND incident_type IS NOT NULL
+                  -- "Other" is every type with no plain name. The card adds it as its
+                  -- last row, from what the listed rows leave out.
+                  AND incident_type <> 'Other'
                   AND (kind = 'road' OR category = 'premises')
                 GROUP BY incident_type
                 ORDER BY n DESC, incident_type
@@ -185,6 +209,7 @@ SELECT
             SELECT COALESCE(jsonb_agg(jsonb_build_object(
                 'reported_at', reported_at,
                 'incident_type', incident_type,
+                'raw_incident_type', raw_incident_type,
                 'disposition', disposition,
                 'call_source', call_source,
                 'category', category,
@@ -196,9 +221,9 @@ SELECT
                 'officer', officer
             ) ORDER BY reported_at DESC NULLS LAST), '[]')
             FROM (
-                SELECT reported_at, incident_type, disposition, call_source, category,
-                       source_url, case_number, dispatched_at, arrived_at, cleared_at,
-                       officer
+                SELECT reported_at, incident_type, raw_incident_type, disposition,
+                       call_source, category, source_url, case_number, dispatched_at,
+                       arrived_at, cleared_at, officer
                 FROM tagged
                 WHERE pin_id = pins.id
                   AND (kind = 'road' OR category <> 'traffic')

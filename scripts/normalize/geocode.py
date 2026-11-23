@@ -7,7 +7,8 @@ never a `human` row. It reuses the coordinates of a place code another row alrea
 has, or the coordinates of another spelling of the same address. Otherwise it asks the
 geocoder for the row's query, then looks the row up in the newest OpenStreetMap
 snapshot (`uv run osm-snapshot`), then asks the geocoder for its street alone, and
-drops a result outside the city. A row that misses three times is marked for review.
+drops a result outside the city. An intersection takes only a point, never a street's.
+A row that misses three times is marked for review.
 It stops after 600 requests, and leaves the rest for the next run.
 
 From the snapshot, a house address is matched by number and street, an intersection by
@@ -347,7 +348,8 @@ def _look_up(
     """The row's query first, then the OpenStreetMap snapshot, then its street alone, and
     whether the street was skipped for want of requests. A result outside the city is a
     miss. A query that finds only an approximate point is tried against the snapshot too,
-    and keeps that point when the snapshot has nothing."""
+    and keeps that point when the snapshot has nothing. An intersection takes only a
+    point, so for one a street point is a miss and its street is never tried."""
     query = row.geocode_query or f"{row.normalized_address}, Lebanon, NH"
     counts.requests += 1
     found = geocoder(query)
@@ -356,6 +358,9 @@ def _look_up(
         return Placement(nominatim.lat, nominatim.lng, "exact", "nominatim"), False
     if locator is not None and (match := locator.locate(row)) is not None:
         return _from_match(match), False
+    if row.kind == "intersection":
+        # A street point is the middle of one of the two streets, not where they cross.
+        return None, False
     if nominatim is not None:
         # Only a street point came back, and the snapshot has nothing better.
         return (

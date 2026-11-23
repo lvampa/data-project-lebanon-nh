@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { HowWeCount } from '@/components/police-map/how-we-count'
 import { CallRow } from '@/components/police-map/call-row'
+import { FilteredSection, type FilteredCard } from '@/components/police-map/filtered-section'
 import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
 import type { CardState } from '@/components/police-map/use-place-card'
 import { categoriesFor } from '@/lib/police-map/categories'
@@ -26,6 +27,8 @@ interface Props {
   since: string
   onClose: () => void
   onRetry: () => void
+  // Set while filters are on: the count above is the filtered one, and the card says so.
+  filtered?: FilteredCard | null
 }
 
 const SECTION_HEADING =
@@ -44,6 +47,7 @@ export function ReportCard({
   since,
   onClose,
   onRetry,
+  filtered = null,
 }: Props) {
   const road = address.kind === 'road'
   const trafficOnly = isTrafficOnly(address)
@@ -67,16 +71,24 @@ export function ReportCard({
         </b>
         <span className="text-muted-foreground">
           {trafficOnly
-            ? 'traffic calls nearby'
+            ? 'traffic stops and calls nearby'
             : road
-              ? 'police calls on this street'
-              : 'police calls here'}
+              ? `${filtered?.noun ?? 'log entries'} on this street`
+              : `${filtered?.noun ?? 'log entries'} here`}
         </span>
       </div>
-      {!trafficOnly && (
+      {/* A rank against filtered counts would compare unlike things, so it is left out. */}
+      {!trafficOnly && !filtered && (
         <div className="mt-1.5 text-sm text-muted-foreground">
           {rankLine(address.count, counts, address.kind)}
         </div>
+      )}
+      {filtered && (
+        <FilteredSection
+          name={nameOf(name)}
+          summary={filtered.summaryOf(address.id)}
+          onClear={filtered.onClear}
+        />
       )}
 
       {state.status === 'loading' && (
@@ -233,7 +245,7 @@ function CardDetails({
       ))}
       {!road && address.count > 0 && address.traffic_count > 0 && (
         <p className="mt-3 border-l-4 border-highlight pl-3 text-sm text-muted-foreground">
-          Not counted here: {address.traffic_count.toLocaleString('en-US')} traffic calls
+          Not counted here: {address.traffic_count.toLocaleString('en-US')} traffic stops and calls
           {street ? ` on ${street}` : ''}, highlighted on the map.
         </p>
       )}
@@ -269,7 +281,7 @@ function CardDetails({
       {/* 6. The record itself */}
       {card.calls.length > 0 && (
         <>
-          <h3 className={SECTION_HEADING}>Recent calls</h3>
+          <h3 className={SECTION_HEADING}>Latest entries</h3>
           <ol>
             {card.calls.map((call) => (
               <CallRow key={call.case_number} call={call} />

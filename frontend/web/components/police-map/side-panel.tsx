@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useState } from 'react'
+import type { FilteredCard } from '@/components/police-map/filtered-section'
 import { ReportCard } from '@/components/police-map/report-card'
 import { TownSummary } from '@/components/police-map/town-summary'
 import { usePlaceCard } from '@/components/police-map/use-place-card'
@@ -12,10 +13,11 @@ interface Props {
   place: Address | undefined
   onChoose: (id: string) => void
   onClose: () => void
+  filtered?: FilteredCard | null
 }
 
 // The panel beside the map: the report card of the selected place, or the town as a whole.
-export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props) {
+export function SidePanel({ addresses, stats, place, onChoose, onClose, filtered = null }: Props) {
   const [attempt, setAttempt] = useState(0)
   const state = usePlaceCard(place?.id ?? null, attempt)
   const kind = place?.kind
@@ -26,7 +28,9 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props)
   )
 
   if (!place || !state) {
-    return <TownSummary addresses={addresses} stats={stats} onChoose={onChoose} />
+    return (
+      <TownSummary addresses={addresses} stats={stats} onChoose={onChoose} noun={filtered?.noun} />
+    )
   }
   return (
     <ReportCard
@@ -41,6 +45,7 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose }: Props)
       since={stats.since}
       onClose={onClose}
       onRetry={() => setAttempt((n) => n + 1)}
+      filtered={filtered}
     />
   )
 }

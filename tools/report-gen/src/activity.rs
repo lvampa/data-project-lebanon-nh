@@ -210,6 +210,7 @@ mod tests {
                 normalized_address: Some(id.into()),
                 count: 0,
                 traffic_count: 0,
+                nearby_traffic: 0,
                 lat: 43.64,
                 lng: -72.25,
                 precision: "exact".into(),
@@ -218,6 +219,7 @@ mod tests {
             },
             card: "{}".into(),
             entries: entries.to_string(),
+            stat_entries: "[]".into(),
         }
     }
 

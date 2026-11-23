@@ -74,34 +74,6 @@ def test_the_total_counts_entries_by_log_date_from_the_day(db_session, three_day
     assert total == 2
 
 
-def test_by_type_counts_entries_by_log_date_from_the_day(db_session, three_days):
-    rows = db_session.execute(text(query("stats_by_type.sql")), {"since": SINCE}).all()
-
-    assert sorted(tuple(row) for row in rows) == [("Alarm", 1), ("Noise", 1)]
-
-
-def test_by_weekday_counts_only_entries_with_a_reported_time(db_session, three_days):
-    rows = db_session.execute(
-        text(query("stats_by_weekday.sql")), {"since": SINCE}
-    ).all()
-
-    # Thursday 1 January only. The Dec 31 entry is before the day, and the June one
-    # has no reported time to take a weekday from.
-    assert [tuple(row) for row in rows] == [(4.0, 1)]
-
-
-def test_by_hour_counts_the_hour_of_the_reported_time(db_session, three_days):
-    add_entry(db_session, 4, date(2026, 1, 2), "Alarm", datetime(2026, 1, 2, 16, 30))
-    add_entry(db_session, 5, date(2026, 1, 2), "Alarm", datetime(2026, 1, 2, 16, 59))
-    db_session.flush()
-
-    rows = db_session.execute(text(query("stats_by_hour.sql")), {"since": SINCE}).all()
-
-    # Midnight on Jan 1 and two calls in the 4 pm hour. The entry with no reported
-    # time has no hour, and the Dec 31 entry is before the day.
-    assert [tuple(row) for row in rows] == [(0, 1), (16, 2)]
-
-
 def test_incidents_leave_out_before_the_day_and_put_unreported_ones_last(
     db_session, three_days
 ):
@@ -113,46 +85,6 @@ def test_incidents_leave_out_before_the_day_and_put_unreported_ones_last(
 
 
 # --- the public rules ---
-
-
-def test_a_type_with_no_plain_name_is_counted_as_other(db_session):
-    add_entry(db_session, 1, date(2026, 6, 1), "DEP INFO - DOE", None, plain=False)
-    add_entry(db_session, 2, date(2026, 6, 1), "Alarm", None)
-    db_session.flush()
-
-    rows = db_session.execute(text(query("stats_by_type.sql")), {"since": SINCE}).all()
-
-    assert sorted(tuple(row) for row in rows) == [("Alarm", 1), ("Other", 1)]
-
-
-def test_other_is_last_whatever_its_count(db_session):
-    for number in range(5):
-        add_entry(
-            db_session, number, date(2026, 6, 1), f"RAW {number}", None, plain=False
-        )
-    add_entry(db_session, 10, date(2026, 6, 1), "Alarm", None)
-    db_session.flush()
-
-    rows = db_session.execute(text(query("stats_by_type.sql")), {"since": SINCE}).all()
-
-    assert [tuple(row) for row in rows] == [("Alarm", 1), ("Other", 5)]
-
-
-def test_other_is_listed_after_the_twenty_busiest_names(db_session):
-    for number in range(25):
-        add_entry(db_session, number, date(2026, 6, 1), f"Type {number:02}", None)
-    for number in range(30, 40):
-        add_entry(
-            db_session, number, date(2026, 6, 1), f"RAW {number}", None, plain=False
-        )
-    db_session.flush()
-
-    rows = db_session.execute(text(query("stats_by_type.sql")), {"since": SINCE}).all()
-
-    names = [row[0] for row in rows]
-    assert len(names) == 21
-    assert names[-1] == "Other"
-    assert "Other" not in names[:-1]
 
 
 def test_the_total_still_counts_every_entry(db_session):

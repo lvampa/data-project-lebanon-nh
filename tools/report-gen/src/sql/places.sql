@@ -94,7 +94,7 @@ pins AS (
     WINDOW w AS (PARTITION BY slug ORDER BY lat, lng, normalized_address)
 ),
 own_tagged AS (
-    SELECT own.*, pins.id AS pin_id, pins.kind
+    SELECT own.*, pins.id AS own_pin_id, pins.kind AS own_kind
     FROM own
     JOIN pins
         ON own.normalized_address IS NOT DISTINCT FROM pins.normalized_address
@@ -102,15 +102,20 @@ own_tagged AS (
        AND own.lng = pins.lng
 ),
 own_counted AS (
-    SELECT pin_id, COUNT(*) FILTER (WHERE category <> 'traffic' OR kind = 'road') AS count
+    -- Each pin's own entries, before anything is folded, so which pin is a street's never
+    -- depends on the entries moved onto it.
+    SELECT
+        own_pin_id AS pin_id,
+        COUNT(*) FILTER (WHERE category <> 'traffic' OR own_kind = 'road') AS count,
+        COUNT(*) FILTER (WHERE category = 'traffic') AS traffic
     FROM own_tagged
-    GROUP BY pin_id
+    GROUP BY own_pin_id
 ),
 street_pins AS (
     -- The pin of a street: the bare street with that street, the busiest by its own calls
     -- if there are several, and the lowest id on a tie. An intersection has a first street
-    -- too, but is not it. A place on a street's point, and a flagged location, both hang
-    -- on this one pin, so there is one rule for both.
+    -- too, but is not it. A place on a street's point, a flagged location, and the traffic
+    -- at a place all hang on this one pin, so there is one rule for them.
     SELECT DISTINCT ON (road.street) road.street, road.id AS pin_id
     FROM pins road
     JOIN own_counted ON own_counted.pin_id = road.id
@@ -120,26 +125,50 @@ street_pins AS (
     ORDER BY road.street, own_counted.count DESC, road.id
 ),
 tagged AS (
-    SELECT * FROM own_tagged
+    -- Where each entry is counted. The street pin of every street is chosen above, from
+    -- the pins' own entries, so folding entries onto it cannot change which pin it is.
+    -- The traffic at a place is counted on its street's pin as a road call, because it
+    -- happened on the road. With no street pin it stays on the place, counted nowhere.
+    SELECT
+        own_tagged.*,
+        COALESCE(street_pins.pin_id, own_tagged.own_pin_id) AS pin_id,
+        CASE
+            WHEN street_pins.pin_id IS NOT NULL THEN 'road'
+            ELSE own_tagged.own_kind
+        END AS kind
+    FROM own_tagged
+    LEFT JOIN street_pins
+        ON own_tagged.own_kind = 'place'
+       AND own_tagged.category = 'traffic'
+       AND street_pins.street = own_tagged.street
     UNION ALL
     -- A flagged entry is counted on its street's pin as a road call. With no street pin it
     -- is in no place card, and the town totals still hold it.
-    SELECT entries.*, street_pins.pin_id, 'road' AS kind
+    SELECT
+        entries.*,
+        NULL::text AS own_pin_id,
+        NULL::text AS own_kind,
+        street_pins.pin_id,
+        'road' AS kind
     FROM entries
     JOIN street_pins ON street_pins.street = entries.street
     WHERE entries.flagged
 ),
 counted AS (
+    -- Every pin has a row, even one whose entries all folded onto a street.
     SELECT
-        pin_id,
-        COUNT(*) FILTER (WHERE category = 'premises') AS premises,
-        COUNT(*) FILTER (WHERE category = 'traffic')  AS traffic,
-        COUNT(*) FILTER (WHERE category = 'alarms')   AS alarms,
-        COUNT(*) FILTER (WHERE category = 'checks')   AS checks,
-        COUNT(*) FILTER (WHERE category = 'admin')    AS admin,
-        COUNT(*) FILTER (WHERE category <> 'traffic' OR kind = 'road') AS count
-    FROM tagged
-    GROUP BY pin_id
+        pins.id AS pin_id,
+        COUNT(*) FILTER (WHERE tagged.category = 'premises') AS premises,
+        COUNT(*) FILTER (WHERE tagged.category = 'traffic')  AS traffic,
+        COUNT(*) FILTER (WHERE tagged.category = 'alarms')   AS alarms,
+        COUNT(*) FILTER (WHERE tagged.category = 'checks')   AS checks,
+        COUNT(*) FILTER (WHERE tagged.category = 'admin')    AS admin,
+        COUNT(*) FILTER (
+            WHERE tagged.category <> 'traffic' OR tagged.kind = 'road'
+        ) AS count
+    FROM pins
+    LEFT JOIN tagged ON tagged.pin_id = pins.id
+    GROUP BY pins.id
 ),
 links AS (
     -- A place on a street's point has no spot of its own. It hangs on its street's card.
@@ -155,7 +184,12 @@ SELECT
     pins.raw_address,
     pins.normalized_address,
     counted.count,
+    -- The traffic that is counted nowhere, or on a road, all of it. For a place that is the
+    -- traffic with no street pin to fold onto, usually none. A road's is already in its count.
     counted.traffic AS traffic_count,
+    -- The traffic at a place, folded or not, for the card's "stops nearby" line. It is never
+    -- added to a count, a total or an activity entry.
+    CASE WHEN pins.kind = 'road' THEN 0 ELSE own_counted.traffic END AS nearby_traffic,
     pins.lat,
     pins.lng,
     pins.coordinate_precision AS precision,
@@ -169,7 +203,7 @@ SELECT
         'count', counted.count,
         'categories', jsonb_build_object(
             'premises', counted.premises,
-            'traffic', counted.traffic,
+            'traffic', CASE WHEN pins.kind = 'road' THEN counted.traffic ELSE own_counted.traffic END,
             'alarms', counted.alarms,
             'checks', counted.checks,
             'admin', counted.admin
@@ -248,8 +282,16 @@ SELECT
         ) ORDER BY COALESCE(reported_at, log_date::timestamp), source_url, case_number), '[]')
         FROM tagged
         WHERE pin_id = pins.id
-    )::text AS entries
+    )::text AS entries,
+    -- What stats.json counts, from the entries that are on a pin: the report time, which is
+    -- null when the log had none, and the type.
+    (
+        SELECT COALESCE(jsonb_agg(jsonb_build_array(reported_at, incident_type)), '[]')
+        FROM tagged
+        WHERE pin_id = pins.id
+    )::text AS stat_entries
 FROM pins
 JOIN counted ON counted.pin_id = pins.id
+JOIN own_counted ON own_counted.pin_id = pins.id
 LEFT JOIN links ON links.pin_id = pins.id
 ORDER BY counted.count DESC, counted.traffic DESC, pins.normalized_address, pins.id

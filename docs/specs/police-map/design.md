@@ -35,6 +35,11 @@ Everything else is a place.
   The log names a business as the location of a traffic stop on the road beside it.
   A place's count leaves traffic out, and a road's count keeps every call.
   A place's card shows one line with its traffic count, and the map highlights the road.
+  The export counts that traffic on the street's pin, as road calls, chosen by the rule that hangs an approximate place on its street, so the street's count, its card and its activity entries hold it and the town's pins add up to every entry on a pin.
+  The place keeps `nearby_traffic`, its own traffic, for that line, and it is never added to a count or a total.
+  `traffic_count` is only the traffic counted nowhere: for a place, the part with no street pin to fold onto, and for a road, its traffic, which is inside its count.
+  A place whose only calls were traffic, all folded, has a count of 0 and drops off the map.
+  `stats.json` has `mapped_total`, the entries on any pin, and its type, weekday and hour lists count those entries, not every entry in range.
 - **One kind of pin, sized by calls.**
   Places, roads and groups of nearby pins are the same blue circle, so the size is the only signal.
   Size and opacity follow the square root of the calls, capped at 3,000 so the police station does not hide everything else.

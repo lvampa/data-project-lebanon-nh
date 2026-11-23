@@ -1,7 +1,6 @@
 use anyhow::Result;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
-use chrono::Utc;
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -36,6 +35,9 @@ pub struct Stats {
     pub by_weekday: Vec<ByWeekday>,
     // Calls by the hour of the day, 0 to 23, for the hours that had any.
     pub by_hour: Vec<ByHour>,
+    // The entries in range that are on a pin, which is what the three lists above count.
+    // `total` is every entry in range.
+    pub mapped_total: i64,
 }
 
 // ---- Incident ----
@@ -67,7 +69,11 @@ pub struct Address {
     pub normalized_address: Option<String>,
     // A place counts every call except road traffic, and a road counts every call.
     pub count: i64,
+    // The traffic that is counted nowhere. For a place, the part with no street pin to
+    // fold onto, usually none. For a road, all its traffic, which is inside `count`.
     pub traffic_count: i64,
+    // The traffic at a place, folded or not, for its "stops nearby" line. Never in a sum.
+    pub nearby_traffic: i64,
     pub lat: f64,
     pub lng: f64,
     // "approximate" when the point is only somewhere on the place's street.
@@ -86,6 +92,8 @@ pub struct PlaceRow {
     pub address: Address,
     pub card: String,
     pub entries: String,
+    // [reported_at or null, incident_type] of each entry, for stats.json.
+    pub stat_entries: String,
 }
 
 // ---- Staff ----
@@ -125,53 +133,13 @@ pub struct Property {
 
 pub const INCIDENT_LIMIT: i64 = 2000;
 
-pub async fn fetch_stats(pool: &PgPool, since: NaiveDate) -> Result<Stats> {
-    const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-    let total: i64 = sqlx::query_scalar(include_str!("sql/stats_total.sql"))
+/// Every parsed entry in range, whether or not it is on a pin.
+pub async fn fetch_total(pool: &PgPool, since: NaiveDate) -> Result<i64> {
+    sqlx::query_scalar(include_str!("sql/stats_total.sql"))
         .bind(since)
         .fetch_one(pool)
-        .await?;
-
-    let by_type_rows = sqlx::query_as::<_, (String, i64)>(include_str!("sql/stats_by_type.sql"))
-        .bind(since)
-        .fetch_all(pool)
-        .await?;
-
-    let by_weekday_rows = sqlx::query_as::<_, (f64, i64)>(include_str!("sql/stats_by_weekday.sql"))
-        .bind(since)
-        .fetch_all(pool)
-        .await?;
-
-    let by_hour_rows = sqlx::query_as::<_, (i32, i64)>(include_str!("sql/stats_by_hour.sql"))
-        .bind(since)
-        .fetch_all(pool)
-        .await?;
-
-    Ok(Stats {
-        total,
-        generated_at: Utc::now().to_rfc3339(),
-        since: since.to_string(),
-        by_type: by_type_rows
-            .into_iter()
-            .map(|(t, c)| ByType {
-                incident_type: t,
-                count: c,
-            })
-            .collect(),
-        by_weekday: by_weekday_rows
-            .into_iter()
-            .map(|(dow, c)| ByWeekday {
-                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-                day: DAYS[dow as usize].to_string(),
-                count: c,
-            })
-            .collect(),
-        by_hour: by_hour_rows
-            .into_iter()
-            .map(|(hour, count)| ByHour { hour, count })
-            .collect(),
-    })
+        .await
+        .map_err(Into::into)
 }
 
 pub async fn fetch_incidents(pool: &PgPool, since: NaiveDate) -> Result<Vec<Incident>> {

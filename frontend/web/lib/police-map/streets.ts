@@ -1,7 +1,7 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 
 // Road names in the map tiles are spelled out: "N Main St" here is "North Main Street" there.
-const SUFFIX: Record<string, string> = {
+export const SUFFIX: Record<string, string> = {
   Rd: 'Road',
   St: 'Street',
   Ave: 'Avenue',
@@ -16,7 +16,7 @@ const SUFFIX: Record<string, string> = {
   Ter: 'Terrace',
   Ext: 'Extension',
 }
-const DIRECTION: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
+export const DIRECTION: Record<string, string> = { N: 'North', S: 'South', E: 'East', W: 'West' }
 
 // A box around Lebanon, so a street of the same name in another town is not lit.
 export const CITY_BOX = {

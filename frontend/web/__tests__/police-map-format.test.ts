@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  callWord,
   clusterHolds,
+  entryWord,
   nameOf,
   sinceLabel,
   streetOf,
@@ -10,11 +10,11 @@ import {
   windowLabel,
 } from '@/lib/police-map/format'
 
-describe('callWord', () => {
-  it('says call for one and calls for the rest', () => {
-    expect(callWord(1)).toBe('1 call')
-    expect(callWord(0)).toBe('0 calls')
-    expect(callWord(1234)).toBe('1,234 calls')
+describe('entryWord', () => {
+  it('says log entry for one and log entries for the rest', () => {
+    expect(entryWord(1)).toBe('1 log entry')
+    expect(entryWord(0)).toBe('0 log entries')
+    expect(entryWord(1234)).toBe('1,234 log entries')
   })
 })
 
@@ -56,9 +56,9 @@ describe('updatedLabel', () => {
 })
 
 describe('clusterHolds', () => {
-  it('counts the calls of a group, and never says 0 calls', () => {
-    expect(clusterHolds(40, 52)).toBe('40 calls')
-    expect(clusterHolds(0, 62)).toBe('62 traffic calls nearby')
+  it('counts the entries of a group, and never says 0 log entries', () => {
+    expect(clusterHolds(40, 52)).toBe('40 log entries')
+    expect(clusterHolds(0, 62)).toBe('62 traffic stops and calls nearby')
   })
 })
 
@@ -70,8 +70,8 @@ describe('sinceLabel', () => {
 
 describe('trafficNearby', () => {
   it('names the traffic a place with no calls of its own has', () => {
-    expect(trafficNearby(7)).toBe('7 traffic calls nearby')
-    expect(trafficNearby(1)).toBe('1 traffic call nearby')
-    expect(trafficNearby(1200)).toBe('1,200 traffic calls nearby')
+    expect(trafficNearby(7)).toBe('7 traffic stops and calls nearby')
+    expect(trafficNearby(1)).toBe('1 traffic stop or call nearby')
+    expect(trafficNearby(1200)).toBe('1,200 traffic stops and calls nearby')
   })
 })

@@ -99,4 +99,41 @@ describe('searchPlaces', () => {
   it('stops at the limit', () => {
     expect(searchPlaces(PLACES, 'mile', 2)).toHaveLength(2)
   })
+
+  it('matches a street typed short or spelled out', () => {
+    const street = place('m', 'Mount Support Rd', 10)
+    const ids = (query: string) => searchPlaces([street], query).map((p) => p.id)
+    expect(ids('mt support')).toEqual(['m'])
+    expect(ids('Mt. Support')).toEqual(['m'])
+    expect(ids('mount support road')).toEqual(['m'])
+  })
+
+  it('matches a direction typed short or spelled out', () => {
+    const street = place('n', 'N Main St', 10)
+    expect(searchPlaces([street], 'north main').map((p) => p.id)).toEqual(['n'])
+  })
+
+  it('finds a direction typed alone, only where a word starts', () => {
+    const places = [place('w', 'W Lebanon Plaza', 10), place('h', 'Hawthorne St', 5)]
+    expect(searchPlaces(places, 'west').map((p) => p.id)).toEqual(['w'])
+  })
+
+  it('matches a shortened word only as a whole word', () => {
+    const places = [place('s', 'S Main St', 10), place('t', 'Support St', 5)]
+    expect(searchPlaces(places, 'south').map((p) => p.id)).toEqual(['s'])
+  })
+
+  it('reads nothing off the prototype for a word like constructor', () => {
+    expect(searchPlaces([place('c', 'Main St', 10)], 'constructor')).toEqual([])
+  })
+
+  it('still matches inside a word as typed', () => {
+    expect(searchPlaces([place('h', 'Hannaford', 10)], 'anna').map((p) => p.id)).toEqual(['h'])
+  })
+
+  it('matches past the punctuation in a name', () => {
+    expect(
+      searchPlaces([place('q', 'Quarry Hill, Mount Support Rd', 10)], 'hill mt').map((p) => p.id),
+    ).toEqual(['q'])
+  })
 })

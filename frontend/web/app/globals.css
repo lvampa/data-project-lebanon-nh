@@ -11,8 +11,9 @@
 @utility police-map-stage {
   display: grid;
   grid-template-columns: 1fr;
-  height: calc(100dvh - 9rem);
-  min-height: 560px;
+  /* The views set --map-height so the map fills the window under their tabs and filters. */
+  height: var(--map-height, calc(100dvh - 9rem));
+  min-height: 420px;
   @media (min-width: 1024px) {
     grid-template-columns: 1fr 420px;
   }
@@ -30,4 +31,48 @@
 }
 .map-tip .maplibregl-popup-tip {
   display: none;
+}
+
+/* The police views' charts. Each step reaches 3:1 on the card, darkest for the most, and the
+   dark theme reverses the scale so the most is brightest. No activity is --secondary. */
+:root {
+  --chart-ink: #1f4e8c;
+  --step-1: #4a7fc0;
+  --step-2: #1f4e8c;
+  --step-3: #14335e;
+  --heat-1: #b6cdeb;
+  --heat-2: #7fa6d9;
+  --heat-3: #4a7fc0;
+  --heat-4: #1f4e8c;
+}
+.dark {
+  --chart-ink: #7fa6d9;
+  --step-1: #7fa6d9;
+  --step-2: #b6cdeb;
+  --step-3: #e3ecf7;
+  --heat-1: #4a7fc0;
+  --heat-2: #7fa6d9;
+  --heat-3: #b6cdeb;
+  --heat-4: #e3ecf7;
+}
+
+/* The tooltip over a chart, styled like the map's. */
+@utility chart-tip {
+  position: fixed;
+  z-index: 70;
+  pointer-events: none;
+  max-width: 260px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+}
+
+/* A week missing logs, or still filling in, is striped instead of solid. */
+@utility week-incomplete {
+  background-image: repeating-linear-gradient(135deg, transparent 0 3px, var(--card) 3px 5px);
 }

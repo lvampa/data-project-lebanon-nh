@@ -8,8 +8,8 @@ import { MapLoadingState } from '@project/ui/components/map/MapLoadingState'
 import { LEBANON_CENTER, LEBANON_ZOOM } from '@project/ui/lib/constants'
 import {
   APPROXIMATE_TIP,
-  callWord,
   clusterHolds,
+  entryWord,
   nameOf,
   trafficNearby,
 } from '@/lib/police-map/format'
@@ -47,12 +47,17 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const onSelectRef = useRef(onSelect)
+  // The pins the map starts with. Later counts go into its source in place, so a filter
+  // change does not rebuild the map.
+  const addressesRef = useRef(addresses)
+  const flownTo = useRef<Selection | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [attempt, setAttempt] = useState(0)
   const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
 
   useEffect(() => {
     onSelectRef.current = onSelect
+    addressesRef.current = addresses
   })
 
   useEffect(() => {
@@ -84,7 +89,7 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
     map.on('load', () => {
       map.addSource('pins', {
         type: 'geojson',
-        data: pinsGeoJson(addresses),
+        data: pinsGeoJson(addressesRef.current),
         cluster: true,
         clusterRadius: CLUSTER_RADIUS,
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
@@ -129,7 +134,7 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
           strong.textContent = nameOf(props.name ?? '')
           label.append(
             strong,
-            ` · ${props.t ? trafficNearby(props.w ?? 0) : callWord((props.n ?? 0) + (props.h ?? 0))}`,
+            ` · ${props.t ? trafficNearby(props.w ?? 0) : entryWord((props.n ?? 0) + (props.h ?? 0))}`,
             props.a ? ` · ${APPROXIMATE_TIP}` : '',
           )
         }
@@ -176,7 +181,14 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
       mapRef.current = null
       map.remove()
     }
-  }, [addresses, attempt])
+  }, [attempt])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || status !== 'ready') return
+    const source = map.getSource('pins') as maplibregl.GeoJSONSource | undefined
+    source?.setData(pinsGeoJson(addresses))
+  }, [addresses, status])
 
   // The selected pin gets a ring, and a place chosen from a list or a search is flown to.
   useEffect(() => {
@@ -185,7 +197,9 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
     map.setFilter('selected', ['==', ['get', 'id'], ringed ?? NO_PIN])
     if (map.getLayer('street')) map.setFilter('street', streetFilter(streets))
     const place = selection.id ? places.get(selection.id) : undefined
-    if (place && selection.fly) {
+    // Only a new selection flies. New counts from a filter change leave the view alone.
+    if (place && selection.fly && flownTo.current !== selection) {
+      flownTo.current = selection
       map.flyTo({
         center: [place.lng, place.lat],
         zoom: Math.max(map.getZoom(), 16),

@@ -44,6 +44,24 @@ describe('pinsGeoJson', () => {
       h: 0,
     })
   })
+
+  it('leaves off a pin with nothing to show, such as one a filter emptied', () => {
+    const empty = { ...FORD, id: 'empty', count: 0, traffic_count: 0 }
+    const trafficOnly = { ...FORD, id: 'traffic', count: 0, traffic_count: 3 }
+
+    const ids = pinsGeoJson([FORD, empty, trafficOnly]).features.map((f) => f.properties.id)
+
+    expect(ids).toEqual(['lebanon-ford-90-miracle-mile', 'traffic'])
+  })
+
+  it('keeps a street with no calls of its own when a hidden place rides on it', () => {
+    const street = { ...FORD, id: 'street', kind: 'road' as const, count: 0, traffic_count: 0 }
+    const hidden = { ...FORD, id: 'quarry', street_id: 'street', hidden: true, count: 4 }
+
+    const [pin] = pinsGeoJson([street, hidden]).features
+
+    expect([pin.properties.id, pin.properties.w]).toEqual(['street', 4])
+  })
 })
 
 describe('pinName', () => {

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapLegend } from '@project/ui/components/map/MapLegend'
 import { IncidentMap, type Selection } from '@/components/incident-map'
 import { PlaceSearch } from '@/components/police-map/place-search'
+import type { FilteredCard } from '@/components/police-map/filtered-section'
 import { SidePanel } from '@/components/police-map/side-panel'
 import { streetPinOf } from '@/lib/police-map/approximate'
 import { streetsToLight } from '@/lib/police-map/streets'
@@ -12,25 +13,32 @@ import { PIN_COLOR } from '@/lib/police-map/map-style'
 import type { Address, StatsData } from '@/lib/types'
 
 interface Props {
+  // The year's rows. The selection, the hash and the search read these, so a filter change
+  // never moves the map or re-runs the selection.
   addresses: Address[]
   stats: StatsData
+  // While filters are on: the filtered rows the pins, the card and the summary count from.
+  shown?: Address[]
+  filtered?: FilteredCard | null
 }
 
 const NOTHING: Selection = { id: null, fly: false }
 
-export function PoliceMap({ addresses, stats }: Props) {
+export function PoliceMap({ addresses, stats, shown, filtered = null }: Props) {
   const [selection, setSelection] = useState<Selection>(NOTHING)
-  const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
+  const yearPlaces = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
+  const current = shown ?? addresses
+  const places = useMemo(() => new Map(current.map((a) => [a.id, a])), [current])
 
   useEffect(() => {
     const read = () => {
-      const id = idFromHash(window.location.hash, places)
+      const id = idFromHash(window.location.hash, yearPlaces)
       setSelection(id ? { id, fly: true } : NOTHING)
     }
     read()
     window.addEventListener('hashchange', read)
     return () => window.removeEventListener('hashchange', read)
-  }, [places])
+  }, [yearPlaces])
 
   const select = useCallback((id: string, fly: boolean) => {
     window.history.replaceState(null, '', `#${id}`)
@@ -55,7 +63,7 @@ export function PoliceMap({ addresses, stats }: Props) {
     <div className="police-map-stage overflow-hidden rounded-lg border border-border bg-card">
       <div className="relative min-h-90">
         <IncidentMap
-          addresses={addresses}
+          addresses={current}
           selection={selection}
           ringed={ringed}
           streets={streets}
@@ -67,8 +75,8 @@ export function PoliceMap({ addresses, stats }: Props) {
         <div className="pointer-events-none absolute bottom-7 left-3.5 z-10">
           <MapLegend
             variant="scale"
-            caption="Larger and darker means more calls"
-            title={`Police calls · ${windowLabel(stats.since, stats.generated_at)}`}
+            caption="Larger and darker means more activity"
+            title={`Police activity · ${windowLabel(stats.since, stats.generated_at)}`}
             lastUpdated={updatedLabel(stats.generated_at)}
             color={PIN_COLOR}
           />
@@ -79,11 +87,12 @@ export function PoliceMap({ addresses, stats }: Props) {
         aria-live="polite"
       >
         <SidePanel
-          addresses={addresses}
+          addresses={current}
           stats={stats}
           place={selected}
           onChoose={(id) => select(id, true)}
           onClose={clear}
+          filtered={filtered}
         />
       </aside>
     </div>

@@ -651,6 +651,30 @@ def test_a_place_does_not_inherit_the_coordinates_of_an_address(db_session):
     assert counts.reused == 0
 
 
+def test_an_intersection_does_not_copy_a_street_point_from_another_spelling(db_session):
+    add_row(
+        db_session,
+        "MAIN ST + HANOVER ST",
+        normalized_address="Main St and Hanover St",
+        kind="intersection",
+        lat=43.6001,
+        lng=-72.2001,
+        geocoded_via="nominatim",
+        coordinate_precision="approximate",
+    )
+    add_row(
+        db_session,
+        "MAIN ST & HANOVER ST",
+        normalized_address="Main St and Hanover St",
+        kind="intersection",
+    )
+
+    counts = geocode_job.run(FakeGeocoder())
+
+    assert the_row(db_session, "MAIN ST & HANOVER ST").lat is None
+    assert counts.reused == 0
+
+
 # --- a second spelling of an address that is already placed ---
 
 

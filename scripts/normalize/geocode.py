@@ -317,6 +317,9 @@ def _reuse_same_address(session: Session, row: AddressNormalization) -> bool:
 def _placed_donor(
     session: Session, row: AddressNormalization, *same: ColumnElement[bool]
 ) -> AddressNormalization | None:
+    if row.kind == "intersection":
+        # An intersection takes only a point, so a donor on a street point lends nothing.
+        same = (*same, AddressNormalization.coordinate_precision == "exact")
     return session.scalars(
         select(AddressNormalization)
         .where(

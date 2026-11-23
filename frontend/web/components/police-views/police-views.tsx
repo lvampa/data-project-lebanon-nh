@@ -256,10 +256,11 @@ function useDerived(
           onClear,
           summaryOf(pinId: string): PinSummary | null {
             const index = pinIndex.get(pinId) ?? -1
-            const own = addresses[index]?.hidden
-            const t = own ? pins.get(index) : cards.get(index)
+            // A place listed on its street opens its own card, so it takes its own tally.
+            const listedOnStreet = addresses[index]?.hidden
+            const t = listedOnStreet ? pins.get(index) : cards.get(index)
             if (!t) return null
-            const fromPublic = (own ? publicPins : publicCards).get(index)?.n ?? 0
+            const fromPublic = (listedOnStreet ? publicPins : publicCards).get(index)?.n ?? 0
             return {
               n: t.n,
               hours: t.hours,

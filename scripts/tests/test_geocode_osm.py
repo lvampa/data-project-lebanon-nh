@@ -1036,3 +1036,159 @@ def test_a_human_row_with_the_code_on_the_same_street_blocks_the_group(db_sessio
 
     assert the_row(db_session, "QUARRY HILL TOWN HOUSES").osm_ref is None
     assert counts.groups_kept == 1
+
+
+# --- roads named by route number ---
+
+
+def route_way(
+    way_id: int, name: str | None, ref: str | None, *nodes: tuple[int, float, float]
+) -> dict:
+    tags = {"highway": "primary"}
+    if name:
+        tags["name"] = name
+    if ref:
+        tags["ref"] = ref
+    return {
+        "type": "way",
+        "id": way_id,
+        "tags": tags,
+        "nodes": [n[0] for n in nodes],
+        "geometry": [{"lat": n[1], "lon": n[2]} for n in nodes],
+    }
+
+
+ROUTE_SNAPSHOT = snapshot_from_replies(
+    "2026-11-23",
+    {"elements": []},
+    {
+        "elements": [
+            route_way(
+                1,
+                "Dartmouth College Highway",
+                "NH 120",
+                (1, 43.65, -72.30),
+                (2, 43.65, -72.25),
+                (3, 43.65, -72.20),
+            ),
+            route_way(
+                2,
+                None,
+                "I 89",
+                (10, 43.60, -72.30),
+                (11, 43.64, -72.25),
+                (12, 43.68, -72.20),
+            ),
+            route_way(3, "Hanover St", None, (20, 43.64, -72.25), (2, 43.65, -72.25)),
+        ]
+    },
+)
+ROUTE_120_POINT = (43.65, -72.25)
+I_89_POINT = (43.64, -72.25)
+
+
+def highway_row(session, raw: str, normalized: str, **columns) -> AddressNormalization:
+    return add_row(
+        session,
+        raw,
+        kind="highway",
+        normalized_address=normalized,
+        street=None,
+        **columns,
+    )
+
+
+def test_a_bare_highway_gets_an_approximate_point_on_its_road(db_session):
+    highway_row(db_session, "ROUTE 120", "Route 120")
+
+    counts = geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "ROUTE 120")
+    assert (row.lat, row.lng) == ROUTE_120_POINT
+    assert (row.geocoded_via, row.coordinate_precision, row.osm_ref) == (
+        "osm",
+        "approximate",
+        "way/1",
+    )
+    assert (row.needs_review, counts.bare_highways, counts.requests) == (False, 0, 0)
+    assert counts.found_by() == {"road": 1}
+
+
+def test_an_interstate_by_any_name_gets_its_road_pin(db_session):
+    highway_row(db_session, "INTERSTATE 89", "Interstate 89")
+    highway_row(db_session, "I-89", "I-89")
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    for raw in ("INTERSTATE 89", "I-89"):
+        row = the_row(db_session, raw)
+        assert (row.lat, row.lng, row.coordinate_precision) == (
+            *I_89_POINT,
+            "approximate",
+        )
+
+
+def test_a_highway_with_a_descriptor_and_no_cross_street_is_bare_and_gets_the_same_pin(
+    db_session,
+):
+    highway_row(db_session, "ROUTE 120", "Route 120")
+    highway_row(db_session, "ROCK CUT - ROUTE 120", "Rock Cut - Route 120")
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    plain = the_row(db_session, "ROUTE 120")
+    described = the_row(db_session, "ROCK CUT - ROUTE 120")
+    assert (described.lat, described.lng) == (plain.lat, plain.lng) == ROUTE_120_POINT
+    assert described.coordinate_precision == "approximate"
+
+
+def test_a_bare_highway_with_no_road_in_the_snapshot_is_still_left_for_review(
+    db_session,
+):
+    highway_row(db_session, "ROUTE 9", "Route 9")
+
+    counts = geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "ROUTE 9")
+    assert (row.lat, row.needs_review, counts.bare_highways) == (None, True, 1)
+
+
+def test_a_bare_highway_with_no_snapshot_is_left_for_review(db_session):
+    highway_row(db_session, "ROUTE 120", "Route 120")
+
+    counts = geocode_job.run(NoNominatim())
+
+    assert (the_row(db_session, "ROUTE 120").needs_review, counts.bare_highways) == (
+        True,
+        1,
+    )
+
+
+def test_a_highway_with_an_exit_keeps_the_old_path_and_is_not_pinned_to_its_road(
+    db_session,
+):
+    highway_row(db_session, "I-89 NB EXIT 18", "I-89 northbound near exit 18")
+    geocoder = NoNominatim()
+
+    counts = geocode_job.run(geocoder, locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "I-89 NB EXIT 18")
+    assert (row.lat, row.geocode_attempts) == (None, 1)
+    assert geocoder.queries == ["I-89 NB EXIT 18, Lebanon, NH"]
+    assert counts.found_by() == {}
+
+
+def test_a_crossing_on_route_120_is_placed_from_the_snapshot(db_session):
+    add_row(
+        db_session,
+        "ROUTE 120 & HANOVER ST",
+        kind="intersection",
+        normalized_address="Route 120 and Hanover St",
+        street="ROUTE 120",
+    )
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "ROUTE 120 & HANOVER ST")
+    assert ((row.lat, row.lng), row.coordinate_precision) == (ROUTE_120_POINT, "exact")
+    assert row.osm_ref == "node/2"

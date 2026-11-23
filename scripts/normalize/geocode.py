@@ -233,9 +233,16 @@ def _place(
     if _reuse_place_code(session, row) or _reuse_same_address(session, row):
         counts.reused += 1
         return
-    if row.kind == "highway" and not _names_a_point(row.normalized_address or ""):
-        row.needs_review = True
-        counts.bare_highways += 1
+    if _is_bare_highway(row):
+        # A bare highway has no point of its own, so it gets a point on its road, as a bare
+        # street does. With no road in the snapshot it is left for a person.
+        match = locator.locate_highway(row) if locator is not None else None
+        if match is not None:
+            _apply(row, _from_match(match), counts)
+            counts.placed += 1
+        else:
+            row.needs_review = True
+            counts.bare_highways += 1
         return
 
     found, skipped_for_budget = _look_up(row, geocoder, counts, max_requests, locator)
@@ -383,7 +390,11 @@ def _look_up(
 
 
 def _from_match(match: Match) -> Placement:
-    return Placement(match.lat, match.lng, "exact", "osm", match.osm_ref, match)
+    return Placement(match.lat, match.lng, match.precision, "osm", match.osm_ref, match)
+
+
+def _is_bare_highway(row: AddressNormalization) -> bool:
+    return row.kind == "highway" and not _names_a_point(row.normalized_address or "")
 
 
 def _names_a_point(normalized_address: str) -> bool:

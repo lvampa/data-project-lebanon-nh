@@ -15,6 +15,7 @@ from locations.osm import (
     Snapshot,
     locate_address,
     locate_intersection,
+    locate_road,
     place_candidates,
 )
 from postgres.models.address_normalization import AddressNormalization
@@ -45,6 +46,14 @@ class OsmLocator:
             return self._intersection(normalized)
         if row.kind in ("address", "place"):
             return self._address_or_place(row, normalized)
+        return None
+
+    def locate_highway(self, row: AddressNormalization) -> Match | None:
+        """An approximate point on the road a bare highway row names, as a bare street gets
+        one. The job calls this only for a highway that names no exit and no cross street."""
+        for text in (row.street, row.normalized_address):
+            if text and (found := locate_road(self.snapshot, text)) is not None:
+                return found
         return None
 
     def _intersection(self, normalized: str) -> Match | None:

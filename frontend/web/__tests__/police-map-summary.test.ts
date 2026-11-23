@@ -11,6 +11,7 @@ function place(id: string, name: string, count: number): Address {
     normalized_address: name,
     count,
     traffic_count: 0,
+    nearby_traffic: 0,
     lat: 43.64,
     lng: -72.25,
     precision: 'exact',

@@ -26,6 +26,7 @@ export function address(id: string, extra: Partial<Address> = {}): Address {
     normalized_address: id,
     count: 0,
     traffic_count: 0,
+    nearby_traffic: 0,
     lat: 43.64,
     lng: -72.25,
     precision: 'exact',

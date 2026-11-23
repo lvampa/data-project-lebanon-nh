@@ -45,6 +45,7 @@ function pin(id: string, count: number, extra: Partial<Address> = {}): Address {
     normalized_address: id,
     count,
     traffic_count: 0,
+    nearby_traffic: 0,
     lat: 43.674,
     lng: -72.2656,
     precision: 'exact',

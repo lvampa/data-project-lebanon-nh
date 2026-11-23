@@ -43,10 +43,13 @@ class FakeGeocoder:
 
 
 def hit(
-    coordinates: tuple[float, float] = IN_CITY, precision: Precision = "exact"
+    coordinates: tuple[float, float] = IN_CITY,
+    precision: Precision = "exact",
+    name: str | None = None,
+    ref: str | None = None,
 ) -> GeocodeResult:
     lat, lng = coordinates
-    return GeocodeResult(lat, lng, precision)
+    return GeocodeResult(lat, lng, precision, name=name, ref=ref)
 
 
 def add_row(session, raw: str, **columns) -> None:
@@ -100,7 +103,9 @@ def test_rule_rows_are_geocoded_too(db_session):
 
 def test_a_query_that_misses_falls_back_to_the_street_and_is_approximate(db_session):
     add_row(db_session, "12 MAIN ST", street="MAIN ST")
-    geocoder = FakeGeocoder({"MAIN ST, Lebanon, NH": hit(precision="exact")})
+    geocoder = FakeGeocoder(
+        {"MAIN ST, Lebanon, NH": hit(precision="exact", name="Main Street")}
+    )
 
     counts = geocode_job.run(geocoder)
 
@@ -128,7 +133,7 @@ def test_an_intersection_that_finds_only_a_street_point_is_a_miss(db_session):
 def test_an_intersection_that_misses_never_falls_back_to_its_street(db_session):
     raw = "MAIN ST + HANOVER ST"
     add_row(db_session, raw, kind="intersection", street="MAIN ST")
-    geocoder = FakeGeocoder({"MAIN ST, Lebanon, NH": hit()})
+    geocoder = FakeGeocoder({"MAIN ST, Lebanon, NH": hit(name="Main Street")})
 
     geocode_job.run(geocoder)
 
@@ -150,7 +155,10 @@ def test_an_intersection_with_a_point_from_the_geocoder_is_placed(db_session):
 def test_a_result_outside_the_city_is_discarded_and_the_street_is_tried(db_session):
     add_row(db_session, "12 MAIN ST", street="MAIN ST")
     geocoder = FakeGeocoder(
-        {"12 MAIN ST, Lebanon, NH": hit(CONCORD), "MAIN ST, Lebanon, NH": hit()}
+        {
+            "12 MAIN ST, Lebanon, NH": hit(CONCORD),
+            "MAIN ST, Lebanon, NH": hit(name="Main Street"),
+        }
     )
 
     geocode_job.run(geocoder)
@@ -345,11 +353,23 @@ def test_a_bare_highway_is_marked_for_review_and_never_looked_up(db_session):
     assert counts.bare_highways == 1
 
 
-@pytest.mark.parametrize(
-    "address",
-    ["I-89 and Route 4", "I-89 exit 18", "I-89 & Main St"],
-)
-def test_a_highway_with_a_cross_street_or_exit_is_looked_up(db_session, address):
+POINT_HIGHWAYS = [
+    "I-89 and Route 4",
+    "I-89 exit 18",
+    "I-89 & Main St",
+    "I-89 mile marker 19",
+    "I-89 milepost 19",
+    "I-89 NB MM 19",
+    "I-89 rest area",
+    "Walking bridge over I-89",
+    "Route 4 under I-89",
+]
+
+
+@pytest.mark.parametrize("address", POINT_HIGHWAYS)
+def test_a_highway_that_names_a_point_is_looked_up_and_takes_an_exact_point(
+    db_session, address
+):
     add_row(
         db_session,
         "HWY",
@@ -357,11 +377,37 @@ def test_a_highway_with_a_cross_street_or_exit_is_looked_up(db_session, address)
         normalized_address=address,
         geocode_query=address,
     )
-    geocoder = FakeGeocoder({address: hit(precision="approximate")})
+    geocoder = FakeGeocoder({address: hit(precision="exact")})
 
     geocode_job.run(geocoder)
 
-    assert the_row(db_session, "HWY").lat == IN_CITY[0]
+    row = the_row(db_session, "HWY")
+    assert (row.lat, row.coordinate_precision) == (IN_CITY[0], "exact")
+
+
+@pytest.mark.parametrize("address", POINT_HIGHWAYS)
+def test_a_highway_that_names_a_point_never_takes_a_road_point(db_session, address):
+    add_row(
+        db_session,
+        "HWY",
+        kind="highway",
+        normalized_address=address,
+        street="I-89",
+        geocode_query=address,
+    )
+    geocoder = FakeGeocoder(
+        {
+            address: hit(precision="approximate", name="Interstate 89", ref="I 89"),
+            "I-89, Lebanon, NH": hit(name="Interstate 89", ref="I 89"),
+        }
+    )
+
+    geocode_job.run(geocoder)
+
+    row = the_row(db_session, "HWY")
+    assert (row.lat, row.geocode_attempts) == (None, 1)
+    # The street alone is never tried, as it is not for an intersection.
+    assert geocoder.queries == [address]
 
 
 def test_a_human_row_is_never_touched(db_session):

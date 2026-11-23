@@ -43,11 +43,16 @@ FEATURES_QUERY = f"""\
 );
 out tags center;"""
 
-# Named roads, with the id and position of every node on them.
+# Roads with a name or a route number, with the id and position of every node on them. The
+# log names a highway by its number ("ROUTE 120", "I-89"), and a way can carry the number
+# in `ref` with no name at all.
 ROADS_QUERY = f"""\
 [out:json][timeout:{_TIMEOUT_S}];
 {_CITY_AREA}
-way(area.city)["highway"]["name"];
+(
+  way(area.city)["highway"]["name"];
+  way(area.city)["highway"]["ref"];
+);
 out geom;"""
 
 

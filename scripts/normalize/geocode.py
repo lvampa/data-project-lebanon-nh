@@ -1,6 +1,6 @@
 """Put normalized locations on the map, by hand from Connor's Mac.
 
-    uv run geocode [--retry-approximate] [--no-llm]
+    uv run geocode [--retry-approximate | --retry-missed] [--no-llm]
 
 It takes `ai` and `rule` rows that have a normalized address and no coordinates, and
 never a `human` row. It reuses the coordinates of a place code another row already
@@ -20,6 +20,14 @@ tmp/, with the old coordinates beside the new ones.
 `--retry-approximate` looks again, from the snapshot only, at every row that sits on a
 street point, a group of rows at a time. A miss changes nothing, and a group with a
 `human` row in it is left alone.
+
+`--retry-missed` does the same for rows with no point that the job marked for review:
+three misses, or a bare highway that had no road. A hit places the row and resets its
+attempts, and leaves the review mark, which normalize sets too. A miss changes nothing.
+
+A bare highway, one that names no exit and no cross street, gets an approximate point on
+the road the snapshot matches by name or by route number, and is marked for review only
+when none matches.
 
 A row whose lookup times out, cannot connect or gets a 5xx is skipped and not charged
 an attempt, so the next run tries it again. A 403 or 429 stops the run at once, and so
@@ -45,7 +53,7 @@ from locations.geocode import (
     geocode,
     in_city_bounds,
 )
-from locations.osm import Candidate, Match, Snapshot
+from locations.osm import Candidate, Match, Snapshot, names_the_road
 from mongo.ai_calls import AiCallLog, ai_calls_collection
 from mongo.client import get_db
 from postgres import get_engine, open_session
@@ -74,9 +82,13 @@ Geocoder = Callable[[str], GeocodeResult | None]
 
 DEFAULT_SNAPSHOT_DIR = Path(__file__).parents[1] / "data" / "osm"
 
-# A highway names a point when it gives a cross street, an exit, or a landmark. The
-# last is a guess: anything that says "near" or "at".
-_NAMES_A_POINT = re.compile(r"\b(and|exit|near|at)\b|&", re.IGNORECASE)
+# A highway names a point when it gives a cross street, an exit, a mile marker, a rest area,
+# a road it passes over or under, or a landmark. The last is a guess: anything that says
+# "near" or "at".
+_NAMES_A_POINT = re.compile(
+    r"\b(and|exits?|near|at|over|under|mile\s*post|mile\s+marker|rest\s+area|mm\s*\d+)\b|&",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -233,9 +245,16 @@ def _place(
     if _reuse_place_code(session, row) or _reuse_same_address(session, row):
         counts.reused += 1
         return
-    if row.kind == "highway" and not _names_a_point(row.normalized_address or ""):
-        row.needs_review = True
-        counts.bare_highways += 1
+    if _is_bare_highway(row):
+        # A bare highway has no point of its own, so it gets a point on its road, as a bare
+        # street does. With no road in the snapshot it is left for a person.
+        match = locator.locate_highway(row) if locator is not None else None
+        if match is not None:
+            _apply(row, _from_match(match), counts)
+            counts.placed += 1
+        else:
+            row.needs_review = True
+            counts.bare_highways += 1
         return
 
     found, skipped_for_budget = _look_up(row, geocoder, counts, max_requests, locator)
@@ -359,10 +378,15 @@ def _look_up(
     nominatim = found if found and in_city_bounds(found.lat, found.lng) else None
     if nominatim is not None and nominatim.precision == "exact":
         return Placement(nominatim.lat, nominatim.lng, "exact", "nominatim"), False
+    if nominatim is not None and not _is_the_road_asked_for(row, nominatim):
+        # A search that cannot find a road can answer with another, such as Hanover Street
+        # for an exit on Interstate 89.
+        nominatim = None
     if locator is not None and (match := locator.locate(row)) is not None:
         return _from_match(match), False
-    if row.kind == "intersection":
-        # A street point is the middle of one of the two streets, not where they cross.
+    if row.kind == "intersection" or _is_point_highway(row):
+        # A street point is the middle of one of the two streets, not where they cross, and
+        # a road point is not an exit, a mile marker or a rest area.
         return None, False
     if nominatim is not None:
         # Only a street point came back, and the snapshot has nothing better.
@@ -376,35 +400,77 @@ def _look_up(
         return None, True
     counts.requests += 1
     street = geocoder(f"{row.street}, Lebanon, NH")
-    if street is not None and in_city_bounds(street.lat, street.lng):
+    if (
+        street is not None
+        and in_city_bounds(street.lat, street.lng)
+        and _is_the_road_asked_for(row, street, street_alone=True)
+    ):
         # A street with no point on it is approximate, whatever the match said.
         return Placement(street.lat, street.lng, "approximate", "nominatim"), False
     return None, False
 
 
+def _is_the_road_asked_for(
+    row: AddressNormalization, result: GeocodeResult, *, street_alone: bool = False
+) -> bool:
+    """Whether an approximate answer is the street the row is on, by its name or its route
+    number. The street alone is asked for by `row.street`. The row's own query also stands
+    for its normalized address, which a highway row may use too."""
+    highway = row.kind == "highway"
+    return any(
+        names_the_road(requested, name=result.name, ref=result.ref, anywhere=highway)
+        for requested in _requested_streets(row, street_alone=street_alone)
+    )
+
+
+def _requested_streets(row: AddressNormalization, *, street_alone: bool) -> list[str]:
+    streets = [row.street] if row.street else []
+    normalized = row.normalized_address or ""
+    if not street_alone and row.kind == "highway" and normalized:
+        streets.append(normalized)
+    if not streets and not street_alone and normalized:
+        # No street is known, so the street part of the address, with no house number.
+        part = re.sub(r"^\d+[A-Za-z]?(-\d+)?\s+", "", normalized.rpartition(", ")[2])
+        streets.append(part)
+    return [street for street in streets if street]
+
+
 def _from_match(match: Match) -> Placement:
-    return Placement(match.lat, match.lng, "exact", "osm", match.osm_ref, match)
+    return Placement(match.lat, match.lng, match.precision, "osm", match.osm_ref, match)
 
 
-def _names_a_point(normalized_address: str) -> bool:
+def _is_bare_highway(row: AddressNormalization) -> bool:
+    return row.kind == "highway" and not names_a_point(row.normalized_address or "")
+
+
+def _is_point_highway(row: AddressNormalization) -> bool:
+    """A highway that names an exit, a mile marker, a rest area or a road it crosses takes
+    only an exact point."""
+    return row.kind == "highway" and names_a_point(row.normalized_address or "")
+
+
+def names_a_point(normalized_address: str) -> bool:
     return _NAMES_A_POINT.search(normalized_address) is not None
 
 
-def run_retry(locator: OsmLocator) -> GeocodeCounts:
-    """Look again, from the snapshot only, at every row that sits on a street point.
+def run_retry(locator: OsmLocator, *, missed: bool = False) -> GeocodeCounts:
+    """Look again, from the snapshot only, at rows the job could not place well.
 
-    A group is the rows that share a normalized address and kind, joined by any place code
-    they share. One lookup places the whole group. A group with a `human` row in it is
-    left alone, and so is a group the snapshot cannot place.
+    By default these are the rows that sit on a street point. With `missed` they are the
+    rows with no point at all that the job gave up on and marked for review. A group is the
+    rows that share a normalized address and kind, joined by any place code they share. One
+    lookup places the whole group, and a missed group gets its attempts reset. A group
+    with a `human` row in it is left alone, and so is a group the snapshot cannot place.
     """
     counts = GeocodeCounts()
     with open_session() as session:
-        for group in _approximate_groups(session):
+        groups = _missed_groups(session) if missed else _approximate_groups(session)
+        for group in groups:
             counts.groups_retried += 1
             if _has_human_row(session, group):
                 counts.groups_kept += 1
                 continue
-            rows = _still_approximate(session, group)
+            rows = _still_waiting(session, group, missed=missed)
             if not rows:
                 session.rollback()
                 continue
@@ -415,6 +481,10 @@ def run_retry(locator: OsmLocator) -> GeocodeCounts:
                 continue
             for row in rows:
                 _apply(row, _from_match(match), counts)
+                if missed:
+                    # The review mark is left alone: normalize sets it too, for an unsure
+                    # answer or a street off the list, and a placed row can still need it.
+                    row.geocode_attempts = 0
                 counts.placed += 1
             session.commit()
     logfire.info(
@@ -434,25 +504,60 @@ def _first_match(locator: OsmLocator, rows: list[AddressNormalization]) -> Match
         if key in tried:
             continue
         tried.add(key)
-        if (match := locator.locate(row)) is not None:
+        if (match := _snapshot_match(locator, row)) is not None:
             return match
     return None
 
 
+def _snapshot_match(locator: OsmLocator, row: AddressNormalization) -> Match | None:
+    """What the snapshot gives for a row. A bare highway gets a point on its road, and a
+    highway with an exit or a cross street is not looked up here."""
+    if row.kind == "highway":
+        return locator.locate_highway(row) if _is_bare_highway(row) else None
+    return locator.locate(row)
+
+
 def _approximate_groups(session: Session) -> list[list[AddressNormalization]]:
-    rows = list(
-        session.scalars(
-            select(AddressNormalization)
-            .where(
-                AddressNormalization.source.in_(("ai", "rule")),
-                AddressNormalization.normalized_address.is_not(None),
-                AddressNormalization.coordinate_precision == "approximate",
-                # A highway or a bare street is not something the snapshot can place.
-                AddressNormalization.kind.in_(("address", "place", "intersection")),
+    return _grouped(
+        list(
+            session.scalars(
+                select(AddressNormalization)
+                .where(
+                    AddressNormalization.source.in_(("ai", "rule")),
+                    AddressNormalization.normalized_address.is_not(None),
+                    AddressNormalization.coordinate_precision == "approximate",
+                    # A highway is pinned when it is first looked up, never retried here.
+                    AddressNormalization.kind.in_(("address", "place", "intersection")),
+                )
+                .order_by(AddressNormalization.id)
             )
-            .order_by(AddressNormalization.id)
         )
     )
+
+
+def _missed_groups(session: Session) -> list[list[AddressNormalization]]:
+    """The rows with no point that the job marked for review: three misses, or a bare
+    highway with no road at the time."""
+    return _grouped(
+        list(
+            session.scalars(
+                select(AddressNormalization)
+                .where(
+                    AddressNormalization.source.in_(("ai", "rule")),
+                    AddressNormalization.normalized_address.is_not(None),
+                    AddressNormalization.lat.is_(None),
+                    AddressNormalization.needs_review.is_(True),
+                    AddressNormalization.kind.in_(
+                        ("address", "place", "intersection", "highway")
+                    ),
+                )
+                .order_by(AddressNormalization.id)
+            )
+        )
+    )
+
+
+def _grouped(rows: list[AddressNormalization]) -> list[list[AddressNormalization]]:
     # Rows are joined through the keys they share, so a place code links two addresses. A
     # code joins rows of one kind on one street only, like `_reuse_place_code`: a code can
     # name an area, and a row with no street is joined by its address alone.
@@ -505,15 +610,21 @@ def _has_human_row(session: Session, group: list[AddressNormalization]) -> bool:
     )
 
 
-def _still_approximate(
-    session: Session, group: list[AddressNormalization]
+def _still_waiting(
+    session: Session, group: list[AddressNormalization], *, missed: bool
 ) -> list[AddressNormalization]:
     """Re-read each row under a lock, like `_still_ours_to_place`: the admin may have
     corrected one since the group was loaded."""
     kept = []
     for row in group:
         session.refresh(row, with_for_update=True)
-        if row.source in ("ai", "rule") and row.coordinate_precision == "approximate":
+        if row.source not in ("ai", "rule"):
+            continue
+        if missed:
+            waiting = row.lat is None and row.needs_review
+        else:
+            waiting = row.coordinate_precision == "approximate"
+        if waiting:
             kept.append(row)
     return kept
 
@@ -578,15 +689,17 @@ def main(
             )
             return 1
         locator = _make_locator(args, DEFAULT_SNAPSHOT_DIR, backend_factory)
-        if args.retry_approximate:
+        retrying = args.retry_approximate or args.retry_missed
+        if retrying:
             if locator is None:
-                print("--retry-approximate needs a snapshot.", file=sys.stderr)
+                flag = "--retry-missed" if args.retry_missed else "--retry-approximate"
+                print(f"{flag} needs a snapshot.", file=sys.stderr)
                 return 1
-            counts = run_retry(locator)
+            counts = run_retry(locator, missed=args.retry_missed)
         else:
             counts = run(geocoder, locator=locator)
     review_file = write_review(counts.from_snapshot, REVIEW_DIR, datetime.now())
-    _print_summary(counts, locator, review_file, retry=args.retry_approximate)
+    _print_summary(counts, locator, review_file, retry=retrying)
     if counts.stopped_at_limit:
         print(f"Stopped at {MAX_REQUESTS} requests. Run it again for the rest.")
     if counts.geocoder_unavailable:
@@ -596,6 +709,54 @@ def main(
         )
         return 1
     return 0
+
+
+@dataclass(frozen=True)
+class Coverage:
+    """How many parsed log entries a kind of location has, and how many sit on a pin."""
+
+    kind: str
+    entries: int
+    pinned: int
+
+
+NOT_NORMALIZED = "not normalized"
+
+
+def coverage_by_kind(session: Session) -> list[Coverage]:
+    """The share of parsed log entries with a pin, by the kind of their location. An entry
+    with no location, or one the job has not normalized, counts under "not normalized"."""
+    rows = session.execute(
+        select(
+            func.coalesce(AddressNormalization.kind, NOT_NORMALIZED),
+            func.count(),
+            func.count(AddressNormalization.lat),
+        )
+        .select_from(LogEntry)
+        .outerjoin(
+            AddressNormalization, AddressNormalization.raw_address == LogEntry.location
+        )
+        .where(LogEntry.parse_error.is_(False))
+        .group_by(func.coalesce(AddressNormalization.kind, NOT_NORMALIZED))
+        .order_by(func.coalesce(AddressNormalization.kind, NOT_NORMALIZED))
+    ).all()
+    return [Coverage(kind, entries, pinned) for kind, entries, pinned in rows]
+
+
+def coverage_line(rows: Sequence[Coverage]) -> str:
+    """ "Entries on a pin: 91.2% of 1,000 (address 99.0%, intersection 80.0%)". Whole tenths
+    of a percent, with no float arithmetic."""
+    total = sum(row.entries for row in rows)
+    if total == 0:
+        return "Entries on a pin: no parsed entries."
+    pinned = sum(row.pinned for row in rows)
+    kinds = ", ".join(f"{row.kind} {_percent(row.pinned, row.entries)}" for row in rows)
+    return f"Entries on a pin: {_percent(pinned, total)} of {total:,} ({kinds})"
+
+
+def _percent(part: int, whole: int) -> str:
+    tenths = (part * 1000 + whole // 2) // whole
+    return f"{tenths // 10}.{tenths % 10}%"
 
 
 def _print_summary(
@@ -632,6 +793,8 @@ def _print_summary(
             )
     if review_file is not None:
         print(f"Review the placements in {review_file}.")
+    with open_session() as session:
+        print(coverage_line(coverage_by_kind(session)))
 
 
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
@@ -640,10 +803,17 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
+    retries = parser.add_mutually_exclusive_group()
+    retries.add_argument(
         "--retry-approximate",
         action="store_true",
         help="Look again, from the OpenStreetMap snapshot, at rows on a street point.",
+    )
+    retries.add_argument(
+        "--retry-missed",
+        action="store_true",
+        help="Look again, from the OpenStreetMap snapshot, at rows marked for review "
+        "that have no point.",
     )
     parser.add_argument(
         "--no-llm",

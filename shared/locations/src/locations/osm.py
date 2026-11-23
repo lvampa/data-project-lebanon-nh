@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from locations.canonical import canonical_address
+from locations.geocode import in_city_bounds
 
 # Nodes of two roads this close together are one crossing, such as a divided road's.
 INTERSECTION_SPREAD_M = 150
@@ -58,7 +59,7 @@ _FEATURE_KINDS = (
     "building",
 )
 
-Via = Literal["address", "intersection", "llm"]
+Via = Literal["address", "intersection", "road", "llm"]
 
 
 @dataclass(frozen=True)
@@ -80,9 +81,12 @@ class Feature:
 @dataclass(frozen=True)
 class Road:
     ref: str
+    # Empty for a way that has only a route number.
     name: str
     nodes: tuple[int, ...]
     points: tuple[tuple[float, float], ...]
+    # The way's `ref` tag, such as "NH 120;US 4". Snapshots from before it was kept have none.
+    route_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -93,6 +97,7 @@ class Match:
     via: Via
     name: str
     address: str
+    precision: Literal["exact", "approximate"] = "exact"
 
 
 @dataclass(frozen=True)
@@ -112,6 +117,7 @@ class Snapshot:
         self._by_address: dict[tuple[str, str], list[Feature]] = {}
         self._by_token: dict[str, list[Feature]] = {}
         self._roads_by_street: dict[str, list[Road]] = {}
+        self._roads_by_route: dict[str, list[Road]] = {}
         for feature in features:
             if feature.housenumber and feature.street:
                 key = (_house_key(feature.housenumber), street_key(feature.street))
@@ -119,7 +125,10 @@ class Snapshot:
             for token in _tokens(feature.name or ""):
                 self._by_token.setdefault(token, []).append(feature)
         for road in roads:
-            self._roads_by_street.setdefault(street_key(road.name), []).append(road)
+            if road.name:
+                self._roads_by_street.setdefault(street_key(road.name), []).append(road)
+            for route in _routes_of(road):
+                self._roads_by_route.setdefault(route, []).append(road)
 
     def features_at(self, housenumber: str, street: str) -> list[Feature]:
         return self._by_address.get((_house_key(housenumber), street_key(street)), [])
@@ -128,7 +137,36 @@ class Snapshot:
         return self._by_token.get(token, [])
 
     def roads_named(self, street: str) -> list[Road]:
-        return self._roads_by_street.get(street_key(street), [])
+        """The ways named `street`, and the ways whose route number it is, as "ROUTE 120"
+        is for a way with `ref` "NH 120"."""
+        return self._roads_matching(street, anywhere=False)
+
+    def roads_in(self, text: str) -> list[Road]:
+        """Like `roads_named`, but finds a route number anywhere in the text, as in
+        "ROCK CUT - ROUTE 120"."""
+        return self._roads_matching(text, anywhere=True)
+
+    def _roads_matching(self, text: str, *, anywhere: bool) -> list[Road]:
+        found = {
+            road.ref: road for road in self._roads_by_street.get(street_key(text), [])
+        }
+        for alternatives in _route_alternatives(text, anywhere=anywhere):
+            by_route = [
+                self._roads_by_route[route]
+                for route in sorted(alternatives)
+                if route in self._roads_by_route
+            ]
+            if (
+                len(by_route) > 1
+                and len({tuple(r.ref for r in roads) for roads in by_route}) > 1
+            ):
+                # A bare "ROUTE 4" that finds both a state and a federal road does not say
+                # which one, so it matches neither.
+                continue
+            for roads in by_route:
+                for road in roads:
+                    found.setdefault(road.ref, road)
+        return list(found.values())
 
     def to_json(self) -> str:
         return json.dumps(
@@ -148,9 +186,10 @@ class Snapshot:
             [
                 Road(
                     r["ref"],
-                    r["name"],
+                    r["name"] or "",
                     tuple(r["nodes"]),
                     tuple((p[0], p[1]) for p in r["points"]),
+                    r.get("route_ref", ""),
                 )
                 for r in data["roads"]
             ],
@@ -168,6 +207,25 @@ class Snapshot:
 
 def street_key(street: str) -> str:
     return canonical_address(street)
+
+
+def names_the_road(
+    requested: str, *, name: str | None, ref: str | None, anywhere: bool = False
+) -> bool:
+    """Whether a road called `name`, with route number `ref`, is the road `requested` names.
+
+    The names are equal once spelled the same way, or the route numbers overlap: "ROUTE 120"
+    is a road with ref "NH 120". With `anywhere`, the request may hold the route among other
+    words. A geocoder that cannot find a road can answer with another one, so an answer with
+    no name and no ref is not the road asked for either.
+    """
+    if name and street_key(name) == street_key(requested):
+        return True
+    wanted = route_refs(requested, anywhere=anywhere)
+    have = {r for value in (ref or "").split(";") for r in ref_values(value)}
+    if name:
+        have |= route_refs(name)
+    return bool(wanted & have)
 
 
 def snapshot_from_replies(
@@ -199,10 +257,14 @@ def _feature_of(element: dict[str, Any]) -> Feature | None:
 
 
 def _road_of(element: dict[str, Any]) -> Road | None:
-    name = (element.get("tags") or {}).get("name")
+    tags = element.get("tags") or {}
+    name = tags.get("name") or ""
+    route_ref = tags.get("ref") or ""
     nodes = element.get("nodes") or []
     geometry = element.get("geometry") or []
-    if element.get("type") != "way" or not name or len(nodes) != len(geometry):
+    if element.get("type") != "way" or not (name or route_ref):
+        return None
+    if len(nodes) != len(geometry):
         return None
     if any(point is None for point in geometry):
         return None
@@ -211,7 +273,116 @@ def _road_of(element: dict[str, Any]) -> Road | None:
         name=name,
         nodes=tuple(nodes),
         points=tuple((float(p["lat"]), float(p["lon"])) for p in geometry),
+        route_ref=route_ref,
     )
+
+
+# A route number as the log writes it, and as OpenStreetMap writes `ref`. The text is upper
+# case, with dots dropped and hyphens as spaces, so "I-89" is "I 89" and "U.S. 4" is "US 4".
+_ROUTE = re.compile(
+    r"(?<![A-Z0-9])"
+    r"(?P<prefix>INTERSTATE|NEW HAMPSHIRE ROUTE|STATE ROUTE|STATE RTE|STATE RT|STATE HWY"
+    r"|US ROUTE|US HIGHWAY|US HWY|NH ROUTE|NH RTE|NH RT|NH HWY|ROUTE|HIGHWAY|RTE|RT|HWY"
+    r"|US|U S|NH|I)"
+    r"\s*(?P<number>\d{1,3}[A-Z]?)(?![A-Z0-9])"
+)
+
+
+def route_refs(text: str, *, anywhere: bool = False) -> set[str]:
+    """The `ref` values a road called `text` can have: "ROUTE 120" is "NH 120" or "US 120",
+    "I-89" is "I 89", "US 4" is "US 4". A bare "ROUTE", "RT" or "HWY" can be a state or a
+    federal route, never an interstate. With `anywhere`, the route number may sit inside
+    other words, as in "ROCK CUT - ROUTE 120". Otherwise the text must be only the route.
+    The number is a whole token with its letter, so "4" never matches "4A".
+    """
+    return {
+        ref
+        for alternatives in _route_alternatives(text, anywhere=anywhere)
+        for ref in alternatives
+    }
+
+
+def _route_alternatives(text: str, *, anywhere: bool) -> list[tuple[str, ...]]:
+    """One tuple per route in the text. A bare route has two refs to choose between."""
+    cleaned = " ".join(text.upper().replace(".", "").replace("-", " ").split())
+    matches = (
+        list(_ROUTE.finditer(cleaned))
+        if anywhere
+        else [m for m in [_ROUTE.fullmatch(cleaned)] if m is not None]
+    )
+    alternatives: list[tuple[str, ...]] = []
+    for match in matches:
+        prefix, number = match["prefix"], match["number"]
+        if prefix in ("I", "INTERSTATE"):
+            alternatives.append((f"I {number}",))
+        elif prefix.startswith(("US", "U S")):
+            alternatives.append((f"US {number}",))
+        elif prefix.startswith(("NH", "NEW HAMPSHIRE", "STATE")):
+            alternatives.append((f"NH {number}",))
+        else:
+            alternatives.append((f"NH {number}", f"US {number}"))
+    return alternatives
+
+
+def _routes_of(road: Road) -> set[str]:
+    """Every route number a way has: its `ref` values, and the one its name spells out."""
+    routes = {ref for value in road.route_ref.split(";") for ref in ref_values(value)}
+    if road.name:
+        routes |= route_refs(road.name)
+    return routes
+
+
+def ref_values(value: str) -> set[str]:
+    """The refs one `ref` value gives, such as "I 89", or the value itself when it is not
+    a route the log can name."""
+    cleaned = " ".join(value.upper().replace(".", "").replace("-", " ").split())
+    return route_refs(cleaned) or ({cleaned} if cleaned else set())
+
+
+def locate_road(snapshot: Snapshot, text: str) -> Match | None:
+    """A point on the road a highway row names, or None.
+
+    A road is often many ways, and a point on it is only somewhere along it, so the match is
+    approximate. It is the point halfway along the longest way, measured in meters along the
+    part of the way inside the city, which does not move between runs. A way is fetched
+    whole, so one that runs out of town, as I-89 does, is cut at the city's edge first.
+    """
+    parts = [
+        (road, inside)
+        for road in snapshot.roads_in(text)
+        if (inside := [p for p in road.points if in_city_bounds(*p)])
+    ]
+    if not parts:
+        return None
+    road, inside = max(parts, key=lambda part: (_length(part[1]), part[0].ref))
+    lat, lng = _halfway(inside)
+    if not in_city_bounds(lat, lng):
+        return None
+    name = road.name or road.route_ref
+    return Match(lat, lng, road.ref, "road", name, "", precision="approximate")
+
+
+def _length(points: list[tuple[float, float]]) -> float:
+    return sum(
+        meters_between(a[0], a[1], b[0], b[1])
+        for a, b in zip(points, points[1:], strict=False)
+    )
+
+
+def _halfway(points: list[tuple[float, float]]) -> tuple[float, float]:
+    """The vertex nearest the halfway point along the line, in meters, not in vertices.
+
+    The points are the ones inside the city. A way that leaves the box and comes back has a
+    gap between two of them, and the length counts the jump across it. That is harmless: all
+    this needs is a point that does not move between runs.
+    """
+    half = _length(points) / 2
+    best, best_gap, walked = points[0], abs(half), 0.0
+    for a, b in zip(points, points[1:], strict=False):
+        walked += meters_between(a[0], a[1], b[0], b[1])
+        if abs(walked - half) < best_gap:
+            best, best_gap = b, abs(walked - half)
+    return best
 
 
 def locate_address(snapshot: Snapshot, housenumber: str, street: str) -> Match | None:

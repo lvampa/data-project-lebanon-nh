@@ -86,3 +86,8 @@ def test_both_queries_are_scoped_to_the_city_boundary():
         assert '["admin_level"="8"]["name"="Lebanon"]' in query
         assert "map_to_area->.city" in query
         assert "(area.city)" in query
+
+
+def test_the_roads_query_takes_ways_with_a_route_number_and_no_name():
+    assert '["highway"]["name"]' in ROADS_QUERY
+    assert '["highway"]["ref"]' in ROADS_QUERY

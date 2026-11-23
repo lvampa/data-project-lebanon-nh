@@ -1,7 +1,7 @@
 import type { ExpressionSpecification } from 'maplibre-gl'
 
 // Road names in the map tiles are spelled out: "N Main St" here is "North Main Street" there.
-const SUFFIX: Record<string, string> = {
+export const SUFFIX: Record<string, string> = {
   Rd: 'Road',
   St: 'Street',
   Ave: 'Avenue',

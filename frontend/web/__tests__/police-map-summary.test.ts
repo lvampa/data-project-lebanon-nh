@@ -99,4 +99,16 @@ describe('searchPlaces', () => {
   it('stops at the limit', () => {
     expect(searchPlaces(PLACES, 'mile', 2)).toHaveLength(2)
   })
+
+  it('matches a street typed short or spelled out', () => {
+    const street = place('m', 'Mount Support Rd', 10)
+    const ids = (query: string) => searchPlaces([street], query).map((p) => p.id)
+    expect(ids('mt support')).toEqual(['m'])
+    expect(ids('Mt. Support')).toEqual(['m'])
+    expect(ids('mount support road')).toEqual(['m'])
+  })
+
+  it('matches past the punctuation in a name', () => {
+    expect(searchPlaces([place('q', 'Quarry Hill, Mount Support Rd', 10)], 'hill mt').map((p) => p.id)).toEqual(['q'])
+  })
 })

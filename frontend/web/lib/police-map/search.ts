@@ -1,7 +1,26 @@
 import type { Address } from '../types'
 import { isTrafficOnly, pinCalls, pinName } from './map-style'
+import { SUFFIX } from './streets'
 
 const MIN_QUERY = 2
+
+// One spelling per word, so "Mt" finds "Mount" and "road" finds "Rd".
+const SHORT_FORM: Record<string, string> = {
+  mount: 'mt',
+  ...Object.fromEntries(
+    Object.entries(SUFFIX).map(([short, long]) => [long.toLowerCase(), short.toLowerCase()]),
+  ),
+}
+
+function searchForm(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[.,]/g, '')
+    .split(/\s+/)
+    .filter((word) => word !== '')
+    .map((word) => SHORT_FORM[word] ?? word)
+    .join(' ')
+}
 
 // The number beside a result: its calls, or "62 traffic" for a place with only traffic.
 export function resultCount(address: Address): string {
@@ -11,10 +30,10 @@ export function resultCount(address: Address): string {
 
 // Places and streets whose name holds what was typed, busiest first.
 export function searchPlaces(addresses: Address[], query: string, limit = 8): Address[] {
-  const needle = query.trim().toLowerCase()
+  const needle = searchForm(query)
   if (needle.length < MIN_QUERY) return []
   return addresses
-    .filter((address) => pinName(address).toLowerCase().includes(needle))
+    .filter((address) => searchForm(pinName(address)).includes(needle))
     .sort((a, b) => pinCalls(b) - pinCalls(a) || pinName(a).localeCompare(pinName(b)))
     .slice(0, limit)
 }

@@ -40,8 +40,11 @@ describe('PoliceViews layout', () => {
     expect(header().parentElement?.className ?? '').not.toMatch(/w-screen|max-w-/)
   })
 
-  it('never lets the tabs scroll', () => {
+  // jsdom has no layout, so this pins the classes: sideways scroll for a small phone, and
+  // room under the tabs for the active underline, so the row never scrolls down.
+  it('lets the tabs scroll sideways but not down', () => {
     render(<PoliceViews addresses={[]} stats={stats} />)
-    expect(screen.getByRole('tablist').className).not.toMatch(/overflow/)
+    const tabs = screen.getByRole('tablist')
+    expect(tabs).toHaveClass('overflow-x-auto', 'pb-px')
   })
 })

@@ -103,7 +103,9 @@ export function PoliceViews({ addresses, stats }: Props) {
         <div className="eyebrow">Public safety · Updated {updatedOf(stats)}</div>
         <h1 className="mb-3 mt-1.5 text-display-2">Police activity in Lebanon</h1>
         <Tabs
-          className="mb-3.5 w-full"
+          // Four tabs are wider than a small phone, so the row scrolls sideways. The 1px of
+          // padding holds the active underline, which sits 1px low, so it never scrolls down.
+          className="mb-3.5 w-full overflow-x-auto pb-px"
           items={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
           value={view}
           onChange={(id) => go({ view: id as View, filters })}

@@ -70,6 +70,11 @@ There is no Elasticsearch and no dbt.
 - **Rule pass for addresses:** a house number on a street from the street list, two listed streets joined by `and`, `&` or `/`, or a known place code is settled with `source = 'rule'`.
   The street list is built each run from parcel locations.
   Anything else goes to AI.
+- **One spelling per crossing:** an intersection is stored with its two streets in alphabetical order, ignoring case, so "Poverty Ln and Mechanic St" and "Mechanic St and Poverty Ln" are one text and share a pin.
+  Each street keeps its own spelling.
+  A new spelling of a crossing that is already stored takes the stored text, a `human` row's first and then the lowest id, so "Lahaye" and "LaHaye" do not make two pins.
+  This applies only to the `intersection` kind, since "Wright and Sons, Main St" is a place, and the geocode query for a crossing is rebuilt from the stored text.
+  `RULES_VERSION` is 3 because a rule row for a crossing now reads in this order.
 - **AI backend:** one interface, `AiBackend`.
   `ClaudeCliBackend` runs `claude -p` with every tool, setting, hook and MCP server turned off, from an empty temporary directory, and refuses to run if `ANTHROPIC_API_KEY` is set.
   The default model is Haiku.

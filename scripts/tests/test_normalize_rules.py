@@ -125,8 +125,9 @@ def test_two_listed_streets_joined_by_and_are_an_intersection():
     rule = settled(result)["MAIN ST & ELM ST"]
     assert rule.kind == "intersection"
     assert rule.street == "MAIN ST"
-    assert rule.normalized_address == "Main St and Elm St"
-    assert rule.geocode_query == "Main St and Elm St, Lebanon, NH"
+    # The two streets are in alphabetical order, whichever came first in the log.
+    assert rule.normalized_address == "Elm St and Main St"
+    assert rule.geocode_query == "Elm St and Main St, Lebanon, NH"
 
 
 def test_an_ampersand_or_slash_makes_the_same_intersection():
@@ -305,3 +306,14 @@ def test_the_rules_version_changed_with_the_title_case_output():
     # Rule rows store this. Existing rows were written upper case, so a redo must see
     # them as old. Moving it back to 1 would hide them.
     assert rules_prompt_version() != "rules-1"
+
+
+def test_the_same_crossing_in_either_order_is_one_text():
+    first = apply_rules([location("Main St and Elm St")], STREETS, places={})
+    second = apply_rules([location("Elm St and Main St")], STREETS, places={})
+
+    assert (
+        settled(first)["MAIN ST & ELM ST"].normalized_address
+        == settled(second)["ELM ST & MAIN ST"].normalized_address
+        == "Elm St and Main St"
+    )

@@ -39,14 +39,18 @@ interface Props {
   // Streets to light up, spelled as the map tiles spell them. None lights nothing.
   streets: string[]
   onSelect: (id: string) => void
+  // What the counts are made of under the filters, as the count line says it.
+  noun?: string
 }
 
 type Status = 'loading' | 'ready' | 'error'
 
-export function IncidentMap({ addresses, selection, ringed, streets, onSelect }: Props) {
+export function IncidentMap({ addresses, selection, ringed, streets, onSelect, noun }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const onSelectRef = useRef(onSelect)
+  // Read by the hover tip, which is set up once with the map.
+  const nounRef = useRef(noun)
   // The pins the map starts with. Later counts go into its source in place, so a filter
   // change does not rebuild the map.
   const addressesRef = useRef(addresses)
@@ -57,6 +61,7 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
 
   useEffect(() => {
     onSelectRef.current = onSelect
+    nounRef.current = noun
     addressesRef.current = addresses
   })
 
@@ -128,13 +133,13 @@ export function IncidentMap({ addresses, selection, ringed, streets, onSelect }:
           strong.textContent = `${props.point_count} places`
           label.append(
             strong,
-            ` · ${clusterHolds(props.calls ?? 0, props.weight ?? 0)} · zoom in to see them`,
+            ` · ${clusterHolds(props.calls ?? 0, props.weight ?? 0, nounRef.current)} · zoom in to see them`,
           )
         } else {
           strong.textContent = nameOf(props.name ?? '')
           label.append(
             strong,
-            ` · ${props.t ? trafficNearby(props.w ?? 0) : entryWord((props.n ?? 0) + (props.h ?? 0))}`,
+            ` · ${props.t ? trafficNearby(props.w ?? 0) : entryWord((props.n ?? 0) + (props.h ?? 0), nounRef.current)}`,
             props.a ? ` · ${APPROXIMATE_TIP}` : '',
           )
         }

@@ -22,7 +22,7 @@ places.sql (one query, as today)
 report-gen
   ├─ addresses.json, places/<id>.json, stats.json   as today
   └─ activity.json   one row per entry, in columns, with lookup tables
-frontend/web /map
+frontend/web /public-safety
   ├─ loads addresses.json and stats.json at build time, as today
   └─ fetches /data/activity.json the first time a filter or another tab is used
 ```

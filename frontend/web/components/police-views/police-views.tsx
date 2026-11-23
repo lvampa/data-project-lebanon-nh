@@ -1,10 +1,11 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Tabs } from '@project/ui/components/ui/tabs'
 import type { FilteredCard, PinSummary } from '@/components/police-map/filtered-section'
 import type { Activity } from '@/lib/police-views/activity'
 import {
+  cardGroupOf,
   filteredAddresses,
   tally,
   topOf,
@@ -25,7 +26,7 @@ import {
   type View,
 } from '@/lib/police-views/filters'
 import { weekFlags, weeksInRange } from '@/lib/police-views/findings'
-import { lastDayOf, selectEntries } from '@/lib/police-views/select'
+import { STATION_ID, lastDayOf, selectEntries } from '@/lib/police-views/select'
 import type { Address, StatsData } from '@/lib/types'
 import { BusyTimesView } from './busy-times-view'
 import { ChartTooltip } from './chart-tooltip'
@@ -51,9 +52,6 @@ interface Props {
   addresses: Address[]
   stats: StatsData
 }
-
-// Space kept under the map, so its bottom edge shows.
-const BELOW_MAP = 16
 
 export function PoliceViews({ addresses, stats }: Props) {
   const [{ view, filters }, setState] = useState<{ view: View; filters: Filters }>({
@@ -96,15 +94,19 @@ export function PoliceViews({ addresses, stats }: Props) {
   const showOfficer = (officer: string) => go({ view: 'map', filters: { ...filters, officer } })
 
   const onMap = view === 'map'
-  const width = onMap ? '' : 'mx-auto max-w-7xl'
 
+  // The header keeps the layout's width on every tab, so switching tabs never moves it.
+  // Only the map runs the full width of the window, keeping the page's side padding; the
+  // body clips the scrollbar overflow of w-screen.
   return (
-    <div>
-      <div className={width}>
+    <div className={onMap ? 'police-map-page' : undefined}>
+      <div className="shrink-0">
         <div className="eyebrow">Public safety · Updated {updatedOf(stats)}</div>
         <h1 className="mb-3 mt-1.5 text-display-2">Police activity in Lebanon</h1>
         <Tabs
-          className="mb-3.5 w-full overflow-x-auto"
+          // Four tabs are wider than a small phone, so the row scrolls sideways. The 1px of
+          // padding holds the active underline, which sits 1px low, so it never scrolls down.
+          className="mb-3.5 w-full overflow-x-auto pb-px"
           items={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
           value={view}
           onChange={(id) => go({ view: id as View, filters })}
@@ -119,7 +121,7 @@ export function PoliceViews({ addresses, stats }: Props) {
       </div>
 
       {onMap ? (
-        <FittedMap>
+        <div className="relative left-1/2 min-h-0 w-screen flex-1 -translate-x-1/2 px-5 md:px-8">
           <PoliceMap
             addresses={addresses}
             shown={derived && !isDefault(filters) ? derived.mapAddresses : undefined}
@@ -130,9 +132,9 @@ export function PoliceViews({ addresses, stats }: Props) {
                 : null
             }
           />
-        </FittedMap>
+        </div>
       ) : (
-        <div className={width}>
+        <div>
           {state.status === 'error' ? (
             <LoadError onRetry={() => setAttempt((n) => n + 1)} />
           ) : !activity || !derived ? (
@@ -193,18 +195,22 @@ function useDerived(
     )
     // The same kind with no other filter, for "1,204 of 19,316".
     const kindOnly = { ...DEFAULT_FILTERS, kind: filters.kind }
-    const narrowed =
-      filters.time !== kindOnly.time || filters.range !== kindOnly.range || filters.officer !== null
+    const narrowedButOfficer = filters.time !== kindOnly.time || filters.range !== kindOnly.range
+    const narrowed = narrowedButOfficer || filters.officer !== null
     const sum = (mask: Uint8Array) => mask.reduce((a, v) => a + v, 0)
-    const shown = { all: sum(kept), public: sum(publicKept) }
+    const shown = { all: sum(kept), public: sum(publicKept), everyOfficer: sum(everyOfficerKept) }
     const totals = narrowed
       ? {
           all: sum(selectEntries(activity, addresses, kindOnly, 'all')),
           public: sum(selectEntries(activity, addresses, kindOnly, 'public')),
         }
-      : shown
+      : { all: shown.all, public: shown.public }
 
     const pins = tally(activity, kept, (i) => activity.pin[i])
+    // A street's filtered numbers count the places listed on it, as its headline does.
+    const cards = tally(activity, kept, cardGroupOf(activity, addresses))
+    const publicPins = tally(activity, publicKept, (i) => activity.pin[i])
+    const publicCards = tally(activity, publicKept, cardGroupOf(activity, addresses))
     const town = tally(activity, kept, wholeTown).get(TOWN)
     const pinIndex = new Map(addresses.map((address, index) => [address.id, index]))
 
@@ -231,6 +237,14 @@ function useDerived(
         })),
       } satisfies StatsData,
       countLine(view: View): string {
+        // The Officers tab lists every officer and hides the officer filter, so its line
+        // leaves that filter out too.
+        if (view === 'officers') {
+          const n = shown.everyOfficer.toLocaleString('en-US')
+          const noun = nounFor(filters.kind)
+          const total = totals.all.toLocaleString('en-US')
+          return narrowedButOfficer ? `${n} of ${total} ${noun}` : `${n} ${noun}`
+        }
         const lens = view === 'places' ? 'public' : 'all'
         const noun = view === 'places' ? 'calls from the public' : nounFor(filters.kind)
         const n = shown[lens].toLocaleString('en-US')
@@ -241,8 +255,12 @@ function useDerived(
           noun: nounFor(filters.kind),
           onClear,
           summaryOf(pinId: string): PinSummary | null {
-            const t = pins.get(pinIndex.get(pinId) ?? -1)
+            const index = pinIndex.get(pinId) ?? -1
+            // A place listed on its street opens its own card, so it takes its own tally.
+            const listedOnStreet = addresses[index]?.hidden
+            const t = listedOnStreet ? pins.get(index) : cards.get(index)
             if (!t) return null
+            const fromPublic = (listedOnStreet ? publicPins : publicCards).get(index)?.n ?? 0
             return {
               n: t.n,
               hours: t.hours,
@@ -250,6 +268,12 @@ function useDerived(
               sceneTimed: t.scenes.length,
               response: typical(t.responses),
               responseTimed: t.responses.length,
+              started:
+                filters.kind !== 'place'
+                  ? null
+                  : pinId === STATION_ID
+                    ? 'station'
+                    : { fromPublic, byOfficers: t.initiated },
             }
           },
         }
@@ -276,32 +300,6 @@ function updatedOf(stats: StatsData): string {
     month: 'short',
     day: 'numeric',
   }).format(new Date(stats.generated_at))
-}
-
-// The map fills the window under the tabs and filters, so the whole map shows at the top
-// of the page. Measured, and measured again when the bar above it wraps or unwraps.
-function FittedMap({ children }: { children: React.ReactNode }) {
-  const box = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const node = box.current
-    if (!node) return
-    const fit = () => {
-      const top = node.getBoundingClientRect().top + window.scrollY
-      node.style.setProperty(
-        '--map-height',
-        `${Math.round(window.innerHeight - top - BELOW_MAP)}px`,
-      )
-    }
-    fit()
-    window.addEventListener('resize', fit)
-    const observer = new ResizeObserver(fit)
-    if (node.previousElementSibling) observer.observe(node.previousElementSibling)
-    return () => {
-      window.removeEventListener('resize', fit)
-      observer.disconnect()
-    }
-  }, [])
-  return <div ref={box}>{children}</div>
 }
 
 function LoadError({ onRetry }: { onRetry: () => void }) {

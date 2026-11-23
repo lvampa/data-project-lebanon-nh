@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Tabs } from '@project/ui/components/ui/tabs'
 import { TypeLabel } from '@/components/police-map/labels'
-import { nameOf, streetOf } from '@/lib/police-map/format'
+import { alarmsLine, nameOf, streetOf } from '@/lib/police-map/format'
 import { pinName } from '@/lib/police-map/map-style'
 import type { Activity } from '@/lib/police-views/activity'
 import { tally, topOf, type Tally } from '@/lib/police-views/counts'
@@ -33,8 +33,8 @@ type Sort = 'count' | 'night'
 export function PlacesView({ addresses, activity, kept, filters, range, onShow }: Props) {
   const [sort, setSort] = useState<Sort>('count')
   const places = useMemo(() => tally(activity, kept, (i) => activity.pin[i]), [activity, kept])
-  const falseAlarms = useMemo(
-    () => falseAlarmsByPin(activity, addresses, filters),
+  const alarms = useMemo(
+    () => alarmsByPin(activity, addresses, filters),
     [activity, addresses, filters],
   )
 
@@ -57,8 +57,8 @@ export function PlacesView({ addresses, activity, kept, filters, range, onShow }
             Places police were called to most
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Calls from the public about something at the place. Leaves out traffic stops, officer
-            patrols and checks, false alarms, and the police station.
+            Calls from the public about something at the place. Leaves out alarms, traffic stops,
+            officer patrols and checks, and the police station.
           </p>
         </div>
         <Tabs
@@ -84,7 +84,7 @@ export function PlacesView({ addresses, activity, kept, filters, range, onShow }
                 rank={index + 1}
                 address={addresses[pin]}
                 tally={t}
-                falseAlarms={falseAlarms.get(pin) ?? 0}
+                alarms={alarms.get(pin) ?? NO_ALARMS}
                 showNight={filters.time === 'all'}
                 weekMax={weekMax}
                 range={range}
@@ -110,7 +110,7 @@ function PlaceTile({
   rank,
   address,
   tally: t,
-  falseAlarms,
+  alarms,
   showNight,
   weekMax,
   range,
@@ -121,7 +121,7 @@ function PlaceTile({
   rank: number
   address: Address
   tally: Tally
-  falseAlarms: number
+  alarms: Alarms
   showNight: boolean
   weekMax: number
   range: WeekRange
@@ -168,12 +168,7 @@ function PlaceTile({
             </b>
           </span>
         )}
-        {falseAlarms > 0 && (
-          <span>
-            {falseAlarms.toLocaleString('en-US')} false {falseAlarms === 1 ? 'alarm' : 'alarms'},
-            not counted above
-          </span>
-        )}
+        {alarms.all > 0 && <span>{alarmsLine(alarms.all, alarms.false)}</span>}
       </div>
       <button
         type="button"
@@ -186,20 +181,30 @@ function PlaceTile({
   )
 }
 
-// A place's false alarms, under the same dates, hours and officer as its calls.
-function falseAlarmsByPin(
+interface Alarms {
+  all: number
+  false: number
+}
+const NO_ALARMS: Alarms = { all: 0, false: 0 }
+
+// A place's alarms, and how many were false, under the same dates, hours and officer as its
+// calls. None of them is in the card's count, which is only calls from the public.
+function alarmsByPin(
   activity: Activity,
   addresses: Address[],
   filters: Filters,
-): Map<number, number> {
-  const alarms = selectEntries(activity, addresses, { ...filters, kind: 'alarms' }, 'all')
+): Map<number, Alarms> {
+  const kept = selectEntries(activity, addresses, { ...filters, kind: 'alarms' }, 'all')
   const falseAlarm = activity.dispositions.indexOf('False Alarm')
-  const counts = new Map<number, number>()
+  const counts = new Map<number, Alarms>()
   for (let i = 0; i < activity.size; i++) {
-    if (!alarms[i] || activity.disposition[i] !== falseAlarm) continue
+    if (!kept[i]) continue
     const pin = activity.pin[i]
     if (addresses[pin].kind !== 'place') continue
-    counts.set(pin, (counts.get(pin) ?? 0) + 1)
+    const c = counts.get(pin) ?? { all: 0, false: 0 }
+    c.all++
+    if (activity.disposition[i] === falseAlarm) c.false++
+    counts.set(pin, c)
   }
   return counts
 }

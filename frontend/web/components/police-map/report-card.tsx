@@ -7,8 +7,15 @@ import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
 import type { CardState } from '@/components/police-map/use-place-card'
 import { categoriesFor } from '@/lib/police-map/categories'
 import { remainder } from '@/lib/police-map/card'
-import { isApproximatePlace } from '@/lib/police-map/approximate'
-import { approximateLine, nameOf, onStreetHeading, streetOf } from '@/lib/police-map/format'
+import { isApproximatePlace, streetTotal } from '@/lib/police-map/approximate'
+import {
+  approximateLine,
+  nameOf,
+  onStreetHeading,
+  streetBreakdown,
+  streetItselfLine,
+  streetOf,
+} from '@/lib/police-map/format'
 import { isTrafficOnly, pinName } from '@/lib/police-map/map-style'
 import { rankLine } from '@/lib/police-map/rank'
 import type { Address, PlaceCard } from '@/lib/types'
@@ -51,6 +58,7 @@ export function ReportCard({
 }: Props) {
   const road = address.kind === 'road'
   const trafficOnly = isTrafficOnly(address)
+  const total = streetTotal(address, onStreet)
   const name = pinName(address)
   const street = streetOf(name)
   const subtitle = isApproximatePlace(address)
@@ -67,7 +75,7 @@ export function ReportCard({
       {/* 2. How many, and how that compares */}
       <div className="mt-4 flex items-baseline gap-2.5">
         <b className="text-display-2 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
-          {(trafficOnly ? address.traffic_count : address.count).toLocaleString('en-US')}
+          {(trafficOnly ? address.traffic_count : total).toLocaleString('en-US')}
         </b>
         <span className="text-muted-foreground">
           {trafficOnly
@@ -77,10 +85,18 @@ export function ReportCard({
               : `${filtered?.noun ?? 'log entries'} here`}
         </span>
       </div>
+      {!trafficOnly && onStreet.length > 0 && (
+        <a
+          href="#on-this-street"
+          className="mt-1 block text-sm text-muted-foreground hover:text-primary"
+        >
+          {streetBreakdown(address.count, onStreet)} ↓
+        </a>
+      )}
       {/* A rank against filtered counts would compare unlike things, so it is left out. */}
       {!trafficOnly && !filtered && (
         <div className="mt-1.5 text-sm text-muted-foreground">
-          {rankLine(address.count, counts, address.kind)}
+          {rankLine(total, counts, address.kind)}
         </div>
       )}
       {filtered && (
@@ -107,12 +123,17 @@ export function ReportCard({
         </div>
       )}
       {state.status === 'ready' && (
-        <CardDetails address={address} card={state.card} street={street} />
+        <CardDetails address={address} card={state.card} street={street} onStreet={onStreet} />
       )}
 
       {/* 7. Method */}
       {onStreet.length > 0 && (
-        <OnThisStreet street={nameOf(name)} places={onStreet} onChoose={onChoose} />
+        <OnThisStreet
+          street={nameOf(name)}
+          places={onStreet}
+          onChoose={onChoose}
+          filtered={filtered !== null}
+        />
       )}
 
       <HowWeCount since={since} />
@@ -127,10 +148,13 @@ function OnThisStreet({
   street,
   places,
   onChoose,
+  filtered,
 }: {
   street: string
   places: Address[]
   onChoose: (id: string) => void
+  // The places' counts follow the filters, unlike the whole-year lists above them.
+  filtered: boolean
 }) {
   const [first, rest] = [places.slice(0, LISTED_AT_FIRST), places.slice(LISTED_AT_FIRST)]
   const row = (place: Address) => (
@@ -147,7 +171,10 @@ function OnThisStreet({
   )
   return (
     <section>
-      <h3 className={SECTION_HEADING}>{onStreetHeading(street)}</h3>
+      <h3 id="on-this-street" className={SECTION_HEADING}>
+        {onStreetHeading(street)}
+        {filtered && ' · with your filters'}
+      </h3>
       <ul>{first.map(row)}</ul>
       {rest.length > 0 && (
         <details>
@@ -204,22 +231,28 @@ function CardDetails({
   address,
   card,
   street,
+  onStreet,
 }: {
   address: Address
   card: PlaceCard
   street: string | null
+  onStreet: Address[]
 }) {
   const road = address.kind === 'road'
   const kinds = categoriesFor(address.kind, card.categories)
-  // A place lists the incidents at the place, and a street lists every call.
-  const otherTypes = remainder(card.types, road ? address.count : card.categories.premises)
+  // A place lists the incidents at the place, and a street lists every call. The card's own
+  // count, not a filtered one, since these lists are the whole year's.
+  const otherTypes = remainder(card.types, road ? card.count : card.categories.premises)
   const otherOutcomes = remainder(
     card.outcomes,
-    road ? address.count : card.categories.premises + card.categories.alarms,
+    road ? card.count : card.categories.premises + card.categories.alarms,
   )
-
   return (
     <>
+      {/* The lists below cover the street itself; its places have their own list further down. */}
+      {road && onStreet.length > 0 && (
+        <p className="mt-6 text-sm text-muted-foreground">{streetItselfLine(card.count)}</p>
+      )}
       {/* 3. What kinds of calls */}
       <div className="my-4 flex h-2.5 gap-0.5" role="img" aria-label="Calls by kind">
         {kinds.map((kind) => (

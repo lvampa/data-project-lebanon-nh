@@ -4,7 +4,7 @@ import type { FilteredCard } from '@/components/police-map/filtered-section'
 import { ReportCard } from '@/components/police-map/report-card'
 import { TownSummary } from '@/components/police-map/town-summary'
 import { usePlaceCard } from '@/components/police-map/use-place-card'
-import { placesOnStreet, streetNameOf } from '@/lib/police-map/approximate'
+import { placesOnStreet, rankCounts, streetNameOf } from '@/lib/police-map/approximate'
 import type { Address, StatsData } from '@/lib/types'
 
 interface Props {
@@ -22,14 +22,17 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose, filtered
   const state = usePlaceCard(place?.id ?? null, attempt)
   const kind = place?.kind
   const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
-  const counts = useMemo(
-    () => addresses.filter((a) => a.kind === kind && a.count > 0).map((a) => a.count),
-    [addresses, kind],
-  )
+  const counts = useMemo(() => (kind ? rankCounts(addresses, kind) : []), [addresses, kind])
 
   if (!place || !state) {
     return (
-      <TownSummary addresses={addresses} stats={stats} onChoose={onChoose} noun={filtered?.noun} />
+      <TownSummary
+        addresses={addresses}
+        stats={stats}
+        onChoose={onChoose}
+        noun={filtered?.noun}
+        filtered={filtered !== null}
+      />
     )
   }
   return (

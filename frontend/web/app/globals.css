@@ -7,13 +7,29 @@
 /* Tailwind only scans this app by default; shared components live outside it. */
 @source "../../shared";
 
+/* The map tab is exactly as tall as the window under the site header (4rem, 76px from md)
+   and the layout's top padding, with 1rem left below. The header above the map takes its
+   own height, and the map takes the rest, however the filters wrap. In a window too short
+   for the map's 420px floor, the page grows instead, so the map never covers the footer. */
+@utility police-map-page {
+  display: flex;
+  flex-direction: column;
+  min-height: min-content;
+  height: calc(100dvh - 4rem - 2.5rem);
+  @media (min-width: 768px) {
+    height: calc(100dvh - 76px - 2.5rem);
+  }
+}
+
 /* The police map page: the map on the left and a 420px panel on the right. */
 @utility police-map-stage {
   display: grid;
   grid-template-columns: 1fr;
-  /* The views set --map-height so the map fills the window under their tabs and filters. */
-  height: var(--map-height, calc(100dvh - 9rem));
+  height: 100%;
   min-height: 420px;
+  /* Sized as if empty when the page works out its minimum, so a long side panel scrolls
+     inside the stage instead of making the page tall; only the 420px floor counts. */
+  contain: size;
   @media (min-width: 1024px) {
     grid-template-columns: 1fr 420px;
   }

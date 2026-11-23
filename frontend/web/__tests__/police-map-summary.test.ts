@@ -113,6 +113,15 @@ describe('searchPlaces', () => {
     expect(searchPlaces([street], 'north main').map((p) => p.id)).toEqual(['n'])
   })
 
+  it('finds a direction typed alone, only where a word starts', () => {
+    const places = [place('w', 'W Lebanon Plaza', 10), place('h', 'Hawthorne St', 5)]
+    expect(searchPlaces(places, 'west').map((p) => p.id)).toEqual(['w'])
+  })
+
+  it('still matches inside a word as typed', () => {
+    expect(searchPlaces([place('h', 'Hannaford', 10)], 'anna').map((p) => p.id)).toEqual(['h'])
+  })
+
   it('matches past the punctuation in a name', () => {
     expect(
       searchPlaces([place('q', 'Quarry Hill, Mount Support Rd', 10)], 'hill mt').map((p) => p.id),

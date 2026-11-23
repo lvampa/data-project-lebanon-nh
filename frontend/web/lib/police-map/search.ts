@@ -32,11 +32,16 @@ export function resultCount(address: Address): string {
 }
 
 // Places and streets whose name holds what was typed, busiest first.
+// The text as typed matches anywhere, and the one spelling per word matches where a word
+// starts, since "west" folds to "w", which is in every other name.
 export function searchPlaces(addresses: Address[], query: string, limit = 8): Address[] {
-  const needle = searchForm(query)
-  if (needle.length < MIN_QUERY) return []
+  const typed = query.trim().toLowerCase()
+  if (typed.length < MIN_QUERY) return []
+  const folded = ` ${searchForm(query)}`
+  const matches = (name: string) =>
+    name.toLowerCase().includes(typed) || ` ${searchForm(name)}`.includes(folded)
   return addresses
-    .filter((address) => searchForm(pinName(address)).includes(needle))
+    .filter((address) => matches(pinName(address)))
     .sort((a, b) => pinCalls(b) - pinCalls(a) || pinName(a).localeCompare(pinName(b)))
     .slice(0, limit)
 }

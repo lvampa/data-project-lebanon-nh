@@ -14,7 +14,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from locations.canonical import canonical_address
+from locations.canonical import canonical_address, canonical_crossing, crossing_key
 from postgres import utc_now
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
@@ -240,6 +240,7 @@ class Locations:
     def __init__(self, streets: Sequence[str]) -> None:
         self._streets = list(streets)
         self._place_codes: dict[str, str | None] = {}
+        self._crossings: dict[str, str] | None = None
 
     def can_call(self) -> bool:
         return bool(self._streets)
@@ -422,6 +423,14 @@ class Locations:
     def _write(
         self, session: Session, raw: str, place_code: str | None, **values: Any
     ) -> None:
+        if values.get("kind") == "intersection" and values.get("normalized_address"):
+            # Only an intersection is a crossing: "Wright and Sons, Main St" is a place.
+            shown = self._crossing_text(session, values["normalized_address"])
+            values = {
+                **values,
+                "normalized_address": shown,
+                "geocode_query": f"{shown}, Lebanon, NH",
+            }
         _upsert(
             session,
             AddressNormalization,
@@ -431,6 +440,34 @@ class Locations:
             cleared_if_changed=_COORDINATES_CLEARED_ON_NEW_ADDRESS,
             changes_on="normalized_address",
         )
+
+    def _crossing_text(self, session: Session, normalized: str) -> str:
+        """The text a crossing is stored as: its legs in order, in the spelling the
+        crossing already has. A `human` row's spelling comes first, then the lowest id, so
+        a new spelling lands on the text the rest already share. The backfill picks the
+        most-used spelling instead, and the two agree once every row has the same text."""
+        if self._crossings is None:
+            self._crossings = {}
+            rows = session.execute(
+                select(AddressNormalization.normalized_address)
+                .where(
+                    AddressNormalization.kind == "intersection",
+                    AddressNormalization.normalized_address.is_not(None),
+                )
+                .order_by(
+                    (AddressNormalization.source == "human").desc(),
+                    AddressNormalization.id,
+                )
+            )
+            for (stored,) in rows:
+                key = crossing_key(stored) if stored else None
+                if stored and key is not None:
+                    self._crossings.setdefault(key, stored)
+        ordered = canonical_crossing(normalized)
+        key = crossing_key(ordered)
+        if key is None:
+            return ordered
+        return self._crossings.setdefault(key, ordered)
 
 
 # --- shared helpers ---

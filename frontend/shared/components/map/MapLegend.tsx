@@ -16,7 +16,7 @@ const DEFAULT_CATEGORIES: LegendCategory[] = [
 
 // Three sample circles for the 'scale' variant: size and opacity both grow with the count.
 const SCALE_SAMPLES = [
-  { size: 12, opacity: 0.45 },
+  { size: 12, opacity: 0.65 },
   { size: 20, opacity: 0.72 },
   { size: 30, opacity: 0.9 },
 ]

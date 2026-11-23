@@ -29,13 +29,43 @@ describe('SiteHeader', () => {
 
   it('lists the four topics in order', () => {
     render(<SiteHeader />)
+    const text = desktopNav().textContent ?? ''
+    const order = ['Voter Info', 'Public safety', 'Properties', 'Government'].map((label) =>
+      text.indexOf(label),
+    )
+    expect(order.every((at) => at >= 0)).toBe(true)
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+  })
+
+  it('links only the topics that are ready', () => {
+    render(<SiteHeader />)
     const links = within(desktopNav()).getAllByRole('link')
     expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
-      ['Voter Info', '/elections'],
       ['Public safety', '/public-safety'],
-      ['Properties', '/properties'],
-      ['Government', '/government'],
     ])
+  })
+
+  // The chip shows from xl up and the screen-reader text below it, so each topic has both.
+  it('says each topic that is not ready is coming soon', () => {
+    render(<SiteHeader />)
+    for (const label of ['Voter Info', 'Properties', 'Government']) {
+      const topic = within(desktopNav()).getByText(
+        (_, element) => element?.tagName === 'SPAN' && element.firstChild?.textContent === label,
+      )
+      expect(topic.textContent).toBe(`${label}Coming soonComing soon`)
+      expect(within(topic).getByText('Coming soon', { selector: '.sr-only' })).toHaveClass(
+        'xl:hidden',
+      )
+    }
+  })
+
+  it('marks coming-soon topics in the phone menu too', async () => {
+    const user = userEvent.setup()
+    render(<SiteHeader />)
+    await user.click(screen.getByRole('button', { name: 'Open menu' }))
+    const menu = within(screen.getByRole('dialog', { name: 'Menu' }))
+    expect(menu.getAllByText('Coming soon')).toHaveLength(3)
+    expect(menu.getAllByRole('link').map((link) => link.textContent)).not.toContain('Government')
   })
 
   it('links Support to the support page', () => {
@@ -46,15 +76,12 @@ describe('SiteHeader', () => {
   })
 
   it('marks the active topic, including nested pages', () => {
-    mockedUsePathname.mockReturnValue('/government/budgets')
+    mockedUsePathname.mockReturnValue('/public-safety/map')
     render(<SiteHeader />)
     const nav = desktopNav()
-    expect(within(nav).getByRole('link', { name: 'Government' })).toHaveAttribute(
+    expect(within(nav).getByRole('link', { name: 'Public safety' })).toHaveAttribute(
       'aria-current',
       'page',
-    )
-    expect(within(nav).getByRole('link', { name: 'Properties' })).not.toHaveAttribute(
-      'aria-current',
     )
   })
 

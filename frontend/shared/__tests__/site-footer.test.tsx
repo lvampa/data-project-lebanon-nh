@@ -9,14 +9,13 @@ function column(title: string) {
 }
 
 describe('SiteFooter', () => {
-  it('repeats the topics under Explore', () => {
+  it('repeats the topics under Explore, linking only the ones that are ready', () => {
     render(<SiteFooter />)
-    expect(column('Explore').map((link) => link.textContent)).toEqual([
-      'Voter Info',
-      'Public safety',
-      'Properties',
-      'Government',
-    ])
+    const heading = screen.getByRole('heading', { name: 'Explore' })
+    expect(heading.parentElement!.textContent).toBe(
+      'ExploreVoter InfoComing soonPublic safetyPropertiesComing soonGovernmentComing soon',
+    )
+    expect(column('Explore').map((link) => link.textContent)).toEqual(['Public safety'])
   })
 
   it('links About the data, Support and Contact under About', () => {

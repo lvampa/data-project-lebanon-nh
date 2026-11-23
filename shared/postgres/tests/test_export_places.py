@@ -1033,3 +1033,285 @@ def test_every_pins_count_matches_its_activity_entries(db_session):
         entries = json.loads(found["entries"])
         counted = [e for e in entries if e[1] != "traffic" or found["kind"] == "road"]
         assert len(counted) == found["count"], found["id"]
+
+
+# --- the traffic at a place is counted on its street ---
+
+SHOP_POINT = ("43.6700", "-72.2600")
+SHOP = "Sample Shop, Example St"
+SHOP_TRAFFIC = ("Motor Vehicle Stop", "MV Complaint", "Assist Motorist")
+
+
+def add_shop(
+    session, *incident_types: str, raw: str = "SHOP", point=SHOP_POINT, **columns
+) -> None:
+    add_place(
+        session,
+        columns.pop("normalized", SHOP),
+        point,
+        raw,
+        kind="place",
+        precision=columns.pop("precision", "exact"),
+        street=columns.pop("street", "EXAMPLE ST"),
+    )
+    add_entries(session, raw, *incident_types, **columns)
+
+
+def counts_by_kind(session) -> tuple[int, int]:
+    """The sum of every pin's count, and of the unfolded traffic of the place pins."""
+    found = rows(session)
+    return (
+        sum(p["count"] for p in found),
+        sum(p["traffic_count"] for p in found if p["kind"] == "place"),
+    )
+
+
+def entry_total(session) -> int:
+    return sum(len(json.loads(p["entries"])) for p in rows(session))
+
+
+def test_a_places_traffic_is_counted_on_its_street(db_session):
+    add_bare_street(db_session, calls=3)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+
+    street = pin(db_session, "Example St")
+    shop = pin(db_session, SHOP)
+
+    assert (street["count"], street["traffic_count"]) == (3 + 3, 3)
+    assert (shop["count"], shop["traffic_count"], shop["nearby_traffic"]) == (1, 0, 3)
+
+
+def test_the_street_card_lists_the_folded_traffic(db_session):
+    add_bare_street(db_session, calls=1)
+    add_shop(db_session, *SHOP_TRAFFIC)
+
+    street = pin(db_session, "Example St")
+    result = json.loads(street["card"])
+
+    assert result["categories"]["traffic"] == 3
+    assert {t[0] for t in result["types"]} >= {"Motor Vehicle Stop", "MV Complaint"}
+    assert sum(1 for c in result["calls"] if c["category"] == "traffic") == 3
+    # A road's card lists add up to its count.
+    assert sum(result["categories"].values()) == result["count"] == street["count"]
+
+
+def test_the_places_card_keeps_its_own_traffic_as_context_and_does_not_count_it(
+    db_session,
+):
+    add_bare_street(db_session, calls=1)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+
+    shop = pin(db_session, SHOP)
+    result = json.loads(shop["card"])
+
+    assert result["categories"]["traffic"] == 3
+    assert result["count"] == shop["count"] == 1
+    assert all(c["category"] != "traffic" for c in result["calls"])
+
+
+def test_a_places_traffic_with_no_street_pin_stays_on_the_place(db_session):
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+
+    shop = pin(db_session, SHOP)
+
+    assert (shop["count"], shop["traffic_count"], shop["nearby_traffic"]) == (1, 3, 3)
+
+
+def test_a_traffic_only_place_that_folds_has_no_count_and_no_traffic_left(db_session):
+    add_bare_street(db_session, calls=1)
+    add_shop(db_session, *SHOP_TRAFFIC)
+
+    shop = pin(db_session, SHOP)
+
+    assert (shop["count"], shop["traffic_count"], shop["nearby_traffic"]) == (0, 0, 3)
+    assert json.loads(shop["entries"]) == []
+    assert json.loads(shop["card"])["count"] == 0
+
+
+def test_a_traffic_only_place_with_no_street_pin_is_still_traffic_only(db_session):
+    add_shop(db_session, *SHOP_TRAFFIC)
+
+    shop = pin(db_session, SHOP)
+
+    assert (shop["count"], shop["traffic_count"]) == (0, 3)
+
+
+def test_the_places_entries_in_activity_move_with_its_traffic(db_session):
+    add_bare_street(db_session, calls=1)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+
+    street = pin(db_session, "Example St")
+    shop = pin(db_session, SHOP)
+
+    street_categories = [e[1] for e in json.loads(street["entries"])]
+    assert street_categories.count("traffic") == 3
+    assert [e[1] for e in json.loads(shop["entries"])] == ["premises"]
+
+
+def test_a_road_keeps_its_own_traffic_and_an_intersection_is_not_a_street_pin(
+    db_session,
+):
+    add_bare_street(db_session, calls=1)
+    add_place(
+        db_session,
+        "Example St and Sample Ave",
+        ("43.6742", "-72.2650"),
+        "CROSS",
+        kind="intersection",
+        precision="exact",
+        street="EXAMPLE ST",
+    )
+    add_entries(db_session, "CROSS", "Motor Vehicle Stop", "Motor Vehicle Stop")
+    add_shop(db_session, *SHOP_TRAFFIC)
+
+    cross = pin(db_session, "Example St and Sample Ave")
+    street = pin(db_session, "Example St")
+
+    assert (cross["count"], cross["traffic_count"]) == (2, 2)
+    assert street["count"] == 1 + 3
+
+
+def test_the_street_pin_is_chosen_by_its_own_calls_not_by_the_folded_traffic(
+    db_session,
+):
+    add_bare_street(db_session, calls=2, raw="EX ST")
+    add_place(
+        db_session,
+        "Example Street",
+        ("43.6750", "-72.2660"),
+        "EX STREET",
+        kind="place",
+        precision="exact",
+        street="EXAMPLE ST",
+    )
+    add_entries(db_session, "EX STREET", "Welfare Check")
+    add_shop(db_session, *(["Motor Vehicle Stop"] * 6))
+
+    # All six went to the street with more calls of its own, not to the other one.
+    assert pin(db_session, "Example St")["count"] == 2 + 6
+    assert pin(db_session, "Example Street")["count"] == 1
+
+
+def test_a_hidden_places_traffic_folds_like_any_places(db_session):
+    add_bare_street(db_session, calls=1)
+    add_shop(
+        db_session,
+        "Welfare Check",
+        "Motor Vehicle Stop",
+        normalized="Hidden Shop, Example St",
+        precision="approximate",
+        raw="HIDDEN",
+        point=STREET_POINT,
+    )
+
+    hidden = pin(db_session, "Hidden Shop, Example St")
+
+    assert hidden["hidden"] is True
+    assert (hidden["count"], hidden["traffic_count"], hidden["nearby_traffic"]) == (
+        1,
+        0,
+        1,
+    )
+    assert pin(db_session, "Example St")["count"] == 1 + 1
+
+
+def test_a_flagged_location_and_folded_traffic_share_the_streets_rule(db_session):
+    add_bare_street(db_session, calls=1)
+    add_flagged(db_session, calls=2)
+    add_shop(db_session, "Welfare Check", "Motor Vehicle Stop")
+
+    assert pin(db_session, "Example St")["count"] == 1 + 2 + 1
+
+
+def test_the_pins_counts_add_up_to_every_entry_on_a_pin(db_session):
+    add_bare_street(db_session, calls=3)
+    add_flagged(db_session, calls=2)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+    add_shop(
+        db_session,
+        "Alarm",
+        "Motor Vehicle Stop",
+        raw="LONELY",
+        normalized="Lonely Shop, Elm St",
+        street="ELM ST",
+        point=("43.6650", "-72.2500"),
+    )
+
+    count, unfolded = counts_by_kind(db_session)
+
+    # Every entry on a pin is counted once, apart from the traffic with no street pin,
+    # which sits on its place and is counted in no pin's count.
+    assert count + unfolded == entry_total(db_session)
+    assert unfolded == 1
+
+
+def test_each_pins_entries_match_its_count_and_its_unfolded_traffic(db_session):
+    add_bare_street(db_session, calls=3)
+    add_flagged(db_session, calls=2)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+    add_shop(
+        db_session,
+        "Alarm",
+        "Motor Vehicle Stop",
+        raw="LONELY",
+        normalized="Lonely Shop, Elm St",
+        street="ELM ST",
+        point=("43.6650", "-72.2500"),
+    )
+
+    for found in rows(db_session):
+        entries = len(json.loads(found["entries"]))
+        expected = found["count"] + (
+            found["traffic_count"] if found["kind"] == "place" else 0
+        )
+        assert entries == expected, found["id"]
+
+
+def test_traffic_per_pin_matches_the_traffic_entries_in_activity(db_session):
+    add_bare_street(db_session, calls=1)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+
+    found = rows(db_session)
+    from_pins = sum(p["traffic_count"] for p in found)
+    from_entries = sum(
+        1 for p in found for e in json.loads(p["entries"]) if e[1] == "traffic"
+    )
+
+    assert from_pins == from_entries == 3
+
+
+def test_nearby_traffic_is_never_in_a_sum(db_session):
+    add_bare_street(db_session, calls=3)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+    before = (counts_by_kind(db_session), entry_total(db_session))
+
+    db_session.execute(
+        text("DELETE FROM log_entries WHERE incident_type = 'Assist Motorist'")
+    )
+    db_session.flush()
+    with_one_fewer = (counts_by_kind(db_session), entry_total(db_session))
+
+    # Only the entries that moved change a sum. A place's nearby traffic is context.
+    assert before[1] - with_one_fewer[1] == 1
+    assert [p["nearby_traffic"] for p in rows(db_session) if p["kind"] == "road"] == [0]
+
+
+def test_a_stat_entry_is_listed_for_each_entry_on_a_pin(db_session):
+    add_bare_street(db_session, calls=2)
+    add_flagged(db_session, calls=1)
+    add_shop(db_session, "Welfare Check", *SHOP_TRAFFIC)
+
+    for found in rows(db_session):
+        assert len(json.loads(found["stat_entries"])) == len(
+            json.loads(found["entries"])
+        )
+
+
+def test_a_stat_entry_is_the_report_time_and_the_public_type(db_session):
+    add_bare_street(db_session, calls=0)
+    add_entries(db_session, "EX ST", "DEP INFO - DOE", plain=False)
+
+    [found] = rows(db_session)
+
+    [[reported_at, incident_type]] = json.loads(found["stat_entries"])
+    assert (reported_at, incident_type) == ("2026-06-01T12:00:00", "Other")

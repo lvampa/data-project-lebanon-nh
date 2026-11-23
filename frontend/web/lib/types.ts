@@ -14,6 +14,9 @@ export interface StatsData {
   by_type: TypeStat[]
   by_weekday: WeekdayStat[]
   by_hour: HourStat[]
+  // The entries in range that are on a pin, which `by_type`, `by_weekday` and `by_hour` count.
+  // `total` is every entry in range.
+  mapped_total: number
 }
 
 export interface Address {
@@ -24,7 +27,12 @@ export interface Address {
   raw_address: string
   normalized_address: string | null
   count: number
+  // The traffic counted nowhere. For a place, the part with no street pin to fold onto,
+  // usually none. For a road, all its traffic, which is inside `count`.
   traffic_count: number
+  // The traffic at a place, folded onto its street or not, for its "stops nearby" line.
+  // Never add it to a count or a total.
+  nearby_traffic: number
   lat: number
   lng: number
   // 'approximate' when the point is only somewhere on the place's street.

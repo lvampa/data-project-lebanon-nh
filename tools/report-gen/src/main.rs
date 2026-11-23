@@ -5,6 +5,7 @@ mod db;
 mod output;
 #[cfg(test)]
 mod public_rules;
+mod stats;
 
 use anyhow::Result;
 use chrono::NaiveDate;
@@ -33,20 +34,32 @@ async fn main() -> Result<()> {
 
     let pool = sqlx::PgPool::connect(&database_url).await?;
 
-    let stats = db::fetch_stats(&pool, args.since).await?;
-    println!("✓ stats.json  ({} total incidents)", stats.total);
-    output::write_json(&args.output_dir, "stats.json", &stats)?;
+    let total = db::fetch_total(&pool, args.since).await?;
 
     let incidents = db::fetch_incidents(&pool, args.since).await?;
     println!(
-        "✓ incidents.json  ({} rows of {} total, capped at {})",
+        "✓ incidents.json  ({} rows of {total} total, capped at {})",
         incidents.len(),
-        stats.total,
         db::INCIDENT_LIMIT
     );
     output::write_json(&args.output_dir, "incidents.json", &incidents)?;
 
     let places = db::fetch_places(&pool, args.since).await?;
+    // The stats count the entries on a pin, so they come after the pins.
+    let stats = stats::build(total, args.since, &places)?;
+    println!(
+        "✓ stats.json  ({} total incidents, {} on a pin)",
+        stats.total, stats.mapped_total
+    );
+    output::write_json(&args.output_dir, "stats.json", &stats)?;
+    let unfolded: i64 = places
+        .iter()
+        .filter(|place| place.address.kind == "place")
+        .map(|place| place.address.traffic_count)
+        .sum();
+    if unfolded > 0 {
+        println!("  {unfolded} place traffic entries have no street pin, and stay on the place");
+    }
     let addresses: Vec<&db::Address> = places.iter().map(|place| &place.address).collect();
     println!("✓ addresses.json  ({} rows)", addresses.len());
     output::write_json(&args.output_dir, "addresses.json", &addresses)?;

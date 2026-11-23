@@ -16,6 +16,7 @@ const FORD: Address = {
   normalized_address: 'Lebanon Ford, 90 Miracle Mile',
   count: 12,
   traffic_count: 3,
+  nearby_traffic: 3,
   lat: 43.64,
   lng: -72.25,
   precision: 'exact',

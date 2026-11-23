@@ -30,6 +30,7 @@ function pin(id: string, name: string, count: number, extra: Partial<Address> = 
     normalized_address: name,
     count,
     traffic_count: 0,
+    nearby_traffic: 0,
     lat: 43.674,
     lng: -72.2656,
     precision: 'exact',

@@ -69,7 +69,7 @@ fn rust_sources() -> Vec<(String, String)> {
 
 #[test]
 fn there_are_queries_to_check() {
-    assert!(sql_files().len() >= 6);
+    assert!(sql_files().len() >= 3);
 }
 
 #[test]

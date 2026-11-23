@@ -195,16 +195,16 @@ function useDerived(
     )
     // The same kind with no other filter, for "1,204 of 19,316".
     const kindOnly = { ...DEFAULT_FILTERS, kind: filters.kind }
-    const narrowed =
-      filters.time !== kindOnly.time || filters.range !== kindOnly.range || filters.officer !== null
+    const narrowedButOfficer = filters.time !== kindOnly.time || filters.range !== kindOnly.range
+    const narrowed = narrowedButOfficer || filters.officer !== null
     const sum = (mask: Uint8Array) => mask.reduce((a, v) => a + v, 0)
-    const shown = { all: sum(kept), public: sum(publicKept) }
+    const shown = { all: sum(kept), public: sum(publicKept), everyOfficer: sum(everyOfficerKept) }
     const totals = narrowed
       ? {
           all: sum(selectEntries(activity, addresses, kindOnly, 'all')),
           public: sum(selectEntries(activity, addresses, kindOnly, 'public')),
         }
-      : shown
+      : { all: shown.all, public: shown.public }
 
     const pins = tally(activity, kept, (i) => activity.pin[i])
     // A street's filtered numbers count the places listed on it, as its headline does.
@@ -237,6 +237,14 @@ function useDerived(
         })),
       } satisfies StatsData,
       countLine(view: View): string {
+        // The Officers tab lists every officer and hides the officer filter, so its line
+        // leaves that filter out too.
+        if (view === 'officers') {
+          const n = shown.everyOfficer.toLocaleString('en-US')
+          const noun = nounFor(filters.kind)
+          const total = totals.all.toLocaleString('en-US')
+          return narrowedButOfficer ? `${n} of ${total} ${noun}` : `${n} ${noun}`
+        }
         const lens = view === 'places' ? 'public' : 'all'
         const noun = view === 'places' ? 'calls from the public' : nounFor(filters.kind)
         const n = shown[lens].toLocaleString('en-US')

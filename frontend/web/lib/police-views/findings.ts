@@ -6,6 +6,29 @@ import { weekCount } from './counts'
 
 export type WeekFlag = 'thin' | 'partial' | null
 
+// Under the Officers heading: every entry the list leaves out, so its rows and this line add
+// up to the count line.
+export function leftOutLine(
+  unnamed: number,
+  fewOfficers: number,
+  fewEntries: number,
+  least: number,
+): string {
+  const parts: string[] = []
+  if (unnamed > 0) {
+    const verb = unnamed === 1 ? 'entry names' : 'entries name'
+    parts.push(`${unnamed.toLocaleString('en-US')} ${verb} no officer`)
+  }
+  if (fewOfficers > 0) {
+    const officers = fewOfficers === 1 ? '1 officer' : `${fewOfficers} officers`
+    const have = fewOfficers === 1 ? 'has' : 'have'
+    parts.push(
+      `${officers} with fewer than ${least} ${have} ${fewEntries.toLocaleString('en-US')} more`,
+    )
+  }
+  return parts.length === 0 ? '' : `Left out: ${parts.join(', and ')}.`
+}
+
 // A week with under half the usual activity is missing logs, not a quiet week, and the last
 // week is still filling in unless the log covers all seven of its days. Both are judged on
 // every entry, so a filter cannot make a quiet stretch look like missing logs.

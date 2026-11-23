@@ -6,6 +6,7 @@ import {
   directLabels,
   heatKey,
   heatStep,
+  leftOutLine,
   partOfDay,
   stayRows,
   typicalWeek,
@@ -13,6 +14,17 @@ import {
   weeksInRange,
 } from '@/lib/police-views/findings'
 import { SINCE, activityFile, address, times, type FixtureEntry } from './police-views-fixture'
+
+describe('leftOutLine', () => {
+  it('names every entry the Officers list leaves out', () => {
+    expect(leftOutLine(4929, 10, 63, 25)).toBe(
+      'Left out: 4,929 entries name no officer, and 10 officers with fewer than 25 have 63 more.',
+    )
+    expect(leftOutLine(1, 0, 0, 25)).toBe('Left out: 1 entry names no officer.')
+    expect(leftOutLine(0, 1, 3, 25)).toBe('Left out: 1 officer with fewer than 25 has 3 more.')
+    expect(leftOutLine(0, 0, 0, 25)).toBe('')
+  })
+})
 
 const FORD = address('ford')
 

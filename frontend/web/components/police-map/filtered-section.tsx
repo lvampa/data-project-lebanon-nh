@@ -1,5 +1,5 @@
 import { HourStrip } from '@/components/police-views/hour-strip'
-import { fromPublicLine } from '@/lib/police-map/format'
+import { STATION_NOTE, whoStartedLine } from '@/lib/police-map/format'
 
 // One pin's kept entries, for its card while filters are on.
 export interface PinSummary {
@@ -10,9 +10,9 @@ export interface PinSummary {
   sceneTimed: number
   response: number | null
   responseTimed: number
-  // With the place filter on: how many were calls from the public, which is the Places tab's
-  // count, so a place opened from there explains its bigger number. Otherwise null.
-  fromPublic: number | null
+  // With the place filter on: who started the entries, so a place opened from the Places tab
+  // explains its bigger number. Null otherwise. The station is never on the Places tab.
+  started: { fromPublic: number; byOfficers: number } | 'station' | null
 }
 
 // What the card needs from the views when filters are on.
@@ -51,8 +51,13 @@ export function FilteredSection({
   }
   return (
     <section>
-      {summary.fromPublic !== null && summary.fromPublic < summary.n && (
-        <p className="mt-1.5 text-sm text-muted-foreground">{fromPublicLine(summary.fromPublic)}</p>
+      {summary.started === 'station' && (
+        <p className="mt-1.5 text-sm text-muted-foreground">{STATION_NOTE}</p>
+      )}
+      {summary.started && summary.started !== 'station' && (
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {whoStartedLine(summary.started.fromPublic, summary.started.byOfficers)}
+        </p>
       )}
       <h3 className={SECTION_HEADING}>Time of day, with your filters</h3>
       <HourStrip hours={summary.hours} />

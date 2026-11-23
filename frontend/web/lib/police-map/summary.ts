@@ -37,11 +37,11 @@ export function busiestHour(byHour: HourStat[]): string | null {
   return top ? hourLabel(top.hour) : null
 }
 
-// The places with a spot of their own and the most calls, busiest first. A place listed on
-// its street is left out, since it is already inside that street's total.
+// The places with the most calls, busiest first, on the same footing as a place card's rank.
+// A place listed on its street is in here too; the streets list is a separate list.
 export function busiestPlaces(addresses: Address[], limit: number): Address[] {
   return addresses
-    .filter((a) => a.kind === 'place' && !a.hidden)
+    .filter((a) => a.kind === 'place')
     .sort((a, b) => b.count - a.count)
     .slice(0, limit)
 }

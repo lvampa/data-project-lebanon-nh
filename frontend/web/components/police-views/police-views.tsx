@@ -26,7 +26,7 @@ import {
   type View,
 } from '@/lib/police-views/filters'
 import { weekFlags, weeksInRange } from '@/lib/police-views/findings'
-import { lastDayOf, selectEntries } from '@/lib/police-views/select'
+import { STATION_ID, lastDayOf, selectEntries } from '@/lib/police-views/select'
 import type { Address, StatsData } from '@/lib/types'
 import { BusyTimesView } from './busy-times-view'
 import { ChartTooltip } from './chart-tooltip'
@@ -268,7 +268,12 @@ function useDerived(
               sceneTimed: t.scenes.length,
               response: typical(t.responses),
               responseTimed: t.responses.length,
-              fromPublic: filters.kind === 'place' ? fromPublic : null,
+              started:
+                filters.kind !== 'place'
+                  ? null
+                  : pinId === STATION_ID
+                    ? 'station'
+                    : { fromPublic, byOfficers: t.initiated },
             }
           },
         }

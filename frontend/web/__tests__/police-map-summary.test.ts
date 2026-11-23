@@ -86,8 +86,9 @@ describe('the two busiest lists', () => {
   const shop = { ...place('p', 'Shop, 2 Elm St', 500), traffic_count: 40 }
   const pins = [street, crossing, hidden, shop]
 
-  it('lists places with a spot of their own, never one inside a street', () => {
-    expect(busiestPlaces(pins, 5).map((p) => p.id)).toEqual(['p'])
+  // Its order must match the places' rank lines, which count every place.
+  it('lists every place, including one listed on its street, and no streets', () => {
+    expect(busiestPlaces(pins, 5).map((p) => p.id)).toEqual(['p', 'h'])
   })
 
   it('lists streets on their totals, with the places on them, and no crossings', () => {

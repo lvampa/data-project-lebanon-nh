@@ -53,7 +53,6 @@ export function approximateLine(street: string | null): string {
   return street ? `Approximate location, somewhere on ${street}` : 'Approximate location'
 }
 
-// The heading over the places listed on a street's card.
 // "389 at the street itself · 313 at 19 places on it", under a street's total.
 export function streetBreakdown(own: number, onStreet: { count: number }[]): string {
   const theirs = onStreet.reduce((sum, place) => sum + place.count, 0)
@@ -69,20 +68,25 @@ export function alarmsLine(alarms: number, falseAlarms: number): string {
   return `${alarms.toLocaleString('en-US')} ${noun}${falseNote}, not counted above`
 }
 
-// Under a place's filtered count, matching the number its Places card shows.
-export function fromPublicLine(fromPublic: number): string {
-  const these =
-    fromPublic === 1
-      ? '1 of these was a call'
-      : `${fromPublic.toLocaleString('en-US')} of these were calls`
-  return `${these} from the public. The rest were started by officers.`
+// Under a place's filtered count: the calls from the public, which is the number its Places
+// card shows, and the entries officers started. Both are counted; the rest is neither.
+export function whoStartedLine(fromPublic: number, byOfficers: number): string {
+  const calls =
+    fromPublic === 1 ? '1 was a call' : `${fromPublic.toLocaleString('en-US')} were calls`
+  const started = byOfficers === 1 ? '1 was' : `${byOfficers.toLocaleString('en-US')} were`
+  return `${calls} from the public and ${started} started by officers.`
 }
 
-// Over a street card's lists, which cover the street itself and not the places on it.
-export function streetItselfLine(own: number, atPlaces: number, street: string): string {
-  return `At the street itself: ${own.toLocaleString('en-US')}. The ${atPlaces.toLocaleString('en-US')} at places on ${street} are listed below.`
+export const STATION_NOTE =
+  'The Places tab leaves out the station, since the log files reports taken there under the station.'
+
+// Over a street card's lists, which cover the street itself, and the whole year, never the
+// places on it or a filter.
+export function streetItselfLine(own: number): string {
+  return `These lists cover the street itself, the whole year: ${own.toLocaleString('en-US')} ${own === 1 ? 'entry' : 'entries'}.`
 }
 
+// The heading over the places listed on a street's card.
 export function onStreetHeading(street: string): string {
   return `On ${street}, exact spot unknown`
 }

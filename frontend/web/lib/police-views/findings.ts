@@ -16,14 +16,14 @@ export function leftOutLine(
 ): string {
   const parts: string[] = []
   if (unnamed > 0) {
-    const verb = unnamed === 1 ? 'entry names' : 'entries name'
-    parts.push(`${unnamed.toLocaleString('en-US')} ${verb} no officer`)
+    const that = unnamed === 1 ? 'entry that names' : 'entries that name'
+    parts.push(`${unnamed.toLocaleString('en-US')} ${that} no officer`)
   }
   if (fewOfficers > 0) {
     const officers = fewOfficers === 1 ? '1 officer' : `${fewOfficers} officers`
-    const have = fewOfficers === 1 ? 'has' : 'have'
+    const each = fewOfficers === 1 ? '' : ' each'
     parts.push(
-      `${officers} with fewer than ${least} ${have} ${fewEntries.toLocaleString('en-US')} more`,
+      `${fewEntries.toLocaleString('en-US')} by ${officers} with fewer than ${least}${each}`,
     )
   }
   return parts.length === 0 ? '' : `Left out: ${parts.join(', and ')}.`

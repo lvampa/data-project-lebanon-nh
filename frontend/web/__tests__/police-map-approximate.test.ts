@@ -13,7 +13,7 @@ import {
   approximateLine,
   clusterHolds,
   entryWord,
-  fromPublicLine,
+  whoStartedLine,
   onStreetHeading,
   streetBreakdown,
   streetItselfLine,
@@ -99,13 +99,12 @@ describe("a street's total", () => {
     expect(clusterHolds(120, 300)).toBe('120 log entries')
   })
 
-  it('says how many of a filtered place count were calls from the public', () => {
-    expect(fromPublicLine(119)).toBe(
-      '119 of these were calls from the public. The rest were started by officers.',
+  // Both counted: "the rest were started by officers" was false at the station and on streets.
+  it('says how many of a filtered count came from the public and from officers', () => {
+    expect(whoStartedLine(202, 399)).toBe(
+      '202 were calls from the public and 399 were started by officers.',
     )
-    expect(fromPublicLine(1)).toBe(
-      '1 of these was a call from the public. The rest were started by officers.',
-    )
+    expect(whoStartedLine(1, 1)).toBe('1 was a call from the public and 1 was started by officers.')
   })
 
   it('says a Places card leaves out all of its alarms, not only the false ones', () => {
@@ -114,8 +113,8 @@ describe("a street's total", () => {
   })
 
   it("says a street card's lists cover the street itself", () => {
-    expect(streetItselfLine(409, 766, 'Mechanic St')).toBe(
-      'At the street itself: 409. The 766 at places on Mechanic St are listed below.',
+    expect(streetItselfLine(409)).toBe(
+      'These lists cover the street itself, the whole year: 409 entries.',
     )
   })
 

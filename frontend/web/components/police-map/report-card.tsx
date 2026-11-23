@@ -123,18 +123,17 @@ export function ReportCard({
         </div>
       )}
       {state.status === 'ready' && (
-        <CardDetails
-          address={address}
-          card={state.card}
-          street={street}
-          name={nameOf(name)}
-          onStreet={onStreet}
-        />
+        <CardDetails address={address} card={state.card} street={street} onStreet={onStreet} />
       )}
 
       {/* 7. Method */}
       {onStreet.length > 0 && (
-        <OnThisStreet street={nameOf(name)} places={onStreet} onChoose={onChoose} />
+        <OnThisStreet
+          street={nameOf(name)}
+          places={onStreet}
+          onChoose={onChoose}
+          filtered={filtered !== null}
+        />
       )}
 
       <HowWeCount since={since} />
@@ -149,10 +148,13 @@ function OnThisStreet({
   street,
   places,
   onChoose,
+  filtered,
 }: {
   street: string
   places: Address[]
   onChoose: (id: string) => void
+  // The places' counts follow the filters, unlike the whole-year lists above them.
+  filtered: boolean
 }) {
   const [first, rest] = [places.slice(0, LISTED_AT_FIRST), places.slice(LISTED_AT_FIRST)]
   const row = (place: Address) => (
@@ -171,6 +173,7 @@ function OnThisStreet({
     <section>
       <h3 id="on-this-street" className={SECTION_HEADING}>
         {onStreetHeading(street)}
+        {filtered && ' · with your filters'}
       </h3>
       <ul>{first.map(row)}</ul>
       {rest.length > 0 && (
@@ -228,13 +231,11 @@ function CardDetails({
   address,
   card,
   street,
-  name,
   onStreet,
 }: {
   address: Address
   card: PlaceCard
   street: string | null
-  name: string
   onStreet: Address[]
 }) {
   const road = address.kind === 'road'
@@ -246,15 +247,11 @@ function CardDetails({
     card.outcomes,
     road ? card.count : card.categories.premises + card.categories.alarms,
   )
-  const atPlaces = onStreet.reduce((sum, place) => sum + place.count, 0)
-
   return (
     <>
       {/* The lists below cover the street itself; its places have their own list further down. */}
-      {road && atPlaces > 0 && (
-        <p className="mt-6 text-sm text-muted-foreground">
-          {streetItselfLine(card.count, atPlaces, name)}
-        </p>
+      {road && onStreet.length > 0 && (
+        <p className="mt-6 text-sm text-muted-foreground">{streetItselfLine(card.count)}</p>
       )}
       {/* 3. What kinds of calls */}
       <div className="my-4 flex h-2.5 gap-0.5" role="img" aria-label="Calls by kind">

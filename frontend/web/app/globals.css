@@ -27,6 +27,9 @@
   grid-template-columns: 1fr;
   height: 100%;
   min-height: 420px;
+  /* Sized as if empty when the page works out its minimum, so a long side panel scrolls
+     inside the stage instead of making the page tall; only the 420px floor counts. */
+  contain: size;
   @media (min-width: 1024px) {
     grid-template-columns: 1fr 420px;
   }

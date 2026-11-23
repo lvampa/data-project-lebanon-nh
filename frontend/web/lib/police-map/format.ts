@@ -2,8 +2,17 @@ const NEW_HAMPSHIRE = 'America/New_York'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // Officers start about half the entries themselves, so a count is of log entries, not calls.
-export function entryWord(count: number): string {
-  return `${count.toLocaleString('en-US')} ${count === 1 ? 'log entry' : 'log entries'}`
+// A filter names its own kind, as the count line does: "54 traffic stops and calls".
+const ONE_OF: Record<string, string> = {
+  'log entries': 'log entry',
+  'entries about a place': 'entry about a place',
+  'traffic stops and calls': 'traffic stop or call',
+  alarms: 'alarm',
+}
+
+export function entryWord(count: number, noun = 'log entries'): string {
+  const word = count === 1 ? (ONE_OF[noun] ?? noun) : noun
+  return `${count.toLocaleString('en-US')} ${word}`
 }
 
 // "Lebanon Ford" from "Lebanon Ford, 90 Miracle Mile".
@@ -82,8 +91,12 @@ export const APPROXIMATE_TIP = 'approximate location'
 
 // What a group of pins holds, for its tooltip. A group with no calls of its own has only
 // traffic, and its weight is exactly the sum of that traffic.
-export function clusterHolds(calls: number, weight: number): string {
-  return calls === 0 ? trafficNearby(weight) : entryWord(calls)
+const TRAFFIC = 'traffic stops and calls'
+
+export function clusterHolds(calls: number, weight: number, noun?: string): string {
+  // Under the traffic filter, a group's traffic is what it holds, as its size shows.
+  if (noun === TRAFFIC) return entryWord(weight, noun)
+  return calls === 0 ? trafficNearby(weight) : entryWord(calls, noun)
 }
 
 // "Jan to Nov 2026" for a window that starts in January 2026 and was generated in November.

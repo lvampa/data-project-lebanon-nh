@@ -11,6 +11,8 @@ import {
 import {
   alarmsLine,
   approximateLine,
+  clusterHolds,
+  entryWord,
   fromPublicLine,
   onStreetHeading,
   streetBreakdown,
@@ -82,6 +84,19 @@ describe("a street's total", () => {
 
     expect(found.map((a) => a.id)).toEqual(['mount-support-rd', 'quarry-hill', 'marek'])
     expect(resultCount(found[0], hiddenCallsByStreet(ALL))).toBe('1,620')
+  })
+
+  it('names a count with the filter in use, like the count line and the card', () => {
+    expect(entryWord(54, 'traffic stops and calls')).toBe('54 traffic stops and calls')
+    expect(entryWord(1, 'traffic stops and calls')).toBe('1 traffic stop or call')
+    expect(entryWord(1)).toBe('1 log entry')
+    expect(entryWord(2, 'alarms')).toBe('2 alarms')
+  })
+
+  it("counts a group's traffic when the filter is traffic, and its calls otherwise", () => {
+    expect(clusterHolds(0, 300, 'traffic stops and calls')).toBe('300 traffic stops and calls')
+    expect(clusterHolds(120, 300, 'traffic stops and calls')).toBe('300 traffic stops and calls')
+    expect(clusterHolds(120, 300)).toBe('120 log entries')
   })
 
   it('says how many of a filtered place count were calls from the public', () => {

@@ -68,6 +68,7 @@ export function PoliceMap({ addresses, stats, shown, filtered = null }: Props) {
           ringed={ringed}
           streets={streets}
           onSelect={(id) => select(id, false)}
+          noun={filtered?.noun}
         />
         <div className="absolute left-3.5 top-3.5 z-10 w-full max-w-80 pr-16">
           <PlaceSearch addresses={addresses} onChoose={(id) => select(id, true)} />

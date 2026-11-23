@@ -19,7 +19,7 @@ from scripts.models.incident_category import IncidentCategory
 from scripts.normalize.streets import street_list_version
 
 INCIDENT_TYPE_PROMPT_VERSION = "incident_type-1"
-LOCATION_PROMPT_VERSION = "location-1"
+LOCATION_PROMPT_VERSION = "location-2"
 
 LocationKind = Literal["address", "intersection", "place", "highway"]
 
@@ -46,6 +46,9 @@ class LocationItem(AnswerItem):
     geocode_query: str
     # The street from the street list, or an empty string when none fits.
     street: str
+    # True when the text names a person or describes one. The public export then
+    # publishes only the street.
+    names_person: bool
 
 
 class LocationAnswer(BaseModel):
@@ -110,6 +113,11 @@ Rules:
 - Give a geocode_query that a map search would find, ending in "Lebanon, NH".
 - Use a street from the street list when the location is on one. Leave street empty \
 if none fits.
+- Set names_person to true when the location names a person or describes one: a name, \
+or an age, a sex, a relation or a role beside a name, as in "F and 3 Yo Child, Mount \
+Support Rd" or "Councilman Smith - Church St". Set it to false for a business, school, \
+church, park or building, even when it is named after a person, such as "Carter \
+Community Building".
 - Set unsure to true when you are guessing.
 - Return exactly one item for each raw value, and copy the raw value exactly, \
 character for character.

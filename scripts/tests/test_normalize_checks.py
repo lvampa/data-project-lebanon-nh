@@ -24,6 +24,7 @@ def location_item(raw: str, **overrides: object) -> dict[str, object]:
         "normalized_address": "12 Main St",
         "geocode_query": "12 Main St, Lebanon, NH",
         "street": "Main St",
+        "names_person": False,
         "unsure": False,
         **overrides,
     }
@@ -279,3 +280,23 @@ def test_locations_share_the_not_sent_twice_and_missing_rules():
     ]
     assert checked.not_sent == ["NOT SENT"]
     assert checked.missing == ["B"]
+
+
+def test_a_location_answer_with_no_names_person_flag_is_discarded():
+    item = location_item("12 MAIN ST")
+    del item["names_person"]
+
+    checked = check_locations({"items": [item]}, ["12 MAIN ST"], ["MAIN ST"])
+
+    assert checked.accepted == []
+    assert checked.discarded[0].reason == "invalid item"
+
+
+def test_a_flagged_location_is_accepted_as_it_is():
+    checked = check_locations(
+        {"items": [location_item("F AND CHILD", names_person=True)]},
+        ["F AND CHILD"],
+        ["MAIN ST"],
+    )
+
+    assert checked.accepted[0].item.names_person is True

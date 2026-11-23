@@ -3,14 +3,16 @@
 The query lives in a file that report-gen includes, so this is the same SQL.
 """
 
+import itertools
 import json
 from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 from postgres.models.address_normalization import AddressNormalization
+from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 # report-gen binds $1, the first day published. SQLAlchemy names it :since.
 QUERY = (
@@ -29,6 +31,7 @@ NOW = datetime(2026, 11, 19)
 SINCE = date(2026, 1, 1)
 LOGGED = date(2026, 6, 1)
 REPORTED = datetime(2026, 6, 1, 12)
+CASE_NUMBERS = itertools.count(1)
 MIRACLE_MILE = ("43.6400", "-72.2500")
 FORD = "Lebanon Ford, 90 Miracle Mile"
 
@@ -61,6 +64,27 @@ def add_place(
     session.flush()
 
 
+def name_type(session, incident_type: str | None) -> None:
+    """Give a raw type the plain name of itself, so the public view shows it as it is."""
+    if incident_type is None:
+        return
+    known = session.scalar(
+        select(IncidentTypeCategory.id).where(
+            IncidentTypeCategory.raw_incident_type == incident_type
+        )
+    )
+    if known is None:
+        session.add(
+            IncidentTypeCategory(
+                raw_incident_type=incident_type,
+                normalized_type=incident_type,
+                created_at=NOW,
+                updated_at=NOW,
+            )
+        )
+        session.flush()
+
+
 def add_entries(
     session,
     location: str,
@@ -69,11 +93,14 @@ def add_entries(
     reported_at: datetime | None = REPORTED,
     disposition: str | None = None,
     call_source: str | None = None,
+    plain: bool = True,
 ) -> None:
     for number, incident_type in enumerate(incident_types):
+        if plain:
+            name_type(session, incident_type)
         session.add(
             LogEntry(
-                case_number=f"{location}-{incident_type}-{number}-{log_date}-{reported_at}",
+                case_number=f"26-{next(CASE_NUMBERS):06}",
                 source_url=f"https://example.com/{number}.pdf",
                 log_date=log_date,
                 reported_at=reported_at,
@@ -150,7 +177,8 @@ def test_two_spellings_of_one_place_make_one_pin_named_for_the_common_one(
 
     [pin] = rows(db_session)
 
-    assert pin["raw_address"] == "1 MAIN ST"
+    # The pin is spelled the way the public view names it, never the log's text.
+    assert pin["raw_address"] == "1 Main St"
     assert (pin["normalized_address"], pin["count"], pin["traffic_count"]) == (
         "1 Main St",
         4,
@@ -471,6 +499,7 @@ def test_a_places_card_lists_ten_latest_calls_newest_first(db_session):
         "call_source",
         "category",
         "source_url",
+        "raw_incident_type",
         "case_number",
         "dispatched_at",
         "arrived_at",
@@ -786,3 +815,221 @@ def test_every_published_entry_is_on_exactly_one_pin(db_session):
         {"since": SINCE},
     )
     assert listed == published == 10
+
+
+# --- the public rules: a flagged location, and plain type names ---
+
+PERSON = "F and 3 Yo Child, Mount Support Rd"
+STREET_POINT = ("43.6741", "-72.2657")
+
+
+def add_bare_street(session, calls: int = 3, raw: str = "MT SUPPORT RD") -> None:
+    add_place(
+        session,
+        "Mount Support Rd",
+        STREET_POINT,
+        raw,
+        kind="place",
+        precision="exact",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(session, raw, *["Welfare Check"] * calls)
+
+
+def add_flagged(session, raw: str = "F AND 3 YO CHILD", calls: int = 2) -> None:
+    add_place(
+        session,
+        PERSON,
+        ("43.6740", "-72.2650"),
+        raw,
+        kind="place",
+        precision="exact",
+        street="MOUNT SUPPORT RD",
+    )
+    session.execute(
+        text(
+            "UPDATE address_normalizations SET names_person = true WHERE raw_address = :r"
+        ),
+        {"r": raw},
+    )
+    add_entries(session, raw, *["Alarm"] * calls)
+
+
+def everything_published(session) -> str:
+    """All the text the places query hands to the export, as one string."""
+    return json.dumps([{k: str(v) for k, v in row.items()} for row in rows(session)])
+
+
+def test_a_flagged_locations_calls_count_on_its_streets_pin(db_session):
+    add_bare_street(db_session, calls=3)
+    add_flagged(db_session, calls=2)
+
+    found = pin(db_session, "Mount Support Rd")
+
+    assert found["count"] == 5
+    assert len(rows(db_session)) == 1
+
+
+def test_a_flagged_location_has_no_pin_and_no_name_of_its_own(db_session):
+    add_bare_street(db_session)
+    add_flagged(db_session)
+
+    published = everything_published(db_session)
+
+    assert "Child" not in published and "CHILD" not in published
+    assert "F and 3 Yo" not in published
+    assert [p["normalized_address"] for p in rows(db_session)] == ["Mount Support Rd"]
+
+
+def test_a_flagged_locations_calls_are_in_its_streets_card_and_activity(db_session):
+    add_bare_street(db_session, calls=1)
+    add_flagged(db_session, calls=2)
+
+    [found] = rows(db_session)
+
+    assert json.loads(found["card"])["categories"]["alarms"] == 2
+    assert len(json.loads(found["entries"])) == found["count"] == 3
+
+
+def test_a_flagged_location_whose_street_has_no_pin_is_off_the_map(db_session):
+    add_flagged(db_session)
+
+    assert rows(db_session) == []
+
+
+def test_a_flagged_location_with_no_street_is_off_the_map(db_session):
+    add_bare_street(db_session)
+    add_place(
+        db_session,
+        PERSON,
+        ("43.6740", "-72.2650"),
+        "NO STREET",
+        kind="place",
+        street=None,
+    )
+    db_session.execute(
+        text(
+            "UPDATE address_normalizations SET names_person = true WHERE raw_address = 'NO STREET'"
+        )
+    )
+    add_entries(db_session, "NO STREET", "Alarm")
+
+    assert pin(db_session, "Mount Support Rd")["count"] == 3
+
+
+def test_a_human_row_publishes_only_its_street(db_session):
+    add_bare_street(db_session)
+    add_place(
+        db_session,
+        "Hand Placed Shop, Mount Support Rd",
+        ("43.6745", "-72.2640"),
+        "HAND",
+        kind="place",
+        precision="exact",
+        street="MOUNT SUPPORT RD",
+    )
+    db_session.execute(
+        text(
+            "UPDATE address_normalizations SET source = 'human' WHERE raw_address = 'HAND'"
+        )
+    )
+    add_entries(db_session, "HAND", "Alarm")
+
+    assert [p["normalized_address"] for p in rows(db_session)] == ["Mount Support Rd"]
+    assert "Hand Placed" not in everything_published(db_session)
+
+
+def test_a_flagged_location_hangs_on_the_busiest_bare_street_pin(db_session):
+    add_bare_street(db_session, calls=2, raw="MT SUPPORT RD")
+    add_place(
+        db_session,
+        "Mount Support Road",
+        ("43.6750", "-72.2660"),
+        "MT SUPPORT ROAD",
+        kind="place",
+        precision="exact",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(db_session, "MT SUPPORT ROAD", *["Welfare Check"] * 4)
+    add_flagged(db_session, calls=1)
+
+    assert pin(db_session, "Mount Support Road")["count"] == 5
+    assert pin(db_session, "Mount Support Rd")["count"] == 2
+
+
+def test_an_intersection_is_never_the_pin_a_flagged_location_hangs_on(db_session):
+    add_place(
+        db_session,
+        "Mount Support Rd and Dartmouth Ave",
+        ("43.6742", "-72.2650"),
+        "CROSS",
+        kind="intersection",
+        precision="exact",
+        street="MOUNT SUPPORT RD",
+    )
+    add_entries(db_session, "CROSS", *["Alarm"] * 9)
+    add_flagged(db_session)
+
+    assert [p["count"] for p in rows(db_session)] == [9]
+
+
+def test_a_type_with_no_plain_name_is_other_and_keeps_its_category(db_session):
+    add_bare_street(db_session, calls=0)
+    add_entries(
+        db_session,
+        "MT SUPPORT RD",
+        "DEP INFO - M-ARTHUR",
+        "Motor Vehicle Stop - M-ARTHUR",
+        plain=False,
+    )
+
+    [found] = rows(db_session)
+    result = json.loads(found["card"])
+
+    # The category comes from the log's own type, so a traffic stop stays traffic.
+    assert result["categories"]["traffic"] == 1
+    assert result["categories"]["premises"] == 1
+    assert result["types"] == []
+    assert "ARTHUR" not in json.dumps(json.loads(found["entries"]))
+    assert [e[2] for e in json.loads(found["entries"])] == ["Other", "Other"]
+
+
+def test_the_cards_calls_carry_the_logs_own_type_for_the_details(db_session):
+    add_bare_street(db_session, calls=0)
+    add_type_name(db_session, "73 YOM CPR", "Cardiac arrest")
+    add_entries(db_session, "MT SUPPORT RD", "73 YOM CPR", plain=False)
+
+    [found] = rows(db_session)
+    [call] = json.loads(found["card"])["calls"]
+
+    assert (call["incident_type"], call["raw_incident_type"]) == (
+        "Cardiac arrest",
+        "73 YOM CPR",
+    )
+    assert json.loads(found["card"])["types"] == [["Cardiac arrest", 1]]
+
+
+def add_type_name(session, raw: str, normalized: str) -> None:
+    session.add(
+        IncidentTypeCategory(
+            raw_incident_type=raw,
+            normalized_type=normalized,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+    )
+    session.flush()
+
+
+def test_every_pins_count_matches_its_activity_entries(db_session):
+    add_bare_street(db_session)
+    add_flagged(db_session)
+    add_place(
+        db_session, FORD, MIRACLE_MILE, "LEBANON FORD", kind="place", precision="exact"
+    )
+    add_entries(db_session, "LEBANON FORD", "Alarm", "Motor Vehicle Stop")
+
+    for found in rows(db_session):
+        entries = json.loads(found["entries"])
+        counted = [e for e in entries if e[1] != "traffic" or found["kind"] == "road"]
+        assert len(counted) == found["count"], found["id"]

@@ -305,6 +305,9 @@ class Locations:
                     kind=rule.kind,
                     geocode_query=rule.geocode_query,
                     street=rule.street,
+                    # A house number on a listed street, or two listed streets, names
+                    # no one.
+                    names_person=False,
                     source="rule",
                     prompt_version=rules_prompt_version(),
                     ai_call_id=None,
@@ -349,6 +352,7 @@ class Locations:
             kind=sibling.kind,
             geocode_query=sibling.geocode_query,
             street=sibling.street,
+            names_person=sibling.names_person,
             source=sibling.source,
             prompt_version=sibling.prompt_version,
             ai_call_id=sibling.ai_call_id,
@@ -384,6 +388,7 @@ class Locations:
                 kind=item.kind,
                 geocode_query=item.geocode_query or None,
                 street=street,
+                names_person=item.names_person,
                 source="ai",
                 prompt_version=self.version(),
                 ai_call_id=ai_call_id,

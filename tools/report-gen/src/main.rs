@@ -3,6 +3,8 @@
 mod activity;
 mod db;
 mod output;
+#[cfg(test)]
+mod public_rules;
 
 use anyhow::Result;
 use chrono::NaiveDate;

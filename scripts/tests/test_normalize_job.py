@@ -139,6 +139,7 @@ def location_item(raw: str, **overrides: object) -> dict[str, object]:
         "normalized_address": "Hannaford, Market St",
         "geocode_query": "Hannaford, Market St, Lebanon, NH",
         "street": "MARKET ST",
+        "names_person": False,
         "unsure": False,
         **overrides,
     }
@@ -915,3 +916,89 @@ def test_a_stored_answer_resets_the_failed_attempts(db_session, call_log):
     run(backend, call_log, fields=("incident_type",))
 
     assert the_type(db_session, "A").failed_attempts == 0
+
+
+# --- the names_person flag ---
+
+
+def test_the_flag_the_ai_gives_is_stored_with_the_location(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "F AND 3 YO CHILD - MOUNT SUPPORT RD")
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "F AND 3 YO CHILD - MOUNT SUPPORT RD",
+                normalized_address="F and 3 Yo Child, Mount Support Rd",
+                names_person=True,
+            )
+        ]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    assert the_address(db_session, "F AND 3 YO CHILD - MOUNT SUPPORT RD").names_person
+
+
+def test_a_location_the_ai_clears_is_stored_unflagged(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "CARTER COMMUNITY BUILDING")
+    backend = FakeBackend(replies=[location_answer("CARTER COMMUNITY BUILDING")])
+
+    run(backend, call_log, fields=("location",))
+
+    assert the_address(db_session, "CARTER COMMUNITY BUILDING").names_person is False
+
+
+def test_spellings_that_share_an_answer_share_its_flag(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "SOMEWHERE ROAD", "Somewhere Rd")
+    backend = FakeBackend(
+        replies=[location_answer("SOMEWHERE ROAD", names_person=True)]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    assert the_address(db_session, "SOMEWHERE ROAD").names_person
+    assert the_address(db_session, "Somewhere Rd").names_person
+
+
+def test_a_location_settled_by_a_rule_is_never_flagged(db_session, call_log):
+    add_parcels(db_session, "7 Main St", "9 Elm St")
+    add_locations(db_session, "12 MAIN STREET")
+    add_address_row(
+        db_session,
+        "12 MAIN STREET",
+        normalized_address="Old Name",
+        kind="place",
+        source="ai",
+        names_person=True,
+        prompt_version="location-0+streets-old",
+    )
+
+    run(FakeBackend(replies=[]), call_log, fields=("location",), redo=True)
+
+    row = the_address(db_session, "12 MAIN STREET")
+    assert (row.source, row.names_person) == ("rule", False)
+
+
+def test_a_redo_leaves_a_human_row_and_its_flag_alone(db_session, call_log):
+    add_parcels(db_session, "7 Main St")
+    add_locations(db_session, "HAND PLACED")
+    add_address_row(
+        db_session,
+        "HAND PLACED",
+        normalized_address="Hand Placed, Main St",
+        kind="place",
+        source="human",
+        names_person=False,
+        prompt_version=None,
+    )
+
+    run(FakeBackend(replies=[]), call_log, fields=("location",), redo=True)
+
+    row = the_address(db_session, "HAND PLACED")
+    assert (row.source, row.normalized_address, row.names_person) == (
+        "human",
+        "Hand Placed, Main St",
+        False,
+    )

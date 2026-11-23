@@ -55,6 +55,7 @@ def test_the_schemas_require_every_field_so_the_model_cannot_skip_unsure():
         "normalized_address",
         "geocode_query",
         "street",
+        "names_person",
         "unsure",
     }
 
@@ -147,3 +148,17 @@ def test_the_abbreviations_the_spec_names_are_on_the_list(abbreviation):
 )
 def test_an_abbreviation_matches_only_as_a_whole_word(name, expected):
     assert contains_abbreviation(name) is expected
+
+
+def test_the_location_prompt_asks_for_the_names_person_flag():
+    prompt = location_prompt(["F AND 3 YO CHILD - MOUNT SUPPORT RD"], streets=STREETS)
+
+    assert "names_person" in prompt
+    assert "describes one" in prompt
+    # A building named after a person is a place, not a person.
+    assert "Carter Community Building" in prompt
+
+
+def test_the_location_prompt_version_is_2_so_a_redo_asks_again():
+    assert LOCATION_PROMPT_VERSION == "location-2"
+    assert location_prompt_version(STREETS).startswith("location-2+")

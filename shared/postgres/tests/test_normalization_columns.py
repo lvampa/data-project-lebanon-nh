@@ -6,7 +6,7 @@ from alembic.config import Config
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres_testing.plugin import ALEMBIC_INI
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 NOW = datetime(2026, 11, 13)
@@ -172,3 +172,17 @@ def test_the_subcategory_column_is_gone_and_comes_back_empty_on_downgrade(
     command.downgrade(alembic_config, BEFORE_PROVENANCE)
     assert "subcategory" in columns()
     assert "normalized_type" not in columns()
+
+
+def test_names_person_is_false_unless_set(db_session):
+    add_address(db_session)
+
+    row = db_session.scalars(select(AddressNormalization)).one()
+
+    assert row.names_person is False
+
+
+def test_names_person_can_be_set(db_session):
+    add_address(db_session, names_person=True)
+
+    assert db_session.scalars(select(AddressNormalization)).one().names_person is True

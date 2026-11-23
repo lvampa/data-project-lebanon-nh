@@ -78,7 +78,7 @@ export function whoStartedLine(fromPublic: number, byOfficers: number): string {
 }
 
 export const STATION_NOTE =
-  'The Places tab leaves out the station, since the log files reports taken there under the station.'
+  'The Places tab leaves out the station, since the log records reports taken there under the station.'
 
 // Over a street card's lists, which cover the street itself, and the whole year, never the
 // places on it or a filter.

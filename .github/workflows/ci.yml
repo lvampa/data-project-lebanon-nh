@@ -81,7 +81,7 @@ jobs:
       - name: Install
         env:
           BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Typecheck, lint, format and test
         run: bun run check
@@ -245,6 +245,11 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: frontend/package.json
+
+      # Wrangler runs on Node and needs 22.12 or newer.
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "22"
 
       # No install scripts, because this job later holds the Cloudflare token.
       - name: Install

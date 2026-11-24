@@ -246,6 +246,9 @@ jobs:
 
       - name: Build
         working-directory: frontend/web
+        env:
+          # Unset until the data host exists, and then the pages read /data.
+          NEXT_PUBLIC_DATA_URL: ${{ vars.NEXT_PUBLIC_DATA_URL }}
         run: bun run build
 
       # public/ is copied into out/ as is, so a stray dot folder there would be published.

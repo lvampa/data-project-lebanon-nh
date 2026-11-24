@@ -11,6 +11,12 @@ describe('dataUrl', () => {
     expect(dataUrl('stats.json')).toBe('/data/stats.json')
   })
 
+  it('treats an empty NEXT_PUBLIC_DATA_URL as unset', async () => {
+    vi.stubEnv('NEXT_PUBLIC_DATA_URL', '')
+    const { dataUrl } = await import('@/lib/data')
+    expect(dataUrl('stats.json')).toBe('/data/stats.json')
+  })
+
   it('uses NEXT_PUBLIC_DATA_URL and drops a trailing slash', async () => {
     vi.stubEnv('NEXT_PUBLIC_DATA_URL', 'https://data.example.test/releases/')
     const { dataUrl } = await import('@/lib/data')

@@ -25,6 +25,12 @@ The base is `NEXT_PUBLIC_DATA_URL`, and it defaults to `/data`.
 Local dev and `generate_report.sh` are unchanged: the export still lands in `public/data` and Next serves it.
 A deployed build with no data at `/data` shows the error state on those four pages.
 `NEXT_PUBLIC_DATA_URL` is read when the build runs, so pointing the site at a data host means a rebuild.
+In CI it comes from the repository variable of the same name, and an empty value counts as unset.
+
+The planned data host is a public R2 bucket on a subdomain of a domain already on Cloudflare, with a Cache Rule so the JSON is cached at the edge.
+Cloudflare does not cache `.json` by default, and `r2.dev` is rate-limited and for development only, so the custom domain and the rule are both needed.
+Publishing the data is a later change.
+Once the host exists, the operator sets the repository variable to its URL.
 
 ## Deploy hardening
 
@@ -45,6 +51,7 @@ Repository settings, set by the operator:
 - Secret `CLOUDFLARE_API_TOKEN`, in the `production` environment, with the Cloudflare Pages: Edit permission only.
 - Variable `CLOUDFLARE_ACCOUNT_ID`.
 - Variable `CLOUDFLARE_PAGES_PROJECT`, the name of the Pages project.
+- Variable `NEXT_PUBLIC_DATA_URL`, later, once the data host exists.
 
 ## Decisions
 
@@ -62,6 +69,11 @@ Repository settings, set by the operator:
   Pages keeps every deployment, so a bad one is undone with Rollback in the Cloudflare dashboard or the rollback API.
   The site is a hobby site and the checks run first.
 
+## Cost
+
+Everything stays on free tiers: Pages free, the R2 free tier, and GitHub Actions on a public repo.
+Pages Free allows 500 builds a month, and the plan is fewer than 5 deploys a month.
+
 ## Cloudflare Pages limits
 
 Checked against the Cloudflare docs on 2026-11-24:
@@ -71,6 +83,6 @@ Checked against the Cloudflare docs on 2026-11-24:
 
 ## Open questions
 
-- Where and how the data is published: a separate Airflow job, a public R2 bucket on a Cloudflare domain, or something else.
-  Until then the deployed site has no data.
+- How the data gets into the bucket, for example from an Airflow job.
+  Until it does, the deployed site has no data.
 - Whether the Pages project keeps the name `lebanon-pd-log`.

@@ -81,7 +81,7 @@ jobs:
       - name: Install
         env:
           BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
-        run: bun ci
+        run: bun ci --ignore-scripts
 
       - name: Typecheck, lint, format and test
         run: bun run check

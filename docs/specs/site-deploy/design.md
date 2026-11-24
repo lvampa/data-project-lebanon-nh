@@ -18,7 +18,8 @@ The script runs `bun ci`, then `bun run build` in `frontend/web`, then checks `o
 `--dry-run` stops before the upload.
 There is no staging step and no smoke check: if the build passes, it ships.
 `scripts/deploy.sh` replaces the old hand-run script, which uploaded a build with data in it and ran no checks.
-Outside CI the script refuses to run unless the branch is `main`, the tree is clean and HEAD is `origin/main` after a fetch, so a hand run cannot ship an untested branch.
+Outside CI (`GITHUB_ACTIONS` unset) the script refuses to run unless the branch is `main`, the tree is clean, nothing ignored but `public/data` sits in `public/` or is a `.env*` file, and HEAD is `origin/main` after a fetch.
+So a hand run cannot ship an untested branch or an ignored file that CI would not have.
 It reads `CLOUDFLARE_PAGES_PROJECT`, and auth comes from `wrangler login` locally or the token in CI.
 
 ## Data in the browser
@@ -55,8 +56,8 @@ The repo is public, so the workflow is narrow:
   The API token is a secret of that environment, so a branch cannot read it.
 - `permissions: contents: read`, and every action is pinned by SHA.
 - Wrangler is a devDependency of `frontend/web` at `~4.168`, and the lockfile fixes the exact version that `bun ci` installs, failing on a stale lockfile.
-  Bun does not run a dependency's lifecycle scripts unless the project trusts it, and none is trusted.
-  Both CI installs and the script use `bun ci`.
+  Both CI installs and the script use `bun ci --ignore-scripts`.
+  Bun runs the install scripts of packages on its built-in default trust list unless told not to, so the flag is what keeps them off.
 - The deploy gate allows only `push` and `workflow_dispatch`, so a trigger added to the file later cannot deploy by accident.
 - The `deploy` concurrency group queues a second deploy instead of cancelling one that is uploading.
 - `public/` is copied into `out` as is, and a local checkout has `public/data`.
@@ -81,8 +82,9 @@ Repository settings, set by the operator:
   Rejected: a separate `deploy.yml`.
 - **One script for CI and hand runs.**
   Rejected: a workflow with its own build and upload steps, which would drift from what a person runs.
-  The cost is that the build step also sees the Cloudflare token in CI.
-  The build is this repo's own code from main, installed from a lockfile, with no dependency scripts.
+  The token is in the step's environment, but the script runs the install and the build without the Cloudflare variables, so only the Wrangler line sees them.
+  The build runs code from the whole dependency tree, and any package could read the environment.
+  Something that tampers with files on the same runner could still reach the token.
 - **Fetch in the browser, not at build time.**
   CI has no database and no export, so a build that needs data cannot run there.
   Cost: the four lists are not in the page HTML, so a crawler that does not run JavaScript sees a loading state.

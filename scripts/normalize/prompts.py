@@ -100,7 +100,7 @@ Raw values (JSON): {json.dumps(list(raw_values))}
 def location_prompt(
     raw_values: Sequence[str],
     streets: Sequence[str],
-    known_places: Sequence[str] = (),
+    known_places: Sequence[str],
 ) -> str:
     return f"""\
 You are tidying police dispatch records for a town website. Turn each police log \

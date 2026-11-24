@@ -1,9 +1,12 @@
 // The views, the filters they share, and how both live in the URL query, so a filtered view
 // can be shared. Defaults are left out, so the plain page keeps its plain URL.
 
+import { ROADS_MODES, type RoadsMode } from './roads'
+
 export const VIEWS = [
   { id: 'map', label: 'Map' },
   { id: 'places', label: 'Places' },
+  { id: 'roads', label: 'Roads' },
   { id: 'busy', label: 'Busy times' },
   { id: 'officers', label: 'Officers' },
 ] as const
@@ -52,6 +55,12 @@ export function isDefault(filters: Filters): boolean {
   )
 }
 
+// Roads count every entry or only traffic, so a link with any other kind opens on all.
+export function withRoadsKind(view: View, filters: Filters): Filters {
+  const counted = filters.kind === 'all' || filters.kind === 'traffic'
+  return view === 'roads' && !counted ? { ...filters, kind: 'all' } : filters
+}
+
 // The filters behind the Filters button on a phone: everything but the kind, whose chips
 // stay in view.
 export function sheetFilterCount(filters: Filters): number {
@@ -82,10 +91,11 @@ function oneOf<T extends string>(value: string | null, allowed: readonly { id: T
 
 // A value the page does not know falls back to its default, so an old or mistyped link
 // still opens.
-export function readQuery(search: string): { view: View; filters: Filters } {
+export function readQuery(search: string): { view: View; filters: Filters; mode: RoadsMode } {
   const query = new URLSearchParams(search)
   return {
     view: oneOf(query.get('view'), VIEWS, 'map'),
+    mode: oneOf(query.get('mode'), ROADS_MODES, 'roads'),
     filters: {
       kind: oneOf(query.get('kind'), KINDS, DEFAULT_FILTERS.kind),
       time: oneOf(query.get('time'), TIMES, DEFAULT_FILTERS.time),
@@ -96,9 +106,10 @@ export function readQuery(search: string): { view: View; filters: Filters } {
 }
 
 // "?view=places&time=night", or "" for the map with the default filters.
-export function writeQuery(view: View, filters: Filters): string {
+export function writeQuery(view: View, filters: Filters, mode: RoadsMode): string {
   const query = new URLSearchParams()
   if (view !== 'map') query.set('view', view)
+  if (view === 'roads' && mode !== 'roads') query.set('mode', mode)
   if (filters.kind !== DEFAULT_FILTERS.kind) query.set('kind', filters.kind)
   if (filters.time !== DEFAULT_FILTERS.time) query.set('time', filters.time)
   if (filters.range !== DEFAULT_FILTERS.range) query.set('range', filters.range)

@@ -21,18 +21,21 @@ import {
   rangeDays,
   rangeLabel,
   readQuery,
+  withRoadsKind,
   writeQuery,
   type Filters,
   type View,
 } from '@/lib/police-views/filters'
 import { weekFlags, weeksInRange } from '@/lib/police-views/findings'
 import { STATION_ID, lastDayOf, selectEntries } from '@/lib/police-views/select'
+import type { RoadsMode } from '@/lib/police-views/roads'
 import type { Address, StatsData } from '@/lib/types'
 import { BusyTimesView } from './busy-times-view'
 import { ChartTooltip } from './chart-tooltip'
 import { FilterBar } from './filter-bar'
 import { OfficersView } from './officers-view'
 import { PlacesView } from './places-view'
+import { RoadsView } from './roads-view'
 import { useActivity } from './use-activity'
 
 // MapLibre needs the browser, so the map is not prerendered.
@@ -48,17 +51,26 @@ const PoliceMap = dynamic(
   },
 )
 
+interface State {
+  view: View
+  filters: Filters
+  mode: RoadsMode
+}
+
 interface Props {
   addresses: Address[]
   stats: StatsData
 }
 
 export function PoliceViews({ addresses, stats }: Props) {
-  const [{ view, filters }, setState] = useState<{ view: View; filters: Filters }>({
+  const [{ view, filters: asRead, mode }, setState] = useState<State>({
     view: 'map',
     filters: DEFAULT_FILTERS,
+    mode: 'roads',
   })
   const [attempt, setAttempt] = useState(0)
+  // Roads count every entry or only traffic, so a link with another kind opens on all.
+  const filters = withRoadsKind(view, asRead)
 
   // The query is read after the first render, so the static page and the browser agree.
   useEffect(() => {
@@ -66,16 +78,16 @@ export function PoliceViews({ addresses, stats }: Props) {
     read()
   }, [])
 
-  const go = useCallback((next: { view: View; filters: Filters }) => {
+  const go = useCallback((next: State) => {
     setState(next)
     const { pathname, hash } = window.location
     window.history.replaceState(
       null,
       '',
-      `${pathname}${writeQuery(next.view, next.filters)}${hash}`,
+      `${pathname}${writeQuery(next.view, next.filters, next.mode)}${hash}`,
     )
   }, [])
-  const setFilters = (next: Filters) => go({ view, filters: next })
+  const setFilters = (next: Filters) => go({ view, filters: next, mode })
 
   const wanted = view !== 'map' || !isDefault(filters)
   const state = useActivity(addresses, wanted, attempt)
@@ -85,13 +97,16 @@ export function PoliceViews({ addresses, stats }: Props) {
 
   // A place chosen on another tab opens on the map, which reads the selection from the hash.
   // Places counts calls about a place, so the map opens on that kind, and the pin is there.
-  const showPlace = (id: string) => {
-    const onMap = { ...filters, kind: 'place' as const }
+  const showOnMap = (id: string, onMap: Filters) => {
     const { pathname } = window.location
-    window.history.replaceState(null, '', `${pathname}${writeQuery('map', onMap)}#${id}`)
-    setState({ view: 'map', filters: onMap })
+    window.history.replaceState(null, '', `${pathname}${writeQuery('map', onMap, mode)}#${id}`)
+    setState({ view: 'map', filters: onMap, mode })
   }
-  const showOfficer = (officer: string) => go({ view: 'map', filters: { ...filters, officer } })
+  const showPlace = (id: string) => showOnMap(id, { ...filters, kind: 'place' })
+  // A road counts every kind of entry on it, so the map keeps the filters as they are.
+  const showRoad = (id: string) => showOnMap(id, filters)
+  const showOfficer = (officer: string) =>
+    go({ view: 'map', filters: { ...filters, officer }, mode })
 
   const onMap = view === 'map'
 
@@ -109,13 +124,14 @@ export function PoliceViews({ addresses, stats }: Props) {
           className="mb-3.5 w-full overflow-x-auto pb-px"
           items={VIEWS.map((v) => ({ id: v.id, label: v.label }))}
           value={view}
-          onChange={(id) => go({ view: id as View, filters })}
+          onChange={(id) => go({ view: id as View, filters, mode })}
         />
         <FilterBar
           filters={filters}
           onChange={setFilters}
           count={derived ? derived.countLine(view) : null}
           lens={view === 'places' ? 'Calls from the public only' : null}
+          roadsKind={view === 'roads'}
           showOfficer={view !== 'officers'}
         />
       </div>
@@ -147,6 +163,16 @@ export function PoliceViews({ addresses, stats }: Props) {
               filters={filters}
               range={derived.weeks}
               onShow={showPlace}
+            />
+          ) : view === 'roads' ? (
+            <RoadsView
+              addresses={derived.mapAddresses}
+              activity={activity}
+              kept={derived.kept}
+              range={derived.weeks}
+              mode={mode}
+              onMode={(next) => go({ view, filters, mode: next })}
+              onShow={showRoad}
             />
           ) : view === 'busy' ? (
             <BusyTimesView

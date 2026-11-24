@@ -131,7 +131,7 @@ bash scripts/deploy.sh [--dry-run]           # needs main, clean tree, at origin
 
 - Use `uv` instead of `pip` for all Python package management (`uv add`, `uv run`, `uv sync`)
 - Use `docker compose` (not `docker-compose`) for Airflow, Mongo, Postgres
-- Cloudflare Pages deploys from the `deploy` job in `.github/workflows/ci.yml` on merge to main, and the job only runs `scripts/deploy.sh`. Use that script, not a bare `wrangler pages deploy`.
+- Cloudflare Pages deploys from `.github/workflows/deploy.yml` on merge to main, and the workflow only runs `scripts/deploy.sh`. Use that script, not a bare `wrangler pages deploy`.
 - Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
 - CI (`.github/workflows/ci.yml`) runs the pre-push checks plus Rust and, when Docker inputs change, the image builds; `ci-ok` is the one required check.

@@ -10,10 +10,12 @@ The site's code deploys from GitHub Actions to Cloudflare Pages when a commit la
 The data is published separately, to a data host described below.
 The build contains no data, so CI can build it.
 
-The deploy is the `deploy` job in `.github/workflows/ci.yml`.
-It needs `ci-ok`, so it runs only after every check passed on that commit.
+The deploy is its own workflow, `.github/workflows/deploy.yml`, which runs when a push lands on main and touches `frontend/**`, `scripts/deploy.sh` or the workflow itself.
+A backend-only merge does not deploy.
+It does not wait on `ci-ok`, since `ci.yml` is checks only.
+It relies on `ci-ok` being a required check on pull requests, so nothing merges without passing, and the script fails on a broken build, so nothing broken ships.
 The frontend job also runs `bun run build` on every PR, so a build break fails the PR and not main.
-The deploy job runs `bash scripts/deploy.sh` and nothing else for the build and the upload, so a hand run and CI cannot drift.
+The deploy workflow runs `bash scripts/deploy.sh` and nothing else for the build and the upload, so a hand run and CI cannot drift.
 The script runs `bun ci`, then `bun run build` in `frontend/web`, then checks `out`, then `wrangler pages deploy out --branch=main`.
 `--dry-run` stops before the upload.
 There is no staging step and no smoke check: if the build passes, it ships.
@@ -50,7 +52,7 @@ Until it exists, new code can read old data without any check.
 ## Deploy hardening
 
 The repo is public, so the workflow is narrow:
-- The job runs only on a push to main or a manual run of the workflow on main.
+- The workflow runs only on a push to main or a manual run on main.
   There is no `pull_request` or `pull_request_target` path to it.
 - It runs in the `production` environment, which is limited to the main branch in the repository settings.
   The API token is a secret of that environment, so a branch cannot read it.
@@ -58,7 +60,7 @@ The repo is public, so the workflow is narrow:
 - Wrangler is a devDependency of `frontend/web` at `~4.168`, and the lockfile fixes the exact version that `bun ci` installs, failing on a stale lockfile.
   Both CI installs and the script use `bun ci --ignore-scripts`.
   Bun runs the install scripts of packages on its built-in default trust list unless told not to, so the flag is what keeps them off.
-- The deploy gate allows only `push` and `workflow_dispatch`, so a trigger added to the file later cannot deploy by accident.
+- The deploy workflow has only the `push` and `workflow_dispatch` triggers, and its own file, so a trigger added to `ci.yml` later cannot deploy by accident.
 - The `deploy` concurrency group queues a second deploy instead of cancelling one that is uploading.
 - `public/` is copied into `out` as is, and a local checkout has `public/data`.
   The script deletes `out/data` after the build and then fails if `out` has a `data` folder or any dot entry except `.well-known`.
@@ -76,10 +78,12 @@ Repository settings, set by the operator:
 
 ## Decisions
 
-- **A job in `ci.yml`, not a `workflow_run` workflow.**
-  The job deploys the commit the checks just passed on.
-  `workflow_run` runs against the default branch's latest commit and is a trigger that zizmor flags as dangerous.
-  Rejected: a separate `deploy.yml`.
+- **A separate `deploy.yml` on push, not a job in `ci.yml` or a `workflow_run` workflow.**
+  `ci.yml` stays checks only, and a deploy-only file is easy to audit.
+  A path filter skips backend-only merges.
+  Rejected: `workflow_run`, which runs against the default branch's latest commit and is a trigger that zizmor flags as dangerous.
+  Rejected: `needs: ci-ok` in the same file, which ties the deploy to every check, including the ones a frontend deploy does not depend on.
+  The cost is that nothing in the workflow proves the checks passed, so `ci-ok` has to stay required in branch protection.
 - **One script for CI and hand runs.**
   Rejected: a workflow with its own build and upload steps, which would drift from what a person runs.
   The token is in the step's environment, but the script runs the install and the build without the Cloudflare variables, so only the Wrangler line sees them.
@@ -88,7 +92,8 @@ Repository settings, set by the operator:
 - **Fetch in the browser, not at build time.**
   CI has no database and no export, so a build that needs data cannot run there.
   Cost: the four lists are not in the page HTML, so a crawler that does not run JavaScript sees a loading state.
-- **Wrangler in the lockfile, not `bunx wrangler@x`.**
+- **Wrangler at `~4.168`, in the lockfile, not `bunx wrangler@x`.**
+  The range is the operator's choice, so patch releases of 4.168 are accepted, and the lockfile fixes the one that installs.
   Pinning only wrangler would let its dependencies resolve fresh on each run.
   Bump the version by hand.
 - **No staging, no smoke check.**

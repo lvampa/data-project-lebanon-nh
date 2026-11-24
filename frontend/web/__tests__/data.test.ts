@@ -5,6 +5,13 @@ afterEach(() => {
   vi.resetModules()
 })
 
+describe('placeFile', () => {
+  it('names a place card file and escapes the id', async () => {
+    const { placeFile } = await import('@/lib/data')
+    expect(placeFile('a b')).toBe('places/a%20b.json')
+  })
+})
+
 describe('dataUrl', () => {
   it('serves from /data by default', async () => {
     const { dataUrl } = await import('@/lib/data')

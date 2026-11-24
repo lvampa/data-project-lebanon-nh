@@ -54,7 +54,7 @@ The repo is public, so the workflow is narrow:
 - It runs in the `production` environment, which is limited to the main branch in the repository settings.
   The API token is a secret of that environment, so a branch cannot read it.
 - `permissions: contents: read`, and every action is pinned by SHA.
-- Wrangler is a pinned devDependency of `frontend/web`, installed with `bun ci`, which fails on a stale lockfile.
+- Wrangler is a devDependency of `frontend/web` at `~4.168`, and the lockfile fixes the exact version that `bun ci` installs, failing on a stale lockfile.
   Bun does not run a dependency's lifecycle scripts unless the project trusts it, and none is trusted.
   Both CI installs and the script use `bun ci`.
 - The deploy gate allows only `push` and `workflow_dispatch`, so a trigger added to the file later cannot deploy by accident.

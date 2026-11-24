@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { decodeActivity, type Activity, type ActivityFile } from '@/lib/police-views/activity'
-import { fetchDataFile } from '@/lib/data'
+import { DATA_FILES, fetchDataFile } from '@/lib/data'
 import type { Address } from '@/lib/types'
 
 export type ActivityState =
@@ -21,7 +21,7 @@ export function useActivity(addresses: Address[], wanted: boolean, attempt = 0):
   useEffect(() => {
     if (!asked) return
     const controller = new AbortController()
-    fetchDataFile<ActivityFile>('activity.json', controller.signal)
+    fetchDataFile<ActivityFile>(DATA_FILES.activity, controller.signal)
       .then((file) =>
         setState({
           attempt,

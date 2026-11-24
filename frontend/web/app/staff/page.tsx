@@ -1,11 +1,12 @@
 'use client'
+import { DATA_FILES } from '@/lib/data'
 import { DataStatus } from '@/components/data-status'
 import { useDataFile } from '@/components/use-data-file'
 import { StaffTable } from '@/components/staff-table'
 import type { StaffMember } from '@/lib/types'
 
 export default function StaffPage() {
-  const staffFile = useDataFile<StaffMember[]>('staff.json')
+  const staffFile = useDataFile<StaffMember[]>(DATA_FILES.staff)
   if (staffFile.status !== 'ready') return <DataStatus states={[staffFile]} />
 
   const staff = staffFile.data

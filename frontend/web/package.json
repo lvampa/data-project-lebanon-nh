@@ -37,6 +37,6 @@
     "@types/react-dom": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "wrangler": "4.159.0"
+    "wrangler": "~4.168"
   }
 }

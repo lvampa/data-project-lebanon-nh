@@ -1,12 +1,13 @@
 'use client'
 import { Suspense } from 'react'
+import { DATA_FILES } from '@/lib/data'
 import { DataStatus } from '@/components/data-status'
 import { useDataFile } from '@/components/use-data-file'
 import { PropertySearch } from '@/components/property-search'
 import type { PropertyRecord } from '@/lib/types'
 
 export default function PropertiesPage() {
-  const propertiesFile = useDataFile<PropertyRecord[]>('properties.json')
+  const propertiesFile = useDataFile<PropertyRecord[]>(DATA_FILES.properties)
   if (propertiesFile.status !== 'ready') return <DataStatus states={[propertiesFile]} />
 
   const properties = propertiesFile.data

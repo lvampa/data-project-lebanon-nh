@@ -1,5 +1,6 @@
 'use client'
 import { useDataFile } from '@/components/use-data-file'
+import { placeFile } from '@/lib/data'
 import type { PlaceCard } from '@/lib/types'
 
 export type CardState =
@@ -8,7 +9,7 @@ export type CardState =
 // The card for one pin, fetched when the pin is chosen. Choosing another pin shows loading
 // until its card arrives.
 export function usePlaceCard(id: string | null): { state: CardState | null; retry: () => void } {
-  const file = useDataFile<PlaceCard>(id ? `places/${encodeURIComponent(id)}.json` : null)
+  const file = useDataFile<PlaceCard>(id ? placeFile(id) : null)
   const noRetry = () => {}
   if (!id) return { state: null, retry: noRetry }
   if (file.status === 'ready')

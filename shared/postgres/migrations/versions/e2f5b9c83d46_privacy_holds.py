@@ -3,8 +3,7 @@
 `privacy_hold` marks a location that names a person and is not clearly safe. While it is
 held (`privacy_hold` and `privacy_handled_at IS NULL`) the public views treat the location
 as unmapped: no name, no street, no pin. Its log entries stay, with no location, and still
-count in the totals. Setting `privacy_handled_at` releases it, and `privacy_handled_text`
-remembers the text that was handled, so a changed text is held again, and it then publishes as any
+count in the totals. Setting `privacy_handled_at` releases it, and it then publishes as any
 flagged location does, as its street only.
 
 The two views are replaced, since a view cannot change its expressions in place.
@@ -166,10 +165,6 @@ def upgrade() -> None:
         "address_normalizations",
         sa.Column("privacy_handled_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.add_column(
-        "address_normalizations",
-        sa.Column("privacy_handled_text", sa.Text(), nullable=True),
-    )
     op.execute(_PUBLIC_LOCATIONS)
     op.execute(_PUBLIC_LOG_ENTRIES)
 
@@ -177,7 +172,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("DROP VIEW public_log_entries")
     op.execute("DROP VIEW public_locations")
-    op.drop_column("address_normalizations", "privacy_handled_text")
     op.drop_column("address_normalizations", "privacy_handled_at")
     op.drop_column("address_normalizations", "privacy_hold")
     op.execute(_OLD_PUBLIC_LOCATIONS)

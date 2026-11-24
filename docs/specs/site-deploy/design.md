@@ -58,7 +58,10 @@ Output is not verbose, and the scripts never print a matched string.
 
 In report-gen, so the exporter itself refuses to finish:
 - The location pass is complete.
-  It counts `address_normalizations` rows from the AI or rules with a normalized address whose `prompt_version` does not start with the current `LOCATION_PROMPT_VERSION`, and exits non-zero if the count is above zero.
+  It counts `address_normalizations` rows with `source = 'ai'` and a normalized address whose `prompt_version` does not start with the current `LOCATION_PROMPT_VERSION`, and exits non-zero if the count is above zero.
+  The `startswith` covers the `+streets-...` suffix.
+  Rule rows are not counted: they come from the street list, store `rules_prompt_version()` (`rules-3`) rather than a location version, and cannot name a person.
+  A test covers a current AI row plus a current rule row passing, and one AI row on `location-1` failing.
   Until `normalize --field location --redo` covers every row, an unflagged row that names a person would publish in full, because only human rows fail closed.
   It prints the count only.
 - Scan #1.
@@ -125,7 +128,8 @@ bash scripts/deploy.sh
 Scheduling is not built in step one.
 The Airflow image has no `cargo`, `bun` or `wrangler`, no Cloudflare login, and no route to the Mac's files, so a `deploy_site` DAG could only SSH to the host.
 That needs Remote Login and a private key mounted into the container, which is a bigger risk than the deploy it schedules.
-If Connor wants it scheduled, a launchd job on the Mac runs the same command at 07:30 daily, after the 06:00 pipeline.
+The recommended scheduler is a launchd job on the Mac that runs the same command at 07:30 daily, after the 06:00 pipeline.
+Whether to schedule at all is Connor's call.
 Normalize and geocode run outside that chain, so the location gate is what stops a deploy that ran too early.
 
 ## Cloudflare Pages limits
@@ -156,4 +160,4 @@ Checked against the Cloudflare Pages docs (limits page and Direct Upload guide) 
 - Keep the Pages project name `lebanon-pd-log`, or rename it?
   It predates a site that covers more than the police log, and a rename means a new project.
 - Is 85% the right coverage floor?
-- Schedule it with launchd, or keep it by hand?
+- Schedule it with launchd (recommended), or keep it by hand?

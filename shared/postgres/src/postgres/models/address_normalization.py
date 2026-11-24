@@ -63,6 +63,10 @@ class AddressNormalization(ProvenanceMixin, Base):
     geocode_attempts: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # What a geocode retry last looked this row up with, whether it placed the row or not:
+    # the snapshot, the place-match prompt, and the row's kind, street and address. The
+    # retries skip a row whose mark is what they would write now.
+    snapshot_checked: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

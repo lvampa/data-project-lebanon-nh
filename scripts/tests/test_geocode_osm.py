@@ -3,10 +3,11 @@ geocoder and a scripted AI. Nothing here touches the network."""
 
 import csv
 from datetime import date, datetime
+from unittest.mock import patch
 
 import pytest
 from locations.geocode import GeocodeResult
-from locations.osm import Candidate, snapshot_from_replies
+from locations.osm import Candidate, Snapshot, snapshot_from_replies
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.log_entry import LogEntry
 from pymongo.errors import PyMongoError
@@ -1671,3 +1672,207 @@ def test_these_highways_name_a_point(address):
 )
 def test_these_highways_are_bare(address):
     assert not geocode_job.names_a_point(address)
+
+
+# --- the retries skip a row already checked against this snapshot ---
+
+
+def waiting_place(session, raw="QUARRY HILL TOWN HOUSES", **columns):
+    return place_row(session, raw, **approximate(**columns))
+
+
+def mark_checked(session, raw: str, fetched_at: str) -> None:
+    """Record that the row was looked up against a snapshot, as a retry does."""
+    row = the_row(session, raw)
+    row.snapshot_checked = geocode_job._lookup_mark(fetched_at, row)
+    session.commit()
+
+
+def checked_with(session, raw: str, fetched_at: str) -> bool:
+    row = the_row(session, raw)
+    return row.snapshot_checked == geocode_job._lookup_mark(fetched_at, row)
+
+
+def snapshot_named(fetched_at: str):
+    """The fixture snapshot, fetched on another day."""
+    return Snapshot(fetched_at, SNAPSHOT.features, SNAPSHOT.roads)
+
+
+def test_a_miss_is_recorded_and_the_next_run_does_not_ask_again(db_session):
+    waiting_place(db_session)
+    picks = Picks(None)
+
+    first = geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+    second = geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+
+    assert len(picks.calls) == 1
+    assert checked_with(db_session, "QUARRY HILL TOWN HOUSES", "2026-11-20")
+    assert (first.groups_retried, first.groups_skipped) == (1, 0)
+    assert (second.groups_retried, second.groups_skipped) == (0, 1)
+
+
+def test_a_hit_is_recorded_with_the_pin(db_session):
+    waiting_place(db_session)
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, Picks(0)))
+
+    row = the_row(db_session, "QUARRY HILL TOWN HOUSES")
+    assert row.coordinate_precision == "exact"
+    assert checked_with(db_session, "QUARRY HILL TOWN HOUSES", "2026-11-20")
+
+
+def test_a_new_snapshot_asks_again(db_session):
+    waiting_place(db_session)
+    picks = Picks(None, None)
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+    counts = geocode_job.run_retry(OsmLocator(snapshot_named("2026-12-01"), picks))
+
+    assert len(picks.calls) == 2
+    assert counts.groups_skipped == 0
+    assert checked_with(db_session, "QUARRY HILL TOWN HOUSES", "2026-12-01")
+
+
+def test_a_skipped_group_lets_the_run_reach_the_ones_never_asked(db_session):
+    waiting_place(db_session)
+    mark_checked(db_session, "QUARRY HILL TOWN HOUSES", "2026-11-20")
+    place_row(
+        db_session,
+        "QUARRY HILL MARKETING",
+        "Quarry Hill Marketing",
+        **approximate(),
+    )
+    picks = Picks(0)
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+
+    assert [call[0] for call in picks.calls] == ["Quarry Hill Marketing"]
+
+
+def test_a_group_with_one_unchecked_row_is_still_tried(db_session):
+    for raw in ("8 COMMERCE AVE", "8 COMMERCE AV"):
+        add_row(
+            db_session,
+            raw,
+            normalized_address="8 Commerce Ave",
+            street="COMMERCE AVE",
+            **approximate(),
+        )
+    mark_checked(db_session, "8 COMMERCE AVE", "2026-11-20")
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT))
+
+    assert counts.placed == 2
+    assert checked_with(db_session, "8 COMMERCE AV", "2026-11-20")
+
+
+def test_a_miss_with_no_ai_to_ask_is_not_recorded(db_session):
+    waiting_place(db_session)
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT))
+
+    assert the_row(db_session, "QUARRY HILL TOWN HOUSES").snapshot_checked is None
+
+
+def test_a_miss_at_the_call_cap_is_not_recorded(db_session):
+    waiting_place(db_session)
+    picks = Picks()
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, picks, max_llm_calls=0))
+
+    assert picks.calls == []
+    assert the_row(db_session, "QUARRY HILL TOWN HOUSES").snapshot_checked is None
+
+
+def test_a_miss_after_a_failed_call_is_not_recorded(db_session):
+    waiting_place(db_session)
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, Picks(AiCallFailed("not a number"))))
+
+    assert the_row(db_session, "QUARRY HILL TOWN HOUSES").snapshot_checked is None
+
+
+def test_a_miss_after_the_backend_stopped_is_not_recorded(db_session):
+    waiting_place(db_session)
+
+    geocode_job.run_retry(
+        OsmLocator(SNAPSHOT, Picks(AiBackendUnavailable("rate limited")))
+    )
+
+    assert the_row(db_session, "QUARRY HILL TOWN HOUSES").snapshot_checked is None
+
+
+def test_a_place_with_no_candidates_is_a_real_miss_and_is_recorded(db_session):
+    place_row(
+        db_session,
+        "NOWHERE SHOP",
+        "Nowhere Shop",
+        **approximate(),
+    )
+    picks = Picks()
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+
+    assert picks.calls == []
+    assert checked_with(db_session, "NOWHERE SHOP", "2026-11-20")
+
+
+def test_the_missed_retry_skips_a_row_it_already_checked(db_session):
+    place_row(db_session, **missed())
+    picks = Picks(None)
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, picks), missed=True)
+    geocode_job.run_retry(OsmLocator(SNAPSHOT, picks), missed=True)
+
+    assert len(picks.calls) == 1
+    assert checked_with(db_session, "QUARRY HILL TOWN HOUSES", "2026-11-20")
+
+
+def test_plain_geocode_ignores_the_stamp(db_session):
+    place_row(db_session)
+    mark_checked(db_session, "QUARRY HILL TOWN HOUSES", "2026-11-20")
+    picks = Picks(0)
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(SNAPSHOT, picks))
+
+    assert len(picks.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"kind": "address"},
+        {"street": "DARTMOUTH AVE"},
+        {"normalized_address": "Quarry Hill Town Houses 2, Mount Support Rd"},
+    ],
+)
+def test_a_row_whose_kind_street_or_address_changed_is_asked_again(db_session, change):
+    waiting_place(db_session)
+    mark_checked(db_session, "QUARRY HILL TOWN HOUSES", "2026-11-20")
+    row = the_row(db_session, "QUARRY HILL TOWN HOUSES")
+    for column, value in change.items():
+        setattr(row, column, value)
+    db_session.commit()
+
+    counts = geocode_job.run_retry(OsmLocator(SNAPSHOT))
+
+    assert (counts.groups_retried, counts.groups_skipped) == (1, 0)
+
+
+def test_a_new_place_match_prompt_asks_again(db_session):
+    waiting_place(db_session)
+    mark_checked(db_session, "QUARRY HILL TOWN HOUSES", "2026-11-20")
+    picks = Picks(None)
+
+    with patch.object(geocode_job, "PLACE_MATCH_PROMPT_VERSION", "place_match-next"):
+        counts = geocode_job.run_retry(OsmLocator(SNAPSHOT, picks))
+
+    assert (len(picks.calls), counts.groups_skipped) == (1, 0)
+
+
+def test_a_place_with_no_candidates_and_no_ai_is_still_a_real_miss(db_session):
+    place_row(db_session, "NOWHERE SHOP", "Nowhere Shop", **approximate())
+
+    geocode_job.run_retry(OsmLocator(SNAPSHOT))
+
+    assert checked_with(db_session, "NOWHERE SHOP", "2026-11-20")

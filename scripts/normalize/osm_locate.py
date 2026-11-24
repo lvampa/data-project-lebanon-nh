@@ -39,6 +39,9 @@ class OsmLocator:
     # backend that stopped. They wait for the next run.
     left_for_next_run: int = 0
     llm_stopped: bool = False
+    # Lookups that came back empty without a real answer: no AI to ask, the cap, a backend
+    # that stopped, or a call that failed. A miss with none of these is a real "no".
+    unanswered: int = 0
 
     def locate(self, row: AddressNormalization) -> Match | None:
         normalized = row.normalized_address or ""
@@ -84,10 +87,14 @@ class OsmLocator:
 
     def _place(self, name: str, street: str) -> Match | None:
         candidates = place_candidates(self.snapshot, name, street)
-        if not candidates or self.picker is None:
+        if not candidates:
+            return None
+        if self.picker is None:
+            self.unanswered += 1
             return None
         if self.llm_stopped or self.llm_calls >= self.max_llm_calls:
             self.left_for_next_run += 1
+            self.unanswered += 1
             return None
         self.llm_calls += 1
         try:
@@ -95,11 +102,13 @@ class OsmLocator:
         except AiBackendUnavailable as exc:
             self.llm_stopped = True
             self.left_for_next_run += 1
+            self.unanswered += 1
             logfire.error(
                 "ai backend unavailable; no more place matches", error=str(exc)
             )
             return None
         except AiCallFailed:
+            self.unanswered += 1
             return None
         if chosen is None:
             return None

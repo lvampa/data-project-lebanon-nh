@@ -72,6 +72,18 @@ describe('useDataFile', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('fetches a file again after reload', async () => {
+    function Reloader() {
+      const file = useDataFile<{ total: number }>('stats.json')
+      if (file.status !== 'ready') return <DataStatus states={[file]} />
+      return <button onClick={file.reload}>reload {file.data.total}</button>
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok({ total: 3 })))
+    render(<Reloader />)
+    fireEvent.click(await screen.findByRole('button', { name: 'reload 3' }))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+  })
+
   it('aborts a file that is not shared when the caller unmounts', async () => {
     let signal: AbortSignal | undefined
     vi.stubGlobal(

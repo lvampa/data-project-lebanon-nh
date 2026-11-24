@@ -48,7 +48,7 @@ export function RoadsView({ addresses, activity, kept, range, mode, onMode, onSh
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === 'roads'
-              ? 'The number is the same as on the map: the entries on the road and the places listed on it. What happened where it meets another road is counted separately.'
+              ? 'The number is the same as on the map: the entries on the road and the places listed on it. What happened where it meets another road is counted separately. Roads are ranked by all of that activity.'
               : 'Entries at the point where two roads meet.'}
           </p>
         </div>

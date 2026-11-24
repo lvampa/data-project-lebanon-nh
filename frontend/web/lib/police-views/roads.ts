@@ -44,7 +44,16 @@ export interface Crossing {
 
 // Words that make a highway description, not a pair of roads: "I-89 at Exits 19 and 20".
 const DESCRIBES_A_SPOT =
-  /\b(exits?|near|at|between|toward|northbound|southbound|eastbound|westbound|nb|sb|mile marker)\b/i
+  /\b(exits?|near|at|between|toward|northbound|southbound|eastbound|westbound|nb|sb|mile marker|(on|off)[- ]?ramp|ramps?|rest area|weigh station|underpass|median|lane|over)\b/i
+
+// The road or crossing a spot description is about: the text before its first spot word, so
+// "I-89 southbound near Exit 17" is I-89 and "Plainfield Rd and I-89 near Exit 20" is that
+// crossing. A name that starts with a spot word has no road to fall back on, so it is kept.
+export function roadOfSpot(name: string): string {
+  const spot = DESCRIBES_A_SPOT.exec(name)
+  const base = spot ? name.slice(0, spot.index).trim() : name
+  return base === '' ? name : base
+}
 
 // "Heater Rd and NH Route 120" is the crossing of those two roads. Anything that is not
 // exactly two roads joined by "and" is a road of its own.
@@ -76,15 +85,24 @@ export function buildRoads(
   addresses.forEach((address, index) => {
     const count = counts.get(index)
     if (address.kind !== 'road' || address.hidden || !count || count.n === 0) return
-    const name = address.normalized_address ?? address.raw_address
+    const name = roadOfSpot(address.normalized_address ?? address.raw_address)
     const roads = parseCrossing(name)
     if (roads) {
-      crossings.push({ id: address.id, name, roads, n: count.n, weeks: count.weeks })
+      // Spellings of one crossing, such as the same two roads near an exit, are one crossing,
+      // shown on the busiest pin. The map still draws each pin.
+      const same = crossings.find((c) => c.name === name)
+      if (same) {
+        same.id = same.n >= count.n ? same.id : address.id
+        same.n += count.n
+        same.weeks = addWeeks(same.weeks, count.weeks)
+      } else {
+        crossings.push({ id: address.id, name, roads, n: count.n, weeks: [...count.weeks] })
+      }
       return
     }
     const known = bare.get(name)
     bare.set(name, {
-      // Two pins with one name are one road, shown on the busier.
+      // Two pins with one name are one road, shown on the busier. The map still draws both.
       id: known && known.n >= count.n ? known.id : address.id,
       n: (known?.n ?? 0) + count.n,
       weeks: addWeeks(known?.weeks ?? [], count.weeks),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { decodeActivity } from '@/lib/police-views/activity'
 import { tally } from '@/lib/police-views/counts'
 import { DEFAULT_FILTERS, readQuery, writeQuery } from '@/lib/police-views/filters'
-import { buildRoads, parseCrossing, type PinCount } from '@/lib/police-views/roads'
+import { buildRoads, parseCrossing, roadOfSpot, type PinCount } from '@/lib/police-views/roads'
 import { selectEntries } from '@/lib/police-views/select'
 import type { Address } from '@/lib/types'
 import { activityFile, address, type FixtureEntry } from './police-views-fixture'
@@ -35,6 +35,20 @@ describe('parseCrossing', () => {
 
   it('keeps a road whose name has "mile" in it', () => {
     expect(parseCrossing('Glen Rd and Miracle Mile')).toEqual(['Glen Rd', 'Miracle Mile'])
+  })
+})
+
+describe('roadOfSpot', () => {
+  it.each([
+    ['I-89 southbound near Exit 17', 'I-89'],
+    ['I-89 at NH Route 120 interchange', 'I-89'],
+    ['I-89 northbound on-ramp at Exit 18', 'I-89'],
+    ['Plainfield Rd and I-89 near Exit 20', 'Plainfield Rd and I-89'],
+    ['I-89 rest area near Exit 18', 'I-89'],
+    ['Main St', 'Main St'],
+    ['At Grade Rd', 'At Grade Rd'],
+  ])('reads %s as %s', (name, road) => {
+    expect(roadOfSpot(name)).toBe(road)
   })
 })
 
@@ -127,6 +141,35 @@ describe('buildRoads', () => {
 
     expect(roads.map((r) => r.name)).toEqual(['Beta St'])
     expect(crossings).toEqual([])
+  })
+
+  it('counts a spot on a highway toward the highway, not as a road of its own', () => {
+    const addresses = [
+      road('I-89'),
+      road('I-89 southbound near Exit 17'),
+      road('I-89 at NH Route 120 interchange'),
+    ]
+    const { roads } = buildRoads(
+      addresses,
+      counts(addresses, {
+        'i-89': 5,
+        'i-89-southbound-near-exit-17': 7,
+        'i-89-at-nh-route-120-interchange': 3,
+      }),
+    )
+
+    expect(roads.map((r) => [r.name, r.own])).toEqual([['I-89', 15]])
+  })
+
+  it('counts the spellings of one crossing as one crossing, on the busiest pin', () => {
+    const addresses = [road('Plainfield Rd and I-89'), road('Plainfield Rd and I-89 near Exit 20')]
+    const { crossings } = buildRoads(
+      addresses,
+      counts(addresses, { 'plainfield-rd-and-i-89': 6, 'plainfield-rd-and-i-89-near-exit-20': 2 }),
+    )
+
+    expect(crossings).toHaveLength(1)
+    expect([crossings[0].n, crossings[0].id]).toEqual([8, 'plainfield-rd-and-i-89'])
   })
 
   it('sorts crossings busiest first', () => {

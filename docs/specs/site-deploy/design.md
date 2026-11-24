@@ -40,7 +40,7 @@ The two fetches that already ran in the browser, `activity.json` and each place 
 The base is `NEXT_PUBLIC_DATA_URL`, and it defaults to `/data`.
 The export is written to `data/export/` at the repo root, outside `public/`, so it never reaches the build.
 `bun run dev` in `frontend/web` starts `scripts/serve-data.mjs`, which serves that folder on port 4100 with CORS, beside `next dev`.
-A tracked `frontend/web/.env.development` sets `NEXT_PUBLIC_DATA_URL=http://localhost:4100`.
+The `dev:site` script sets `NEXT_PUBLIC_DATA_URL=http://localhost:4100`, so no `.env` file is tracked.
 Dev then reads data from another origin, as production will from R2, and the later publish step uploads `data/export/`.
 A deployed build with nothing at `/data` shows the error state on those four pages.
 `NEXT_PUBLIC_DATA_URL` is read when the build runs, so pointing the site at a data host means a rebuild.

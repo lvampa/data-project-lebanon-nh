@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "bun run --parallel dev:data dev:site",
     "dev:data": "bun scripts/serve-data.mjs",
-    "dev:site": "next dev",
+    "dev:site": "NEXT_PUBLIC_DATA_URL=http://localhost:4100 next dev",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",

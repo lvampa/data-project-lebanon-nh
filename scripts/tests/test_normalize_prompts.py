@@ -159,6 +159,34 @@ def test_the_location_prompt_asks_for_the_names_person_flag():
     assert "Carter Community Building" in prompt
 
 
-def test_the_location_prompt_version_is_2_so_a_redo_asks_again():
-    assert LOCATION_PROMPT_VERSION == "location-2"
-    assert location_prompt_version(STREETS).startswith("location-2+")
+def test_the_location_prompt_version_is_3_so_a_redo_asks_again():
+    assert LOCATION_PROMPT_VERSION == "location-3"
+    assert location_prompt_version(STREETS).startswith("location-3+")
+
+
+def test_the_location_prompt_folds_a_part_of_a_place_into_the_place():
+    prompt = location_prompt(["EXAMPLE MARKET AISLE 12"], streets=STREETS)
+
+    assert "aisle, level, floor, room" in prompt
+    assert '"Example Market, Aisle 12" becomes "Example Market"' in prompt
+    assert "Sample Hospital Building 9" in prompt
+    assert "not the hospital" in prompt
+
+
+def test_the_location_prompt_carries_the_known_places_before_the_raw_values():
+    prompt = location_prompt(
+        ["EXAMPLE MARKET AISLE 12"],
+        streets=STREETS,
+        known_places=["Example Market", "Sample Clinic"],
+    )
+
+    assert json.dumps(["Example Market", "Sample Clinic"]) in prompt
+    assert prompt.index(json.dumps(["Example Market", "Sample Clinic"])) < prompt.index(
+        "Raw values (JSON)"
+    )
+
+
+def test_the_known_places_default_to_none():
+    prompt = location_prompt(["X"], streets=STREETS)
+
+    assert "already in use near these locations (JSON): []" in prompt

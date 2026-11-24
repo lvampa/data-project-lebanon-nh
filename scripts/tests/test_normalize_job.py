@@ -784,6 +784,214 @@ def test_a_new_street_changes_the_version_so_redo_asks_again(db_session, call_lo
     assert the_address(db_session, "SOMEWHERE").normalized_address == "Somewhere Rd"
 
 
+PLACE = {"kind": "place", "source": "ai", "street": "MARKET ST"}
+
+
+def known_places_in(backend: FakeBackend, call: int = 0) -> list[str]:
+    prompt = backend.calls[call].prompt
+    after = prompt.split("(JSON): ")[-2]  # the known-places list sits before the raws
+    return json.loads(after.split("\n")[0])
+
+
+def test_the_prompt_offers_stored_place_names_on_a_street_in_the_batch(
+    db_session, call_log
+):
+    version = location_prompt_version(["MARKET ST"])
+    add_parcels(db_session, "9 Market St")
+    add_address_row(
+        db_session,
+        "Example Market",
+        normalized_address="Example Market",
+        prompt_version=version,
+        **PLACE,
+    )
+    add_address_row(
+        db_session,
+        "Far Away Shop",
+        normalized_address="Far Away Shop",
+        prompt_version=version,
+        kind="place",
+        source="ai",
+        street="OTHER ST",
+    )
+    add_locations(db_session, "EXAMPLE MARKET AISLE 12 - MARKET ST")
+    backend = FakeBackend(
+        replies=[location_answer("EXAMPLE MARKET AISLE 12 - MARKET ST")]
+    )
+
+    run(backend, call_log, fields=("location",))
+
+    assert known_places_in(backend) == ["Example Market"]
+
+
+def test_the_prompt_offers_a_name_that_shares_its_first_word_with_a_raw_with_no_street(
+    db_session, call_log
+):
+    version = location_prompt_version(["MARKET ST"])
+    add_parcels(db_session, "9 Market St")
+    add_address_row(
+        db_session,
+        "Sample Hospital",
+        normalized_address="Sample Hospital",
+        prompt_version=version,
+        kind="place",
+        source="ai",
+        street="HOSPITAL DR",
+    )
+    add_locations(db_session, "SAMPLE HOSPITAL LOT 9")
+    backend = FakeBackend(replies=[location_answer("SAMPLE HOSPITAL LOT 9")])
+
+    run(backend, call_log, fields=("location",))
+
+    assert known_places_in(backend) == ["Sample Hospital"]
+
+
+def test_the_prompt_leaves_out_person_human_and_stale_names(db_session, call_log):
+    version = location_prompt_version(["MARKET ST"])
+    add_parcels(db_session, "9 Market St")
+    for raw, name, extra in [
+        ("Person Row", "Person Name", {"names_person": True, "source": "ai"}),
+        ("Human Row", "Human Name", {"source": "human"}),
+        ("Stale Row", "Stale Name", {"prompt_version": "location-2+streets-abcd1234"}),
+        ("Good Row", "Good Name", {}),
+    ]:
+        add_address_row(
+            db_session,
+            raw,
+            normalized_address=name,
+            **{"prompt_version": version, **PLACE, **extra},
+        )
+    add_locations(db_session, "SOMEWHERE - MARKET ST")
+    backend = FakeBackend(replies=[location_answer("SOMEWHERE - MARKET ST")])
+
+    run(backend, call_log, fields=("location",))
+
+    assert known_places_in(backend) == ["Good Name"]
+
+
+def test_the_prompt_keeps_a_rule_places_name_and_the_100_most_shared(
+    db_session, call_log
+):
+    version = location_prompt_version(["MARKET ST"])
+    add_parcels(db_session, "9 Market St")
+    for number in range(105):
+        add_address_row(
+            db_session,
+            f"Raw {number}",
+            normalized_address=f"Place {number:03d}",
+            prompt_version=version,
+            **PLACE,
+        )
+    # Two spellings share one name, so it ranks first.
+    for spelling in ("Shared A", "Shared B"):
+        add_address_row(
+            db_session,
+            spelling,
+            normalized_address="Shared Place",
+            prompt_version=version,
+            **PLACE,
+        )
+    add_locations(db_session, "SOMEWHERE - MARKET ST")
+    backend = FakeBackend(replies=[location_answer("SOMEWHERE - MARKET ST")])
+
+    run(backend, call_log, fields=("location",))
+
+    known = known_places_in(backend)
+    assert len(known) == 100
+    assert known[0] == "Shared Place"
+
+
+def test_a_later_batch_is_offered_the_names_an_earlier_batch_stored(
+    db_session, call_log
+):
+    add_parcels(db_session, "9 Market St")
+    add_locations(db_session, "ALPHA MARKET - MARKET ST", "ZULU MARKET - MARKET ST")
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "ALPHA MARKET - MARKET ST", normalized_address="Example Market"
+            ),
+            location_answer(
+                "ZULU MARKET - MARKET ST", normalized_address="Example Market"
+            ),
+        ]
+    )
+
+    run(backend, call_log, fields=("location",), batch_size=1)
+
+    assert known_places_in(backend, 0) == []
+    assert known_places_in(backend, 1) == ["Example Market"]
+
+
+def test_a_merged_answer_renames_the_row_and_clears_its_geocoded_pin(
+    db_session, call_log
+):
+    add_parcels(db_session, "9 Market St")
+    add_locations(db_session, "EXAMPLE MARKET AISLE 12 - MARKET ST")
+    add_address_row(
+        db_session,
+        "EXAMPLE MARKET AISLE 12 - MARKET ST",
+        normalized_address="Example Market, Aisle 12",
+        prompt_version="location-2+streets-old",
+        lat=43.6,
+        lng=-72.2,
+        coordinate_precision="exact",
+        geocoded_via="nominatim",
+        **PLACE,
+    )
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "EXAMPLE MARKET AISLE 12 - MARKET ST",
+                normalized_address="Example Market",
+            )
+        ]
+    )
+
+    run(backend, call_log, fields=("location",), redo=True)
+
+    row = the_address(db_session, "EXAMPLE MARKET AISLE 12 - MARKET ST")
+    assert row.normalized_address == "Example Market"
+    assert (row.lat, row.lng, row.geocoded_via) == (None, None, None)
+
+
+@pytest.mark.parametrize("via", ["manual", "research"])
+def test_a_person_placed_pin_keeps_its_name_and_pin_but_follows_the_flag(
+    db_session, call_log, via
+):
+    add_parcels(db_session, "9 Market St")
+    add_locations(db_session, "EXAMPLE MARKET AISLE 12 - MARKET ST")
+    add_address_row(
+        db_session,
+        "EXAMPLE MARKET AISLE 12 - MARKET ST",
+        normalized_address="Example Market, Aisle 12",
+        prompt_version="location-2+streets-old",
+        lat=43.6,
+        lng=-72.2,
+        coordinate_precision="exact",
+        geocoded_via=via,
+        **PLACE,
+    )
+    backend = FakeBackend(
+        replies=[
+            location_answer(
+                "EXAMPLE MARKET AISLE 12 - MARKET ST",
+                normalized_address="Example Market",
+                names_person=True,
+            )
+        ]
+    )
+
+    run(backend, call_log, fields=("location",), redo=True)
+
+    row = the_address(db_session, "EXAMPLE MARKET AISLE 12 - MARKET ST")
+    assert row.normalized_address == "Example Market, Aisle 12"
+    assert (row.lat, row.lng, row.geocoded_via) == (43.6, -72.2, via)
+    assert row.names_person is True
+    assert row.prompt_version == location_prompt_version(["MARKET ST"])
+    assert row.needs_review is True
+
+
 def test_rule_rows_use_the_display_helper_for_their_address(
     db_session, call_log, monkeypatch
 ):

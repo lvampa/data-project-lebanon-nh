@@ -19,7 +19,7 @@ from postgres import utc_now
 from postgres.models.address_normalization import AddressNormalization
 from postgres.models.incident_type_category import IncidentTypeCategory
 from postgres.models.log_entry import LogEntry
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -31,6 +31,7 @@ from scripts.normalize.checks import (
 )
 from scripts.normalize.prompts import (
     INCIDENT_TYPE_PROMPT_VERSION,
+    LOCATION_PROMPT_VERSION,
     IncidentTypeAnswer,
     IncidentTypeItem,
     LocationAnswer,
@@ -241,6 +242,9 @@ class Locations:
         self._streets = list(streets)
         self._place_codes: dict[str, str | None] = {}
         self._crossings: dict[str, str] | None = None
+        # The session the run was planned with. The job commits after every batch, so
+        # each request reads the names the earlier batches stored.
+        self._session: Session | None = None
 
     def can_call(self) -> bool:
         return bool(self._streets)
@@ -329,6 +333,7 @@ class Locations:
             if raws_to_send:
                 to_send.append(Group(raws_to_send))
         self._place_codes = place_codes
+        self._session = session
         return Plan(to_send, settled)
 
     @staticmethod
@@ -362,8 +367,13 @@ class Locations:
 
     def request(self, groups: Sequence[Group]) -> Request:
         sent = [group.sent for group in groups]
+        known = (
+            names_in_use(self._session, sent, self._streets)
+            if self._session is not None
+            else []
+        )
         return Request(
-            location_prompt(sent, self._streets),
+            location_prompt(sent, self._streets, known),
             LocationAnswer.model_json_schema(),
             sent,
         )
@@ -381,6 +391,9 @@ class Locations:
         item: LocationItem = accepted.item
         street = canonical_address(item.street) if item.street.strip() else None
         for raw in group.raws:
+            if _has_own_pin(session, raw):
+                self._keep_named_pin(session, raw, item, accepted, ai_call_id)
+                continue
             self._write(
                 session,
                 raw,
@@ -397,6 +410,36 @@ class Locations:
                 failed_attempts=0,
             )
         return len(group.raws)
+
+    def _keep_named_pin(
+        self,
+        session: Session,
+        raw: str,
+        item: LocationItem,
+        accepted: Accepted[Any],
+        ai_call_id: str | None,
+    ) -> None:
+        """A hand-placed or researched pin stays on its own name, as a human row's does.
+        The privacy flag and the version still follow the answer, and a different answer
+        marks the row for a person to merge."""
+        row = session.scalars(
+            select(AddressNormalization).where(AddressNormalization.raw_address == raw)
+        ).one()
+        session.execute(
+            update(AddressNormalization)
+            .where(AddressNormalization.id == row.id)
+            .values(
+                names_person=item.names_person,
+                prompt_version=self.version(),
+                ai_call_id=ai_call_id,
+                needs_review=(
+                    row.needs_review
+                    or accepted.needs_review
+                    or row.normalized_address != item.normalized_address
+                ),
+                updated_at=utc_now(),
+            )
+        )
 
     def fail(self, session: Session, group: Group) -> int:
         for raw in group.raws:
@@ -516,6 +559,74 @@ def _known_places(
         ):
             places[row.place_code] = PlaceNormalization(row.normalized_address, "place")
     return places
+
+
+# How many place names one location prompt carries.
+KNOWN_PLACE_LIMIT = 100
+# A pin a person placed or a researcher found. The name it sits on is kept with it.
+_PERSON_PLACED = ("manual", "research")
+
+
+def _has_own_pin(session: Session, raw: str) -> bool:
+    return bool(
+        session.scalar(
+            select(func.count())
+            .select_from(AddressNormalization)
+            .where(
+                AddressNormalization.raw_address == raw,
+                AddressNormalization.normalized_address.is_not(None),
+                AddressNormalization.source != "human",
+                AddressNormalization.geocoded_via.in_(_PERSON_PLACED),
+            )
+        )
+    )
+
+
+def names_in_use(
+    session: Session, raws: Sequence[str], streets: Sequence[str]
+) -> list[str]:
+    """Place names the AI may reuse for these raw values, most shared first.
+
+    A name is offered when its street appears in a raw value, or its first word is a word
+    of one, since many parts of a place are written with no street. Only names the AI
+    would give again are offered: the current location version, or a rule row. A person's
+    text and a human row's text are never offered."""
+    canonical = [canonical_address(raw) for raw in raws]
+    padded = [f" {text} " for text in canonical]
+    mentioned = {
+        street for street in streets if any(f" {street} " in p for p in padded)
+    }
+    words = {
+        w for text in canonical for w in text.split() if len(w) >= 4 and w.isalpha()
+    }
+    rows = session.execute(
+        select(
+            AddressNormalization.normalized_address,
+            AddressNormalization.street,
+            func.count(),
+        )
+        .where(
+            AddressNormalization.kind == "place",
+            AddressNormalization.normalized_address.is_not(None),
+            AddressNormalization.names_person.is_(False),
+            AddressNormalization.source != "human",
+            or_(
+                AddressNormalization.prompt_version.like(f"{LOCATION_PROMPT_VERSION}%"),
+                (AddressNormalization.source == "rule")
+                & (AddressNormalization.prompt_version == rules_prompt_version()),
+            ),
+        )
+        .group_by(AddressNormalization.normalized_address, AddressNormalization.street)
+    ).all()
+    shared: dict[str, int] = defaultdict(int)
+    for name, street, count in rows:
+        if name is None:
+            continue
+        first_word = next(iter(canonical_address(name).split()), "")
+        if street in mentioned or first_word in words:
+            shared[name] += count
+    ranked = sorted(shared, key=lambda name: (-shared[name], name))
+    return ranked[:KNOWN_PLACE_LIMIT]
 
 
 def _is_redo_location(row: AddressNormalization | None) -> bool:

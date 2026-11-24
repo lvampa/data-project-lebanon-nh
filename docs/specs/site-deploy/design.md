@@ -13,6 +13,7 @@ The build contains no data, so CI can build it.
 The deploy is its own workflow, `.github/workflows/deploy.yml`, which runs when a push lands on main and touches `frontend/**`, `scripts/deploy.sh` or the workflow itself.
 That push is its only trigger.
 A redeploy is "Re-run all jobs" on the last run, and a deploy from another branch is a local `scripts/deploy.sh`.
+Re-running an older run deploys that older commit over a newer one, so it is a rollback; the Pages Rollback in the Cloudflare dashboard is the intended way to do that.
 A backend-only merge does not deploy.
 It does not wait on `ci-ok`, since `ci.yml` is checks only.
 It relies on `ci-ok` being a required check on pull requests, so nothing merges without passing, and the workflow fails on a broken build, so nothing broken ships.

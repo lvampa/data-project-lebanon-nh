@@ -2,8 +2,11 @@
 import { useEffect, useState } from 'react'
 import { fetchDataFile } from '@/lib/data'
 
+// `reload` fetches the file again, for a caller that finds it unusable after it arrived.
 export type DataState<T> =
-  { status: 'loading' } | { status: 'error'; retry: () => void } | { status: 'ready'; data: T }
+  | { status: 'loading' }
+  | { status: 'error'; retry: () => void }
+  | { status: 'ready'; data: T; reload: () => void }
 
 // Each file is fetched once per page load, so moving between pages does not download and parse
 // it again. A failed fetch is dropped, so Try again asks the host again.
@@ -55,6 +58,10 @@ export function useDataFile<T>(
   }, [filename, key, shared])
 
   if (result?.key !== key) return { status: 'loading' }
-  if (!result.value.ok) return { status: 'error', retry: () => setAttempt((n) => n + 1) }
-  return { status: 'ready', data: result.value.data }
+  const reload = () => {
+    if (filename !== null) loads.delete(filename)
+    setAttempt((n) => n + 1)
+  }
+  if (!result.value.ok) return { status: 'error', retry: reload }
+  return { status: 'ready', data: result.value.data, reload }
 }

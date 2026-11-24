@@ -5,6 +5,17 @@ import { decodeActivity, type Activity, type ActivityFile } from '@/lib/police-v
 import { DATA_FILES } from '@/lib/data'
 import type { Address } from '@/lib/types'
 
+function decodeOrFail(data: ActivityFile | null, addresses: Address[]): Activity | 'failed' | null {
+  if (!data) return null
+  try {
+    return decodeActivity(data, addresses)
+  } catch (error) {
+    // eslint-disable-next-line no-console -- The only record of why the activity did not load.
+    console.error(error)
+    return 'failed'
+  }
+}
+
 export type ActivityState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -20,9 +31,13 @@ export function useActivity(addresses: Address[], wanted: boolean): ActivityStat
 
   const file = useDataFile<ActivityFile>(asked ? DATA_FILES.activity : null)
   const data = file.status === 'ready' ? file.data : null
-  const activity = useMemo(() => (data ? decodeActivity(data, addresses) : null), [data, addresses])
+  const decoded = useMemo(() => decodeOrFail(data, addresses), [data, addresses])
 
   if (!asked) return { status: 'idle' }
   if (file.status === 'error') return file
-  return activity ? { status: 'ready', activity } : { status: 'loading' }
+  if (decoded === 'failed') {
+    // A file the code cannot read, as with data from an older export, must not take the page down.
+    return { status: 'error', retry: file.status === 'ready' ? file.reload : () => {} }
+  }
+  return decoded ? { status: 'ready', activity: decoded } : { status: 'loading' }
 }

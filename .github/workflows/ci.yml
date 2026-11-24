@@ -94,6 +94,8 @@ jobs:
           mkdir -p web/public/data
           echo '{}' > web/public/data/stats.json
           CLOUDFLARE_PAGES_PROJECT=ci bash ../scripts/deploy.sh --dry-run
+          # The script clears data from the build, not from the checkout.
+          test -f web/public/data/stats.json
 
   rust:
     runs-on: ubuntu-latest

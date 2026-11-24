@@ -116,15 +116,15 @@ bash scripts/generate_report.sh              # exports JSON to data/export
 
 # Publish the data to R2. By hand it needs R2_BUCKET, CLOUDFLARE_ACCOUNT_ID and AWS_PROFILE
 # (`aws configure --profile <name>`). The Airflow publish_data DAG runs it with the r2_data
-# Connection instead; see docs/specs/site-deploy/design.md.
+# Connection, made in the Airflow UI; see docs/specs/site-deploy/design.md.
 bash scripts/deploy-data.sh [--dry-run]      # export, check, then sync
 
 # Hold person locations that are not clearly safe, and release them after a look
 uv run privacy-holds list                    # id, kind and raw text, for your terminal only
 uv run privacy-holds handled <id> [<id>...]
 
-# Local dev reads /data. Set NEXT_PUBLIC_DATA_URL in frontend/web/.env.local to read the live
-# R2 data, or look at the files in data/export after deploy-data.sh --dry-run.
+# Local dev has no data server. Without NEXT_PUBLIC_DATA_URL the data pages show the error
+# state. Set it to the R2 URL in frontend/web/.env.local to read live data.
 
 # Deploy by hand (CI runs the same script on merge to main)
 bash scripts/deploy.sh [--dry-run]           # ships whatever is checked out

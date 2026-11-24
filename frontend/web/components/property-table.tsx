@@ -52,6 +52,7 @@ export function PropertyTable({ properties }: Props) {
                 <Link
                   href={p.detail_url}
                   target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={`View VGSI record for ${p.location ?? p.parcel_id}`}
                   className="text-xs text-blue-600 hover:underline"
                 >

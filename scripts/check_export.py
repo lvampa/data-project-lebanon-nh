@@ -10,6 +10,7 @@ import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from urllib.parse import urlparse
 
 from bootstrap import bootstrap
 from postgres import open_session
@@ -18,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from scripts.normalize.prompts import MIN_PRIVACY_LOCATION_PROMPT
+from scripts.privacy_holds import is_plain_address, street_set
 
 DEFAULT_DIR = Path("data/export")
 EXPECTED_FILES = (
@@ -35,6 +37,10 @@ MIN_PERSON_TEXT = 8
 # Parcel and staff records are not police data, and a parcel's address may be the same
 # text as a flagged location, so these two files are not scanned.
 NOT_POLICE_DATA = ("properties.json", "staff.json")
+# The data fields the site uses as a link target, and the only hosts they may point at: the
+# city's police log and the VGSI parcel records.
+LINK_FIELDS = ("source_url", "detail_url")
+LINK_HOSTS = ("www.lebanonnh.gov", "lebanonnh.gov", "gis.vgsi.com")
 
 
 def check_files(export: Path) -> list[str]:
@@ -66,31 +72,54 @@ def check_coverage(export: Path) -> list[str]:
     return []
 
 
+def exported_strings(export: Path) -> str:
+    """Every string value in the police-data files, lowercase, one per line.
+
+    Parsed, not raw text, so a name written with a JSON escape is still found.
+    """
+    found: list[str] = []
+
+    def collect(value: object) -> None:
+        if isinstance(value, str):
+            found.append(value)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+
+    for path in export.rglob("*.json"):
+        if path.name not in NOT_POLICE_DATA:
+            collect(json.loads(path.read_text()))
+    return "\n".join(found).casefold()
+
+
 def check_person_text(export: Path, session: Session) -> list[str]:
     """No flagged location's text appears in the export.
 
     A flagged row's raw text is never published, so it must not appear at all. Its
-    normalized text may appear only when an unflagged location has the same text, since two
-    raw values can normalize to one address and the unflagged row publishes it. A held row
-    is checked like any other: a hold keeps it out of the view, so its text appearing means
-    something else published it.
+    normalized text may appear only when it is a plain address or street, or when every row
+    with that text has been handled by a person. A held row is checked like any other.
+
+    A text under 8 characters is not scanned, since a short street name would match half the
+    export. That makes this check not fail-closed for short texts.
     """
+    streets = street_set(session)
     rows = session.execute(
         select(
             AddressNormalization.raw_address,
             AddressNormalization.normalized_address,
             AddressNormalization.street,
-        ).where(AddressNormalization.names_person.is_(True))
-    ).all()
-    unflagged_texts = {
-        normalized.casefold()
-        for normalized in session.scalars(
-            select(AddressNormalization.normalized_address).where(
-                AddressNormalization.names_person.is_(False),
-                AddressNormalization.normalized_address.is_not(None),
-            )
+            AddressNormalization.names_person,
+            AddressNormalization.privacy_hold,
+            AddressNormalization.privacy_handled_at,
         )
-        if normalized
+    ).all()
+    unhandled = {
+        normalized.casefold()
+        for _, normalized, _, _, hold, handled_at in rows
+        if normalized and not (hold and handled_at is not None)
     }
 
     def scannable(text: str | None, street: str | None) -> str | None:
@@ -98,18 +127,39 @@ def check_person_text(export: Path, session: Session) -> list[str]:
             return text.casefold()
         return None
 
-    raw_texts = {scannable(raw, street) for raw, _, street in rows}
-    normalized_texts = {
-        scannable(normalized, street) for _, normalized, street in rows
-    } - unflagged_texts
-    texts = (raw_texts | normalized_texts) - {None}
-    exported = "\n".join(
-        path.read_text()
-        for path in export.rglob("*.json")
-        if path.name not in NOT_POLICE_DATA
-    ).casefold()
+    texts: set[str | None] = set()
+    for raw, normalized, street, flagged, _, _ in rows:
+        if not flagged:
+            continue
+        texts.add(scannable(raw, street))
+        folded = normalized.casefold() if normalized else ""
+        if folded in unhandled and not is_plain_address(folded, streets):
+            texts.add(scannable(normalized, street))
+    exported = exported_strings(export)
     found = sum(1 for text in texts if text and text in exported)
     return [f"{found} flagged person locations appear in the export"] if found else []
+
+
+def check_links(export: Path) -> list[str]:
+    """Every link target in the data is https on a host the site expects."""
+    bad = 0
+
+    def walk(value: object, key: str | None = None) -> None:
+        nonlocal bad
+        if isinstance(value, dict):
+            for name, item in value.items():
+                walk(item, name)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item, key)
+        elif key in LINK_FIELDS and value is not None:
+            url = urlparse(value) if isinstance(value, str) else None
+            if not url or url.scheme != "https" or url.hostname not in LINK_HOSTS:
+                bad += 1
+
+    for path in export.rglob("*.json"):
+        walk(json.loads(path.read_text()))
+    return [f"{bad} links are not https on an expected host"] if bad else []
 
 
 def location_prompt_number(prompt_version: str | None) -> int | None:
@@ -119,9 +169,10 @@ def location_prompt_number(prompt_version: str | None) -> int | None:
 
 
 def check_prompt_versions(session: Session) -> list[str]:
-    """No AI location in the export predates the prompt that flags a person.
+    """No AI location is on a prompt older than the first one that flags a person.
 
-    Rule rows store their own version, so only AI rows are counted.
+    Rule rows store their own version, so only AI rows are counted. A version that cannot be
+    read counts as old.
     """
     versions = session.scalars(
         select(AddressNormalization.prompt_version).where(
@@ -147,6 +198,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     problems = check_files(args.export)
     if not problems:
         problems += check_coverage(args.export)
+        problems += check_links(args.export)
         with open_session() as session:
             problems += check_prompt_versions(session)
             problems += check_person_text(args.export, session)

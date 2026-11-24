@@ -74,5 +74,7 @@ class AddressNormalization(ProvenanceMixin, Base):
         Boolean, nullable=False, default=False, server_default=false()
     )
     privacy_handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The normalized text, in lowercase, that was handled. A different text is held again.
+    privacy_handled_text: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

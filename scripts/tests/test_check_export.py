@@ -7,9 +7,11 @@ from pathlib import Path
 import pytest
 from postgres.models.address_normalization import AddressNormalization
 
+from scripts import privacy_holds
 from scripts.check_export import (
     check_coverage,
     check_files,
+    check_links,
     check_person_text,
     check_prompt_versions,
 )
@@ -26,6 +28,13 @@ def write(export: Path, name: str, data: object) -> None:
     path = export / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
+
+
+@pytest.fixture(autouse=True)
+def street_list(monkeypatch):
+    monkeypatch.setattr(
+        privacy_holds, "load_street_list", lambda session: ["PLACEHOLDER LANE"]
+    )
 
 
 @pytest.fixture
@@ -87,22 +96,76 @@ def test_a_flagged_person_location_in_the_export_fails_without_printing_it(
     assert PLACE not in " ".join(problems)
 
 
-def test_a_normalized_text_that_an_unflagged_location_also_produces_is_not_a_leak(
+def test_a_normalized_text_an_unflagged_location_also_produces_is_still_a_leak(
     export, db_session
 ):
     add_location(db_session, "RAW ONE", normalized_address=PLACE, names_person=True)
     add_location(db_session, "RAW TWO", normalized_address=PLACE, names_person=False)
     write(export, "incidents.json", [{"location": PLACE}])
+    assert check_person_text(export, db_session) == [
+        "1 flagged person locations appear in the export"
+    ]
+
+
+def test_a_plain_address_may_appear_even_when_a_flagged_row_has_it(export, db_session):
+    add_location(
+        db_session,
+        "RAW ONE",
+        normalized_address="12 Placeholder Lane",
+        names_person=True,
+    )
+    write(export, "incidents.json", [{"location": "12 Placeholder Lane"}])
     assert check_person_text(export, db_session) == []
 
 
-def test_a_flagged_rows_raw_text_in_the_export_fails_even_with_an_unflagged_twin(
+def test_a_text_whose_rows_were_all_handled_may_appear(export, db_session):
+    add_location(
+        db_session,
+        "RAW ONE",
+        normalized_address=PLACE,
+        names_person=True,
+        privacy_hold=True,
+        privacy_handled_at=NOW,
+    )
+    write(export, "incidents.json", [{"location": PLACE}])
+    assert check_person_text(export, db_session) == []
+
+
+def test_a_text_with_one_row_not_handled_still_fails(export, db_session):
+    add_location(
+        db_session,
+        "RAW ONE",
+        normalized_address=PLACE,
+        names_person=True,
+        privacy_hold=True,
+        privacy_handled_at=NOW,
+    )
+    add_location(db_session, "RAW TWO", normalized_address=PLACE, names_person=False)
+    write(export, "incidents.json", [{"location": PLACE}])
+    assert check_person_text(export, db_session) == [
+        "1 flagged person locations appear in the export"
+    ]
+
+
+def test_a_flagged_rows_raw_text_in_the_export_fails_even_when_the_text_is_plain(
     export, db_session
 ):
-    raw = "ZZ RAW PERSON TEXT 7"
-    add_location(db_session, raw, normalized_address=PLACE, names_person=True)
-    add_location(db_session, "OTHER", normalized_address=PLACE, names_person=False)
+    raw = "12 PLACEHOLDER LANE ZZ"
+    add_location(
+        db_session, raw, normalized_address="12 Placeholder Lane", names_person=True
+    )
     write(export, "incidents.json", [{"location": raw}])
+    assert check_person_text(export, db_session) == [
+        "1 flagged person locations appear in the export"
+    ]
+
+
+def test_text_written_with_a_json_escape_is_still_found(export, db_session):
+    name = "ZZ Person \u00e9 Lane 99"
+    add_location(db_session, name, normalized_address=PLACE, names_person=True)
+    (export / "incidents.json").write_text(
+        '[{"location": "ZZ Person \\u00e9 Lane 99"}]'
+    )
     assert check_person_text(export, db_session) == [
         "1 flagged person locations appear in the export"
     ]
@@ -198,3 +261,40 @@ def test_current_ai_and_rule_locations_pass(db_session):
         prompt_version="rules-3",
     )
     assert check_prompt_versions(db_session) == []
+
+
+# --- links ---
+
+
+@pytest.mark.parametrize(
+    ("field", "url"),
+    [
+        ("source_url", "https://www.lebanonnh.gov/DocumentCenter/View/1/log.pdf"),
+        ("detail_url", "https://gis.vgsi.com/lebanonnh/Parcel.aspx?pid=1"),
+    ],
+)
+def test_a_link_to_an_expected_https_host_passes(export, field, url):
+    write(export, "incidents.json", [{field: url}])
+    assert check_links(export) == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://www.lebanonnh.gov/log.pdf",
+        "https://evil.example.test/log.pdf",
+        "javascript:alert(1)",
+        "https://www.lebanonnh.gov.evil.example.test/log.pdf",
+        "//www.lebanonnh.gov/log.pdf",
+        "",
+        7,
+    ],
+)
+def test_any_other_link_fails(export, url):
+    write(export, "places/main-st.json", {"calls": [{"source_url": url}]})
+    assert check_links(export) == ["1 links are not https on an expected host"]
+
+
+def test_a_missing_link_is_not_a_failure(export):
+    write(export, "incidents.json", [{"source_url": None}])
+    assert check_links(export) == []

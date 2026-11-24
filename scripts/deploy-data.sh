@@ -24,28 +24,50 @@ case "$*" in
   *) die "unknown argument '$*'; the only option is --dry-run" ;;
 esac
 
+# A value counts as set only when it is not empty and not the text "None", which is what a
+# template renders for a missing Connection field.
+is_set() {
+  [ -n "${1:-}" ] && [ "${1:-}" != "None" ]
+}
+
 # Fail before the slow export, not after it.
 if ! $dry_run; then
-  [ -n "${R2_BUCKET:-}" ] || die "R2_BUCKET is not set"
-  [ -n "${R2_ENDPOINT:-}${CLOUDFLARE_ACCOUNT_ID:-}" ] ||
+  is_set "${R2_BUCKET:-}" || die "R2_BUCKET is not set"
+  if is_set "${R2_ENDPOINT:-}"; then
+    endpoint="$R2_ENDPOINT"
+  elif is_set "${CLOUDFLARE_ACCOUNT_ID:-}"; then
+    endpoint="https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
+  else
     die "set R2_ENDPOINT or CLOUDFLARE_ACCOUNT_ID"
-  if [ -z "${AWS_PROFILE:-}" ] && { [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; }; then
+  fi
+  has_key_pair=false
+  if is_set "${AWS_ACCESS_KEY_ID:-}" && is_set "${AWS_SECRET_ACCESS_KEY:-}"; then
+    has_key_pair=true
+  fi
+  if is_set "${AWS_PROFILE:-}" && $has_key_pair; then
+    die "set AWS_PROFILE or the key pair, not both"
+  fi
+  if ! is_set "${AWS_PROFILE:-}" && ! $has_key_pair; then
     die "set AWS_PROFILE, or both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"
   fi
-  endpoint="${R2_ENDPOINT:-https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com}"
 fi
+
+# The R2 credentials belong to the upload alone. Everything before it runs without them.
+without_r2_credentials() {
+  env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_PROFILE "$@"
+}
 
 # Hold flagged locations that are not clearly safe, so the export leaves them out. It only
 # adds holds, and prints counts.
 echo "→ Holding unsafe person locations..."
-uv run --frozen privacy-holds mark
+without_r2_credentials uv run --frozen privacy-holds mark
 
 echo "→ Exporting the report data..."
-bash scripts/generate_report.sh
+without_r2_credentials bash scripts/generate_report.sh
 
 # Nothing is uploaded unless every check passes. The checks print counts, never the text.
 echo "→ Checking the export..."
-uv run --frozen check-export data/export
+without_r2_credentials uv run --frozen check-export data/export
 
 if $dry_run; then
   echo "✓ Dry run, not uploading."
@@ -56,8 +78,10 @@ fi
 export AWS_REQUEST_CHECKSUM_CALCULATION=when_required
 export AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
 
-# --delete drops a place card that is gone. The bucket holds only this export.
-echo "→ Uploading to R2..."
+# --delete drops a place card that is gone. The bucket holds only this export, so say which
+# bucket and host this is before anything is removed.
+endpoint_host="${endpoint#https://}"
+echo "→ Syncing to bucket $R2_BUCKET at ${endpoint_host%%/*}..."
 aws s3 sync data/export "s3://$R2_BUCKET/" \
   --delete \
   --region auto \

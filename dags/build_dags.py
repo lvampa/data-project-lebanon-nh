@@ -3,12 +3,29 @@ from pathlib import PurePosixPath
 
 import pendulum
 from airflow import DAG
+from airflow.hooks.base import BaseHook
 from airflow.models.param import Param
 from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from publish import run_with_r2
 from specs import SPECS, DagSpec
 
 PROJECT_ROOT = PurePosixPath("/opt/project")
+
+
+def command_of(spec: DagSpec) -> str:
+    return f"cd {PROJECT_ROOT / spec.cwd} && uv run --frozen {spec.command}"
+
+
+def run_with_connection(spec: DagSpec) -> None:
+    """Read the Connection when the task runs, and give it to the command's environment only."""
+    assert spec.connection is not None
+    run_with_r2(
+        ["uv", "run", "--frozen", *spec.command.split()],
+        str(PROJECT_ROOT / spec.cwd),
+        BaseHook.get_connection(spec.connection),
+    )
 
 
 def build_dag(spec: DagSpec) -> DAG:
@@ -22,16 +39,24 @@ def build_dag(spec: DagSpec) -> DAG:
         params={name: Param(**kwargs) for name, kwargs in spec.params.items()},
         tags=list(spec.tags),
     ) as dag:
-        run = BashOperator(
-            task_id=spec.dag_id,
-            bash_command=f"cd {PROJECT_ROOT / spec.cwd} && uv run --frozen {spec.command}",
-            # The task's own variables are added to the worker's, not in place of them.
-            env=spec.env or None,
-            append_env=True,
-            execution_timeout=spec.timeout,
-            retries=1,
-            retry_delay=timedelta(minutes=5),
-        )
+        run: BashOperator | PythonOperator
+        if spec.connection:
+            run = PythonOperator(
+                task_id=spec.dag_id,
+                python_callable=run_with_connection,
+                op_kwargs={"spec": spec},
+                execution_timeout=spec.timeout,
+                retries=1,
+                retry_delay=timedelta(minutes=5),
+            )
+        else:
+            run = BashOperator(
+                task_id=spec.dag_id,
+                bash_command=command_of(spec),
+                execution_timeout=spec.timeout,
+                retries=1,
+                retry_delay=timedelta(minutes=5),
+            )
         for target in spec.triggers:
             run >> TriggerDagRunOperator(
                 task_id=f"trigger_{target}",

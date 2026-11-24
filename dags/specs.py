@@ -22,18 +22,10 @@ class DagSpec:
     triggers: tuple[str, ...] = ()
     # Keyword arguments for airflow.models.param.Param, keyed by param name.
     params: dict[str, dict[str, Any]] = field(default_factory=dict)
-    # Environment for this task only, as Jinja templates Airflow renders at run time.
-    env: dict[str, str] = field(default_factory=dict)
+    # An Airflow Connection the task reads when it runs, when the command needs one. The
+    # task then runs as a Python task, so the secret goes to the command's environment only.
+    connection: str | None = None
 
-
-# `r2_data` is an `aws` Connection: the login is the R2 access key id, the password is its
-# secret, and the extras hold `endpoint_url` and `bucket`.
-R2_ENV = {
-    "AWS_ACCESS_KEY_ID": "{{ conn.r2_data.login }}",
-    "AWS_SECRET_ACCESS_KEY": "{{ conn.r2_data.password }}",
-    "R2_ENDPOINT": "{{ conn.r2_data.extra_dejson.endpoint_url }}",
-    "R2_BUCKET": "{{ conn.r2_data.extra_dejson.bucket }}",
-}
 
 SPECS = [
     DagSpec(
@@ -169,9 +161,7 @@ SPECS = [
         # The export reads the whole database, and the sync uploads about 1,500 files.
         timeout=timedelta(hours=2),
         tags=("publish",),
-        # The R2 key pair, endpoint and bucket come from the `r2_data` Airflow Connection,
-        # read when the task runs and given to this task only. Nothing is in the container's
-        # environment or in a file.
-        env=R2_ENV,
+        # The R2 key pair, endpoint and bucket come from the `r2_data` Airflow Connection.
+        connection="r2_data",
     ),
 ]

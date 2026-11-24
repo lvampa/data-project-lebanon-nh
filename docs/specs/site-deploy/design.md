@@ -58,6 +58,9 @@ The script needs `R2_BUCKET`, an endpoint, and credentials, and fails before the
 - The endpoint is `R2_ENDPOINT`, or `https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com`.
 - The credentials are `AWS_PROFILE`, an aws CLI profile made with `aws configure --profile <name>`, for a hand run on the operator's Mac.
   Or they are `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, which Airflow's task sets.
+  Both forms together are refused, and an empty value or the text `None` counts as not set.
+- Everything before the upload (`privacy-holds mark`, the export and `check-export`) runs without the three credential variables, so only the `aws` call sees them.
+- Before `sync --delete` it prints the bucket and the endpoint host, so a wrong target shows in the log.
 The script prints nothing from the environment, never turns on tracing, and uses no aws debug flag.
 R2 rejects the checksum headers newer `aws` versions add, so the script sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`.
 
@@ -65,15 +68,18 @@ R2 rejects the checksum headers newer `aws` versions add, so the script sets `AW
 
 A location the AI flagged as naming a person is published as its street only.
 When it is unclear that this is enough, the publish does not fail: the location is held out and listed for a person to handle.
-- `address_normalizations` has `privacy_hold` and `privacy_handled_at`, from one migration.
+- `address_normalizations` has `privacy_hold`, `privacy_handled_at` and `privacy_handled_text`, from one migration.
   A row is held while `privacy_hold` is true and `privacy_handled_at` is null.
 - The public views `public_locations` and `public_log_entries` treat a held location as unmapped: no name, no street, no pin, and no place card.
   Its log entries stay, with no location, and count in the totals.
   This is in the views, so report-gen is unchanged.
 - `privacy-holds mark` holds every flagged location that is not clearly safe, and never clears a hold.
-  A flagged location is clearly safe when its normalized text is a plain address (a house number and a street from the street list, or a street), or an unflagged location has the same normalized text and publishes it already.
+  A flagged location is clearly safe only when its normalized text is a plain address: a house number and a street, or a street, from the street list the AI was given (`load_street_list`).
+  Otherwise `mark` holds every row with that normalized text, flagged or not, since an unflagged twin could carry the same name.
   The view never publishes a flagged row's raw text, so that text cannot reach the export.
   One small function, `is_clearly_safe`, holds the rule.
+- `handled` remembers the text it released in `privacy_handled_text`.
+  If `normalize` later rewrites the text, `mark` holds the row again.
 - `privacy-holds list` prints the id, kind and raw text of each held location, for the operator's terminal only.
   `privacy-holds handled <id>...` sets `privacy_handled_at`, and the location then publishes as any flagged location does.
   Moving this into the admin app is later work.
@@ -82,15 +88,18 @@ When it is unclear that this is enough, the publish does not fail: the location 
 The checks are in `scripts/check_export.py`, and they fail closed and print counts, never the matched text:
 - **Person text.** No flagged location's text appears in the export.
   A flagged row's raw text must not appear at all.
-  Its normalized text may appear only when an unflagged location has the same text, since two raw values can normalize to one address.
+  Its normalized text may appear only when it is a plain address or street, or when every row with that text has been handled.
   A held row is checked the same way.
-  Strings under 8 characters and a flagged row's own street are skipped.
+  It reads the parsed string values, so a name written with a JSON escape is still found.
+  A flagged row's own street is skipped, and so is any text under 8 characters, because a short street name would match half the export.
+  That means this check is not fail-closed for a short text.
   `properties.json` and `staff.json` are not scanned, since a parcel's address may be the same text.
   This is the guard after the holds: it fails closed if anything slips through.
 - **Prompt version.** No AI location is on a prompt older than `MIN_PRIVACY_LOCATION_PROMPT`, the first one that flags a person.
   The number is parsed from `location-<n>+streets-<hash>`, since the street suffix varies.
   Later prompts changed matching, not privacy, so the current version is not required.
   Rule rows are not counted, since they store their own version.
+- **Links.** Every `source_url` and `detail_url` is `https` on `www.lebanonnh.gov`, `lebanonnh.gov` or `gis.vgsi.com`.
 - **Coverage.** At least 85% of in-range entries sit on a pin.
 - **Files.** Every expected file is present, and every pin in `addresses.json` has a card in `places/`.
 
@@ -100,15 +109,17 @@ The Airflow `publish_data` DAG runs `bash scripts/deploy-data.sh` as its one tas
 It is manual only: normalizing and geocoding run outside the police-log chain, so no clock time is right, and the prompt-version check refuses an export that ran too early.
 The Airflow image gets what the script needs:
 - A multi-stage build compiles `report-gen` on `rust:1.98.1-bookworm` and copies the binary in, and `REPORT_GEN_BIN` points `generate_report.sh` at it, so the image has no Rust toolchain.
-- The aws CLI v2, installed from AWS's zip, which is a bundled binary and cannot clash with the boto packages Airflow pins.
+- The aws CLI v2, installed from AWS's zip at a pinned version, which is a bundled binary and cannot clash with the boto packages Airflow pins.
 The R2 credentials are an Airflow Connection, `r2_data`, not container environment and not a mounted file:
 - It is an `aws` Connection. The login is the R2 access key id and the password is its secret.
   The extras are `{"endpoint_url": "https://<account_id>.r2.cloudflarestorage.com", "region_name": "auto", "bucket": "<bucket>"}`.
   The bucket name is not secret, so it lives in the extras and there is no Variable.
-- The `publish_data` task renders `{{ conn.r2_data... }}` templates into `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `R2_ENDPOINT` and `R2_BUCKET`, for that task's environment only.
-  No other task gets them, and `compose.yml` has no R2 variable and no `~/.aws` mount.
-- Airflow hides a Connection password in its logs and a template field named `...SECRET...` in the rendered view.
-  That masking is not tested here.
+- `publish_data` is a Python task. When it runs, it reads the Connection with `BaseHook.get_connection("r2_data")` and runs `uv run --frozen bash scripts/deploy-data.sh` as a subprocess, with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `R2_ENDPOINT` and `R2_BUCKET` in that subprocess's environment only (`dags/publish.py`).
+  The worker's own environment is not changed, no other task gets them, and `compose.yml` has no R2 variable and no `~/.aws` mount.
+- The task logs the script's output line by line.
+  The script prints no credential, and an error about a missing Connection field names the field, not its value.
+- Airflow hides a Connection password in its logs.
+  That masking is not tested here, and neither is the Python task itself, since Airflow is not installed in the test environment.
 
 The DAG's task fails until the Connection exists.
 The image build is not tested here.
@@ -121,19 +132,18 @@ R2 needs these set in Cloudflare, by the operator:
 - A CORS rule allowing GET from the site's origin, or every fetch fails and the pages show the error state.
 - A Cache Rule that makes the data host cacheable, since Cloudflare does not cache `.json` by default.
 
-For local dev, `bun run dev` is plain `next dev`, reading `/data`.
-To read live data, set `NEXT_PUBLIC_DATA_URL` to the subdomain in `frontend/web/.env.local`, which is gitignored.
+For local dev, `bun run dev` is plain `next dev`, and there is no data server.
+Without `NEXT_PUBLIC_DATA_URL`, the four data pages show the error state, because nothing serves `/data`.
+To see data, set `NEXT_PUBLIC_DATA_URL` to the R2 subdomain in `frontend/web/.env.local`, which is gitignored.
 To look at a fresh export, run `deploy-data.sh --dry-run` and read the files in `data/export/`.
 
 ### Adding the Connection
 
-Create it once, in the Airflow UI under Admin, Connections, or with the CLI inside the scheduler container:
-
-```bash
-airflow connections add r2_data --conn-type aws \
-  --conn-login '<access key id>' --conn-password '<secret access key>' \
-  --conn-extra '{"endpoint_url": "https://<account_id>.r2.cloudflarestorage.com", "region_name": "auto", "bucket": "<bucket>"}'
-```
+Create it once in the Airflow UI, under Admin, Connections, so the secret is never on a command line or in shell history:
+- Connection Id `r2_data`, Connection Type `Amazon Web Services`.
+- AWS Access Key ID: the R2 token's access key id.
+- AWS Secret Access Key: the token's secret.
+- Extra: `{"endpoint_url": "https://<account_id>.r2.cloudflarestorage.com", "region_name": "auto", "bucket": "<bucket>"}`.
 
 Safety notes:
 - The token is scoped to one bucket, so a leaked key can write that bucket and nothing else.
@@ -142,11 +152,12 @@ Safety notes:
 
 ### Links in the data
 
-Four fields from the data are used as a link target: `source_url` (the incidents table and a call row), `detail_url` (a parcel's VGSI link) and `person.email` (a `mailto:`).
+Three fields from the data are used as a link target: `source_url` (the incidents table and a call row), `detail_url` (a parcel's VGSI link) and `person.email` (a `mailto:`).
 There is no `dangerouslySetInnerHTML` and no data-driven `src`.
-React 19 blocks a `javascript:` URL in an `href`, so swapped data could not run script, but it could point a link at another site.
-Each link opens in a new tab, and the call row sets `rel="noopener noreferrer"`.
-Nothing validates these URLs as `https:` yet, which is a known gap.
+React 19 blocks a `javascript:` URL in an `href`.
+Every link that opens a new tab sets `rel="noopener noreferrer"`.
+`check-export` fails the publish if a `source_url` or `detail_url` is not `https` on the city's log host or VGSI, so swapped data cannot point a link elsewhere.
+`person.email` is in `staff.json`, which is empty today, and is not validated.
 
 ## Deploy hardening
 

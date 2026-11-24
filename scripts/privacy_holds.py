@@ -1,9 +1,11 @@
 """Hold locations that name a person out of the public data until someone has handled them.
 
-`mark` holds every flagged location that is not clearly safe. The public views then treat
-a held location as unmapped: its entries stay in the log and the counts, with no location
-and no pin. `list` shows what is held, and `handled` releases a location, which then
-publishes as any flagged location does, as its street only. `mark` never clears a hold.
+`mark` holds every flagged location that is not clearly safe, and every other location with
+the same normalized text, flagged or not. The public views then treat a held location as
+unmapped: its entries stay in the log and the counts, with no location and no pin. `list`
+shows what is held, and `handled` releases a location, which then publishes as any flagged
+location does, as its street only. `mark` never clears a hold, but it holds a handled
+location again when its normalized text is no longer the one that was handled.
 
 Only `list` prints a location's text, to the terminal of the person running it. Everything
 else prints counts.
@@ -21,6 +23,13 @@ from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from scripts.normalize.streets import load_street_list
+
+
+def street_set(session: Session) -> set[str]:
+    """The street list the AI was given, in lowercase."""
+    return {street.casefold() for street in load_street_list(session)}
+
 
 def is_plain_address(text: str, streets: Collection[str]) -> bool:
     """A street, or a house number and a street, from the street list. Lowercase."""
@@ -28,52 +37,53 @@ def is_plain_address(text: str, streets: Collection[str]) -> bool:
     return text in streets or bool(match and match.group(2) in streets)
 
 
-def is_clearly_safe(
-    normalized: str | None, streets: Collection[str], unflagged_texts: Collection[str]
-) -> bool:
+def is_clearly_safe(normalized: str | None, streets: Collection[str]) -> bool:
     """Whether a flagged location can be published as the view would publish it.
 
     The view never publishes a flagged row's raw text, and publishes only its street. So the
-    text that could name someone is its normalized address, and that is safe when it is a
-    plain address or street, or when an unflagged location has the same normalized text and
-    publishes it already. A location with no normalized address is not clearly safe.
+    text that could name someone is its normalized address, and that is safe only when it is
+    a plain address or street from the street list. A location with no normalized address is
+    not clearly safe. Another row with the same text does not make it safe, since that row
+    could carry the name too.
     """
-    if normalized is None:
-        return False
-    text = normalized.casefold()
-    return is_plain_address(text, streets) or text in unflagged_texts
+    return normalized is not None and is_plain_address(normalized.casefold(), streets)
+
+
+def _folded(text: str | None) -> str:
+    return (text or "").casefold()
 
 
 def mark(session: Session) -> tuple[int, int]:
-    """Hold every flagged location that is not clearly safe. Returns (newly held, safe)."""
-    streets = {
-        street.casefold()
-        for street in session.scalars(
-            select(AddressNormalization.street).where(
-                AddressNormalization.street.is_not(None)
-            )
-        )
-        if street
-    }
-    unflagged_texts = {
-        normalized.casefold()
-        for normalized in session.scalars(
-            select(AddressNormalization.normalized_address).where(
-                AddressNormalization.names_person.is_(False),
-                AddressNormalization.normalized_address.is_not(None),
-            )
-        )
-        if normalized
-    }
-    flagged = session.execute(
-        select(AddressNormalization).where(AddressNormalization.names_person.is_(True))
-    ).scalars()
-    held = safe = 0
-    for row in flagged:
-        if is_clearly_safe(row.normalized_address, streets, unflagged_texts):
+    """Hold what is not clearly safe. Returns (newly held, flagged rows clearly safe)."""
+    streets = street_set(session)
+    rows = list(session.scalars(select(AddressNormalization)))
+    unsafe_texts: set[str] = set()
+    to_hold: list[AddressNormalization] = []
+    safe = 0
+    for row in rows:
+        if not row.names_person:
+            continue
+        if is_clearly_safe(row.normalized_address, streets):
             safe += 1
-        elif not row.privacy_hold:
+        elif row.normalized_address is None:
+            to_hold.append(row)
+        else:
+            unsafe_texts.add(_folded(row.normalized_address))
+    to_hold += [
+        row
+        for row in rows
+        if row.normalized_address is not None
+        and _folded(row.normalized_address) in unsafe_texts
+    ]
+    held = 0
+    for row in to_hold:
+        if not row.privacy_hold:
             row.privacy_hold = True
+            held += 1
+        elif row.privacy_handled_at is not None and row.privacy_handled_text != _folded(
+            row.normalized_address
+        ):
+            row.privacy_handled_at = None
             held += 1
     session.commit()
     return held, safe
@@ -101,6 +111,7 @@ def handle(session: Session, ids: Sequence[int]) -> int:
     ):
         if row.privacy_hold and row.privacy_handled_at is None:
             row.privacy_handled_at = now
+            row.privacy_handled_text = _folded(row.normalized_address)
             released += 1
     session.commit()
     return released

@@ -55,10 +55,12 @@ RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     && apt-get install -y --no-install-recommends postgresql-client-16 \
     && rm -rf /var/lib/apt/lists/*
 # The aws CLI, for scripts/deploy-data.sh to sync the export to R2. Version 2 is a bundled
-# binary, so it cannot clash with the boto packages Airflow pins.
+# binary, so it cannot clash with the boto packages Airflow pins. The version is pinned, so a
+# new release cannot change what runs with the R2 keys. Bump it by hand.
+ARG AWSCLI_VERSION=2.22.35
 RUN apt-get update \
     && apt-get install -y --no-install-recommends unzip \
-    && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o /tmp/awscli.zip \
+    && curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m)-${AWSCLI_VERSION}.zip" -o /tmp/awscli.zip \
     && unzip -q /tmp/awscli.zip -d /tmp \
     && /tmp/aws/install \
     && rm -rf /tmp/aws /tmp/awscli.zip /var/lib/apt/lists/*

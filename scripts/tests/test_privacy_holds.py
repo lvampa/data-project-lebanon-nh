@@ -219,3 +219,30 @@ def test_a_held_location_has_no_pin_or_place_card_and_its_entries_still_count(
     assert [pin["normalized_address"] for pin in pins] == ["12 Placeholder Lane"]
     assert "Zz Held Name" not in "".join(str(pin["card"]) for pin in pins)
     assert total == 2
+
+
+# The shapes found on the dev data, with made-up text. The flagged row's raw text holds the
+# name; its normalized text is what an unflagged twin also publishes.
+@pytest.mark.parametrize(
+    ("kind", "normalized"),
+    [
+        ("address", "Zzzzzzzzz Zz"),
+        ("place", "Zzzzzzzzzzz Zzzzzzz"),
+        ("place", "Zzzzzzzz Zzzz"),
+        ("highway", "Z-99 Zzzzzzzzzz Zzzz Zzzz 99"),
+    ],
+)
+def test_a_flagged_row_with_an_unflagged_twin_is_not_held(db_session, kind, normalized):
+    flagged = add_location(
+        db_session,
+        "ZZ RAW NAME TEXT",
+        normalized_address=normalized,
+        kind=kind,
+        names_person=True,
+    )
+    add_location(db_session, "ZZ TWIN RAW", normalized_address=normalized, kind=kind)
+
+    assert privacy_holds.mark(db_session) == (0, 1)
+
+    db_session.refresh(flagged)
+    assert flagged.privacy_hold is False

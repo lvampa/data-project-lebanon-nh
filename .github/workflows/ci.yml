@@ -211,3 +211,57 @@ jobs:
               exit 1
             fi
           done
+
+  # The static site, built here and uploaded with Wrangler. Runs only on main, after
+  # every check passed, so what ships is the exact commit that was tested. The build
+  # reads no data: the pages fetch it in the browser. Secrets live in the `production`
+  # environment, which is limited to main in the repository settings.
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: ci-ok
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+    # A second deploy waits for the first. Cancelling one mid-upload could leave a
+    # half-finished deployment.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: frontend/package.json
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        working-directory: frontend/web
+        run: bun run build
+
+      # public/ is copied into out/ as is, so a stray dot folder there would be published.
+      - name: Refuse to deploy a build that contains a .claude folder
+        working-directory: frontend/web
+        run: |
+          stray=$(find out -name .claude)
+          if [ -n "$stray" ]; then
+            echo "Found a .claude folder in the build output."
+            exit 1
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        working-directory: frontend/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+        run: bunx wrangler@4.159.0 pages deploy out --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch=main

@@ -1,32 +1,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import fs from 'fs'
 
-vi.mock('fs', () => ({
-  default: {
-    readFileSync: vi.fn(),
-  },
-  readFileSync: vi.fn(),
-}))
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.resetModules()
+})
 
-afterEach(() => vi.restoreAllMocks())
-
-describe('readDataFile', () => {
-  it('reads and parses JSON from public/data/', async () => {
-    vi.mocked(fs.readFileSync).mockReturnValueOnce(JSON.stringify({ total: 42 }))
-    const { readDataFile } = await import('@/lib/data')
-    const result = readDataFile<{ total: number }>('stats.json')
-    expect(result.total).toBe(42)
-    expect(vi.mocked(fs.readFileSync)).toHaveBeenCalledWith(
-      expect.stringContaining('stats.json'),
-      'utf8',
-    )
+describe('dataUrl', () => {
+  it('serves from /data by default', async () => {
+    const { dataUrl } = await import('@/lib/data')
+    expect(dataUrl('stats.json')).toBe('/data/stats.json')
   })
 
-  it('throws when file is missing', async () => {
-    vi.mocked(fs.readFileSync).mockImplementationOnce(() => {
-      throw new Error('ENOENT')
-    })
-    const { readDataFile } = await import('@/lib/data')
-    expect(() => readDataFile('missing.json')).toThrow('ENOENT')
+  it('uses NEXT_PUBLIC_DATA_URL and drops a trailing slash', async () => {
+    vi.stubEnv('NEXT_PUBLIC_DATA_URL', 'https://data.example.test/releases/')
+    const { dataUrl } = await import('@/lib/data')
+    expect(dataUrl('stats.json')).toBe('https://data.example.test/releases/stats.json')
   })
 })

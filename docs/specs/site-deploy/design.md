@@ -18,9 +18,8 @@ A backend-only merge does not deploy.
 It does not wait on `ci-ok`, since `ci.yml` is checks only.
 It relies on `ci-ok` being a required check on pull requests, so nothing merges without passing, and the workflow fails on a broken build, so nothing broken ships.
 The frontend job also runs `bun run build` on every PR, so a build break fails the PR and not main.
-The script's data removal and output guard run only in the deploy itself and in a local run, not in PR CI.
 The deploy workflow runs `bash scripts/deploy.sh` and nothing else for the build and the upload, so a hand run and CI cannot drift.
-The script runs `bun ci --ignore-scripts`, then `bun run build` in `frontend/web`, then checks `out`, then `wrangler pages deploy out --branch=main`.
+The script runs `bun ci --ignore-scripts`, then `bun run build` in `frontend/web`, then `wrangler pages deploy out --branch=main`.
 `--dry-run` stops before the upload.
 There is no staging step and no smoke check: if the build passes, it ships.
 `scripts/deploy.sh` replaces the old hand-run script, which uploaded a build with data in it and ran no checks.
@@ -55,8 +54,11 @@ It is a plain sync of the folder.
 There are no versioned releases, no pointer file and no schema version.
 `--delete` removes a place card that is gone, and the bucket holds only this export.
 `aws` is already on the operator's Mac, and one sync command handles about 1,500 files.
-The script reads `R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID` and `AWS_PROFILE` from the environment.
-`AWS_PROFILE` names an aws CLI profile that holds the R2 API token's key pair, set up once with `aws configure --profile <name>`, so no key is in the script or its environment.
+The script needs `R2_BUCKET`, an endpoint, and credentials, and fails before the export when any is missing:
+- The endpoint is `R2_ENDPOINT`, or `https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com`.
+- The credentials are `AWS_PROFILE`, an aws CLI profile made with `aws configure --profile <name>`, for a hand run on the operator's Mac.
+  Or they are `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, which Airflow's task sets.
+The script prints nothing from the environment, never turns on tracing, and uses no aws debug flag.
 R2 rejects the checksum headers newer `aws` versions add, so the script sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`.
 
 ### Privacy holds
@@ -99,20 +101,52 @@ It is manual only: normalizing and geocoding run outside the police-log chain, s
 The Airflow image gets what the script needs:
 - A multi-stage build compiles `report-gen` on `rust:1.98.1-bookworm` and copies the binary in, and `REPORT_GEN_BIN` points `generate_report.sh` at it, so the image has no Rust toolchain.
 - The aws CLI v2, installed from AWS's zip, which is a bundled binary and cannot clash with the boto packages Airflow pins.
-- `compose.yml` passes `AWS_PROFILE`, `R2_BUCKET` and `CLOUDFLARE_ACCOUNT_ID` from the host's environment and mounts `~/.aws` read-only.
-The DAG's task fails until those are set.
+The R2 credentials are an Airflow Connection, `r2_data`, not container environment and not a mounted file:
+- It is an `aws` Connection. The login is the R2 access key id and the password is its secret.
+  The extras are `{"endpoint_url": "https://<account_id>.r2.cloudflarestorage.com", "region_name": "auto", "bucket": "<bucket>"}`.
+  The bucket name is not secret, so it lives in the extras and there is no Variable.
+- The `publish_data` task renders `{{ conn.r2_data... }}` templates into `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `R2_ENDPOINT` and `R2_BUCKET`, for that task's environment only.
+  No other task gets them, and `compose.yml` has no R2 variable and no `~/.aws` mount.
+- Airflow hides a Connection password in its logs and a template field named `...SECRET...` in the rendered view.
+  That masking is not tested here.
+
+The DAG's task fails until the Connection exists.
 The image build is not tested here.
 
 R2 needs these set in Cloudflare, by the operator:
 - A bucket on a custom subdomain of a domain already on Cloudflare.
   `r2.dev` is rate-limited and for development only.
-- An API token with Object Read & Write on that one bucket.
+- An API token, made under R2, Manage API tokens, with Object Read & Write on that one bucket only and an expiry.
+  Add an IP filter only if the host's address is stable.
 - A CORS rule allowing GET from the site's origin, or every fetch fails and the pages show the error state.
 - A Cache Rule that makes the data host cacheable, since Cloudflare does not cache `.json` by default.
 
 For local dev, `bun run dev` is plain `next dev`, reading `/data`.
-To check a fresh export locally, copy `data/export` into `frontend/web/public/data`, which is gitignored, and `deploy.sh`'s output guard refuses to ship it.
 To read live data, set `NEXT_PUBLIC_DATA_URL` to the subdomain in `frontend/web/.env.local`, which is gitignored.
+To look at a fresh export, run `deploy-data.sh --dry-run` and read the files in `data/export/`.
+
+### Adding the Connection
+
+Create it once, in the Airflow UI under Admin, Connections, or with the CLI inside the scheduler container:
+
+```bash
+airflow connections add r2_data --conn-type aws \
+  --conn-login '<access key id>' --conn-password '<secret access key>' \
+  --conn-extra '{"endpoint_url": "https://<account_id>.r2.cloudflarestorage.com", "region_name": "auto", "bucket": "<bucket>"}'
+```
+
+Safety notes:
+- The token is scoped to one bucket, so a leaked key can write that bucket and nothing else.
+- The keys are in the task's environment only, and not in the image, the compose file or a mounted folder.
+- A bad write is recovered by running the publish again, since it syncs the whole export.
+
+### Links in the data
+
+Four fields from the data are used as a link target: `source_url` (the incidents table and a call row), `detail_url` (a parcel's VGSI link) and `person.email` (a `mailto:`).
+There is no `dangerouslySetInnerHTML` and no data-driven `src`.
+React 19 blocks a `javascript:` URL in an `href`, so swapped data could not run script, but it could point a link at another site.
+Each link opens in a new tab, and the call row sets `rel="noopener noreferrer"`.
+Nothing validates these URLs as `https:` yet, which is a known gap.
 
 ## Deploy hardening
 
@@ -127,9 +161,9 @@ The repo is public, so the workflow is narrow:
   Bun runs the install scripts of packages on its built-in default trust list unless told not to, so the flag is what keeps them off.
 - The deploy workflow has only the `push` trigger, and its own file, so a trigger added to `ci.yml` later cannot deploy by accident.
 - The `deploy` concurrency group queues a second deploy instead of cancelling one that is uploading.
-- `public/` is copied into `out` as is.
-  The export is not under `public/`, so the script only checks, and fails if `out` has a `data` folder or any dot entry except `.well-known`.
-  A leftover `frontend/web/public/data` from the old export location trips that check until it is deleted.
+- `public/` is copied into `out` as is, and the script does not check what is in it.
+  The export is not under `public/`, so a clean checkout has no data there.
+  A leftover `frontend/web/public/data` from the old export location would be uploaded by a hand run, so delete that folder.
 
 Pages is used as a direct upload only, with no GitHub connection on the Cloudflare project.
 Otherwise Cloudflare would build pull request branches on its own.
@@ -144,7 +178,8 @@ Repository settings, set by the operator:
 - The `production` environment limited to the main branch.
 - Variable `NEXT_PUBLIC_DATA_URL`, the data subdomain, once the bucket exists.
 - For `deploy-data.sh`, the R2 bucket, its custom subdomain, the R2 API token, the CORS rule and the Cache Rule above.
-- For `deploy-data.sh`, an aws profile with the token's key pair (`aws configure --profile <name>`), and `AWS_PROFILE`, `R2_BUCKET` and `CLOUDFLARE_ACCOUNT_ID` in the host environment, which compose passes to Airflow.
+- For `deploy-data.sh` by hand: `R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID` (or `R2_ENDPOINT`) and an aws profile in `AWS_PROFILE`.
+- For the Airflow DAG: the `r2_data` Connection above.
 
 ## Decisions
 

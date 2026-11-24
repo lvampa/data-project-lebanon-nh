@@ -109,3 +109,38 @@ def test_publish_data_is_run_by_hand_and_only_calls_the_script():
     assert spec.schedule is None
     assert spec.command == "bash scripts/deploy-data.sh"
     assert all("publish_data" not in other.triggers for other in SPECS)
+
+
+def test_only_publish_data_gets_the_r2_connection():
+    with_env = {spec.dag_id for spec in SPECS if spec.env}
+    assert with_env == {"publish_data"}
+
+
+def test_publish_data_builds_its_env_from_the_r2_connection():
+    from types import SimpleNamespace
+
+    from jinja2 import Environment, StrictUndefined
+
+    connection = SimpleNamespace(
+        login="key-id",
+        password="key-secret",
+        extra_dejson={"endpoint_url": "https://acct.example.test", "bucket": "data"},
+    )
+    jinja = Environment(undefined=StrictUndefined)
+    rendered = {
+        name: jinja.from_string(template).render(
+            conn=SimpleNamespace(r2_data=connection)
+        )
+        for name, template in SPECS_BY_ID["publish_data"].env.items()
+    }
+    assert rendered == {
+        "AWS_ACCESS_KEY_ID": "key-id",
+        "AWS_SECRET_ACCESS_KEY": "key-secret",
+        "R2_ENDPOINT": "https://acct.example.test",
+        "R2_BUCKET": "data",
+    }
+
+
+def test_the_r2_env_holds_templates_and_no_literal_credential():
+    for name, template in SPECS_BY_ID["publish_data"].env.items():
+        assert template.startswith("{{ conn.r2_data."), name

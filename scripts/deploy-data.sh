@@ -3,9 +3,12 @@
 # From the repo root: bash scripts/deploy-data.sh [--dry-run]
 # --dry-run exports and checks, then stops before the upload.
 #
-# The upload needs R2_BUCKET and CLOUDFLARE_ACCOUNT_ID, and AWS_PROFILE naming an aws CLI
-# profile that holds the key pair of an R2 API token with Object Read & Write on that one
-# bucket. Set it up once with `aws configure --profile <name>`. No key is read from here.
+# The upload needs R2_BUCKET, an endpoint, and credentials for one R2 API token with Object
+# Read & Write on that one bucket. The endpoint is R2_ENDPOINT, or built from
+# CLOUDFLARE_ACCOUNT_ID. The credentials are either AWS_PROFILE, an aws CLI profile made with
+# `aws configure --profile <name>` (a hand run), or AWS_ACCESS_KEY_ID and
+# AWS_SECRET_ACCESS_KEY (Airflow's publish_data task, which reads them from a Connection).
+# Nothing is printed from the environment, and the script never turns on tracing.
 set -euo pipefail
 
 die() {
@@ -23,9 +26,13 @@ esac
 
 # Fail before the slow export, not after it.
 if ! $dry_run; then
-  for name in R2_BUCKET CLOUDFLARE_ACCOUNT_ID AWS_PROFILE; do
-    [ -n "${!name:-}" ] || die "$name is not set"
-  done
+  [ -n "${R2_BUCKET:-}" ] || die "R2_BUCKET is not set"
+  [ -n "${R2_ENDPOINT:-}${CLOUDFLARE_ACCOUNT_ID:-}" ] ||
+    die "set R2_ENDPOINT or CLOUDFLARE_ACCOUNT_ID"
+  if [ -z "${AWS_PROFILE:-}" ] && { [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; }; then
+    die "set AWS_PROFILE, or both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"
+  fi
+  endpoint="${R2_ENDPOINT:-https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com}"
 fi
 
 # Hold flagged locations that are not clearly safe, so the export leaves them out. It only
@@ -54,7 +61,7 @@ echo "→ Uploading to R2..."
 aws s3 sync data/export "s3://$R2_BUCKET/" \
   --delete \
   --region auto \
-  --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com" \
+  --endpoint-url "$endpoint" \
   --content-type application/json \
   --cache-control "public, max-age=300"
 

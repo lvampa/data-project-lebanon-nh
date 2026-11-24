@@ -25,6 +25,9 @@ def build_dag(spec: DagSpec) -> DAG:
         run = BashOperator(
             task_id=spec.dag_id,
             bash_command=f"cd {PROJECT_ROOT / spec.cwd} && uv run --frozen {spec.command}",
+            # The task's own variables are added to the worker's, not in place of them.
+            env=spec.env or None,
+            append_env=True,
             execution_timeout=spec.timeout,
             retries=1,
             retry_delay=timedelta(minutes=5),

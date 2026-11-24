@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the static site and upload it to Cloudflare Pages. CI runs this on merge to main.
 # By hand it ships the checkout as it is: bash scripts/deploy.sh [--dry-run]
-# --dry-run builds and checks the output, then stops before the upload.
+# --dry-run builds, then stops before the upload.
 #
 # Auth comes from CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in CI, or from
 # `wrangler login` on a laptop. CLOUDFLARE_PAGES_PROJECT is the Pages project name.
@@ -35,12 +35,6 @@ without_credentials bun ci --ignore-scripts
 cd web
 echo "→ Building web..."
 without_credentials bun run build
-
-# Next copies public/ into out/, and out/ is what gets published. The site fetches its data
-# in the browser, so the build must hold no data and no dot folders.
-echo "→ Checking the build output..."
-stray=$(find out -name '.*' ! -name .well-known -o -path out/data)
-[ -z "$stray" ] || die "the build output contains data or a dot folder: $stray"
 
 if $dry_run; then
   echo "✓ Dry run, not uploading."

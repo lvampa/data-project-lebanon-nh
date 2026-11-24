@@ -3,9 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bun run --parallel dev:data dev:site",
-    "dev:data": "bun scripts/serve-data.mjs",
-    "dev:site": "NEXT_PUBLIC_DATA_URL=http://localhost:4100 next dev",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",

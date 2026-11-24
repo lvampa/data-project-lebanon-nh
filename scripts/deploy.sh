@@ -50,7 +50,12 @@ if $dry_run; then
   exit 0
 fi
 
-echo "→ Deploying to Cloudflare Pages..."
+# A hand run ships whatever is checked out, so say what is about to replace production.
+# This informs the operator and does not stop the upload.
+branch=$(git rev-parse --abbrev-ref HEAD)
+commit=$(git rev-parse --short HEAD)
+dirty=$([ -n "$(git status --porcelain)" ] && echo "with local changes" || echo "clean")
+echo "→ Deploying $branch at $commit ($dirty) to Cloudflare Pages..."
 bun run wrangler pages deploy out --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch=main
 
 echo "✓ Done."

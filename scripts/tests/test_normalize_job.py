@@ -846,13 +846,16 @@ def test_the_prompt_offers_a_name_that_shares_its_first_word_with_a_raw_with_no_
     assert known_places_in(backend) == ["Sample Hospital"]
 
 
-def test_the_prompt_leaves_out_person_human_and_stale_names(db_session, call_log):
+def test_the_prompt_leaves_out_person_human_stale_and_review_names(
+    db_session, call_log
+):
     version = location_prompt_version(["MARKET ST"])
     add_parcels(db_session, "9 Market St")
     for raw, name, extra in [
         ("Person Row", "Person Name", {"names_person": True, "source": "ai"}),
         ("Human Row", "Human Name", {"source": "human"}),
         ("Stale Row", "Stale Name", {"prompt_version": "location-2+streets-abcd1234"}),
+        ("Review Row", "Review Name", {"needs_review": True}),
         ("Good Row", "Good Name", {}),
     ]:
         add_address_row(

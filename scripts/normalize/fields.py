@@ -589,7 +589,7 @@ def names_in_use(
 
     A name is offered when its street appears in a raw value, or its first word is a word
     of one, since many parts of a place are written with no street. Only names the AI
-    would give again are offered: the current location version, or a rule row. A person's
+    would give again are offered: the current location version, or a rule row, and never a row marked for review. A person's
     text and a human row's text are never offered."""
     canonical = [canonical_address(raw) for raw in raws]
     padded = [f" {text} " for text in canonical]
@@ -609,6 +609,7 @@ def names_in_use(
             AddressNormalization.kind == "place",
             AddressNormalization.normalized_address.is_not(None),
             AddressNormalization.names_person.is_(False),
+            AddressNormalization.needs_review.is_(False),
             AddressNormalization.source != "human",
             or_(
                 AddressNormalization.prompt_version.like(f"{LOCATION_PROMPT_VERSION}%"),

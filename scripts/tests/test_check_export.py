@@ -13,7 +13,10 @@ from scripts.check_export import (
     check_person_text,
     check_prompt_versions,
 )
-from scripts.normalize.prompts import LOCATION_PROMPT_VERSION
+from scripts.normalize.prompts import (
+    LOCATION_PROMPT_VERSION,
+    MIN_PRIVACY_LOCATION_PROMPT,
+)
 
 NOW = datetime(2026, 11, 24)
 PLACE = "ZZ Placeholder Person Lane 99"
@@ -84,13 +87,38 @@ def test_a_flagged_person_location_in_the_export_fails_without_printing_it(
     assert PLACE not in " ".join(problems)
 
 
-def test_a_flagged_text_that_an_unflagged_location_shares_is_not_a_leak(
+ADDRESS = "12 Placeholder Lane"
+
+
+def test_a_plain_address_that_an_unflagged_location_shares_is_not_a_leak(
     export, db_session
 ):
+    street = "Placeholder Lane"
+    add_location(
+        db_session,
+        "RAW ONE",
+        normalized_address=ADDRESS,
+        street=street,
+        names_person=True,
+    )
+    add_location(
+        db_session,
+        "RAW TWO",
+        normalized_address=ADDRESS,
+        street=street,
+        names_person=False,
+    )
+    write(export, "incidents.json", [{"location": ADDRESS}])
+    assert check_person_text(export, db_session) == []
+
+
+def test_a_shared_text_that_is_not_a_plain_address_still_fails(export, db_session):
     add_location(db_session, "RAW ONE", normalized_address=PLACE, names_person=True)
     add_location(db_session, "RAW TWO", normalized_address=PLACE, names_person=False)
     write(export, "incidents.json", [{"location": PLACE}])
-    assert check_person_text(export, db_session) == []
+    assert check_person_text(export, db_session) == [
+        "1 flagged person locations appear in the export"
+    ]
 
 
 def test_a_parcel_address_equal_to_a_flagged_location_is_not_a_leak(export, db_session):
@@ -122,15 +150,35 @@ def test_a_short_flagged_text_is_not_scanned(export, db_session):
     assert check_person_text(export, db_session) == []
 
 
-def test_an_ai_location_on_an_old_prompt_fails(db_session):
+@pytest.mark.parametrize(
+    "version", ["location-1", "location-1+streets-abc", None, "odd"]
+)
+def test_an_ai_location_without_the_person_flag_fails(db_session, version):
     add_location(
         db_session,
         "a",
         normalized_address="1 A St",
         source="ai",
-        prompt_version="location-1",
+        prompt_version=version,
     )
-    assert check_prompt_versions(db_session) == ["1 AI locations are on an old prompt"]
+    assert check_prompt_versions(db_session) == [
+        "1 AI locations are on a prompt without the person flag"
+    ]
+
+
+def test_an_ai_location_on_the_first_flagged_prompt_passes(db_session):
+    add_location(
+        db_session,
+        "a",
+        normalized_address="1 A St",
+        source="ai",
+        prompt_version=f"location-{MIN_PRIVACY_LOCATION_PROMPT}+streets-abc",
+    )
+    assert check_prompt_versions(db_session) == []
+
+
+def test_the_privacy_minimum_is_not_newer_than_the_current_prompt():
+    assert int(LOCATION_PROMPT_VERSION.split("-")[1]) >= MIN_PRIVACY_LOCATION_PROMPT
 
 
 def test_current_ai_and_rule_locations_pass(db_session):

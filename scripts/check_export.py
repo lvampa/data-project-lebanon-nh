@@ -6,6 +6,7 @@ that matched, because the text is the thing that must not go out.
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -16,7 +17,7 @@ from postgres.models.address_normalization import AddressNormalization
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from scripts.normalize.prompts import LOCATION_PROMPT_VERSION
+from scripts.normalize.prompts import MIN_PRIVACY_LOCATION_PROMPT
 
 DEFAULT_DIR = Path("data/export")
 EXPECTED_FILES = (
@@ -65,6 +66,12 @@ def check_coverage(export: Path) -> list[str]:
     return []
 
 
+def is_plain_address(text: str, streets: set[str]) -> bool:
+    """A street, or a house number and a street, from the street list."""
+    match = re.match(r"\d+[a-z]?(-\d+)? (.+)$", text)
+    return text in streets or bool(match and match.group(2) in streets)
+
+
 def check_person_text(export: Path, session: Session) -> list[str]:
     """No location flagged as naming a person appears anywhere in the export."""
     rows = session.execute(
@@ -75,7 +82,17 @@ def check_person_text(export: Path, session: Session) -> list[str]:
         ).where(AddressNormalization.names_person.is_(True))
     ).all()
     # Two raw values can normalize to one address, so a flagged row may share its
-    # normalized text with an unflagged row. That text is public through the other row.
+    # normalized text with an unflagged row. Only a plain address may be shared: a house
+    # number and a street, or a street. Any other shared text could be a name.
+    streets = {
+        street.casefold()
+        for street in session.scalars(
+            select(AddressNormalization.street).where(
+                AddressNormalization.street.is_not(None)
+            )
+        )
+        if street
+    }
     public_texts = {
         text.casefold()
         for raw, normalized in session.execute(
@@ -85,7 +102,7 @@ def check_person_text(export: Path, session: Session) -> list[str]:
             ).where(AddressNormalization.names_person.is_(False))
         ).all()
         for text in (raw, normalized)
-        if text
+        if text and is_plain_address(text.casefold(), streets)
     }
     texts = {
         text.casefold()
@@ -102,19 +119,30 @@ def check_person_text(export: Path, session: Session) -> list[str]:
     return [f"{found} flagged person locations appear in the export"] if found else []
 
 
+def location_prompt_number(prompt_version: str | None) -> int | None:
+    """The number in `location-3+streets-<hash>`. The suffix changes with the street list."""
+    match = re.match(r"location-(\d+)", prompt_version or "")
+    return int(match.group(1)) if match else None
+
+
 def check_prompt_versions(session: Session) -> list[str]:
-    """No location in the export was answered by an old prompt.
+    """No AI location in the export predates the prompt that flags a person.
 
     Rule rows store their own version, so only AI rows are counted.
     """
-    stale = session.scalars(
-        select(AddressNormalization.id).where(
+    versions = session.scalars(
+        select(AddressNormalization.prompt_version).where(
             AddressNormalization.source == "ai",
             AddressNormalization.normalized_address.is_not(None),
-            AddressNormalization.prompt_version.not_like(f"{LOCATION_PROMPT_VERSION}%"),
         )
     ).all()
-    return [f"{len(stale)} AI locations are on an old prompt"] if stale else []
+    numbers = [location_prompt_number(version) for version in versions]
+    stale = sum(1 for n in numbers if n is None or n < MIN_PRIVACY_LOCATION_PROMPT)
+    return (
+        [f"{stale} AI locations are on a prompt without the person flag"]
+        if stale
+        else []
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

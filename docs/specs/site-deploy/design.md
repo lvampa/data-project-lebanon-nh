@@ -60,11 +60,14 @@ R2 rejects the checksum headers newer `aws` versions add, so the script sets `AW
 
 The checks are in `scripts/check_export.py`, and they fail closed and print counts, never the matched text:
 - **Person text.** No location flagged as naming a person appears in the export.
-  Strings under 8 characters, a flagged row's own street, and any text an unflagged location also has are skipped, since two raw values can normalize to one address.
+  Strings under 8 characters and a flagged row's own street are skipped.
+  A text an unflagged location also has is skipped only when it is a plain address, a house number and a street or a street, since two raw values can normalize to one address.
+  Any other shared text still fails, because the unflagged twin could publish a name.
   `properties.json` and `staff.json` are not scanned, since a parcel's address may be the same text.
-- **Prompt version.** No AI location is on an old `LOCATION_PROMPT_VERSION`.
+- **Prompt version.** No AI location is on a prompt older than `MIN_PRIVACY_LOCATION_PROMPT`, the first one that flags a person.
+  The number is parsed from `location-<n>+streets-<hash>`, since the street suffix varies.
+  Later prompts changed matching, not privacy, so the current version is not required.
   Rule rows are not counted, since they store their own version.
-  Until `normalize --field location --redo` has covered every row, this check fails and nothing uploads.
 - **Coverage.** At least 85% of in-range entries sit on a pin.
 - **Files.** Every expected file is present, and every pin in `addresses.json` has a card in `places/`.
 

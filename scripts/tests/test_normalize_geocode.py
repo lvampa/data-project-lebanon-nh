@@ -807,3 +807,97 @@ def test_a_human_row_is_not_filled_from_a_donor_with_the_same_address(db_session
 
     assert the_row(db_session, "12 MAIN STREET").lat is None
     assert counts.reused == 0
+
+
+# --- a highway that names a point takes only an exact pin from a donor ---
+
+STREET_POINT = (43.6001, -72.2001)
+
+
+def point_highway(session, raw: str, **columns) -> None:
+    add_row(
+        session,
+        raw,
+        normalized_address="I-89 northbound on-ramp at Exit 18",
+        kind="highway",
+        street="HANOVER ST",
+        place_code="L X18",
+        **columns,
+    )
+
+
+def test_a_highway_that_names_a_point_does_not_copy_an_approximate_pin(db_session):
+    add_row(
+        db_session,
+        "BARE HIGHWAY",
+        normalized_address="Exit 18 area",
+        kind="highway",
+        street="HANOVER ST",
+        place_code="L X18",
+        lat=STREET_POINT[0],
+        lng=STREET_POINT[1],
+        geocoded_via="nominatim",
+        coordinate_precision="approximate",
+    )
+    point_highway(db_session, "I-89 NB ON-RAMP AT EXIT 18")
+    geocoder = FakeGeocoder()
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "I-89 NB ON-RAMP AT EXIT 18")
+    assert row.lat is None
+    assert counts.reused == 0
+    # It went on to a lookup of its own, which is where the exit is found.
+    assert geocoder.queries == ["I-89 NB ON-RAMP AT EXIT 18, Lebanon, NH"]
+
+
+def test_a_highway_that_names_a_point_still_copies_an_exact_pin(db_session):
+    add_row(
+        db_session,
+        "I-89 AT EXIT 18",
+        normalized_address="I-89 at Exit 18",
+        kind="highway",
+        street="HANOVER ST",
+        place_code="L X18",
+        lat=43.6502,
+        lng=-72.2603,
+        geocoded_via="osm",
+        coordinate_precision="exact",
+    )
+    point_highway(db_session, "I-89 NB ON-RAMP AT EXIT 18")
+    geocoder = FakeGeocoder()
+
+    counts = geocode_job.run(geocoder)
+
+    row = the_row(db_session, "I-89 NB ON-RAMP AT EXIT 18")
+    assert (row.lat, row.lng, row.geocoded_via) == (43.6502, -72.2603, "place_code")
+    assert (counts.reused, counts.requests) == (1, 0)
+
+
+def test_a_bare_highway_still_copies_an_approximate_pin(db_session):
+    add_row(
+        db_session,
+        "I-89",
+        normalized_address="I-89",
+        kind="highway",
+        street="I-89",
+        place_code="L I89",
+        lat=STREET_POINT[0],
+        lng=STREET_POINT[1],
+        geocoded_via="osm",
+        coordinate_precision="approximate",
+    )
+    add_row(
+        db_session,
+        "INTERSTATE 89",
+        normalized_address="I-89",
+        kind="highway",
+        street="I-89",
+        place_code="L I89",
+    )
+
+    counts = geocode_job.run(FakeGeocoder())
+
+    row = the_row(db_session, "INTERSTATE 89")
+    assert (row.lat, row.lng) == STREET_POINT
+    assert counts.reused == 1

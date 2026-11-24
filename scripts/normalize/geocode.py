@@ -338,8 +338,8 @@ def _reuse_same_address(session: Session, row: AddressNormalization) -> bool:
 def _placed_donor(
     session: Session, row: AddressNormalization, *same: ColumnElement[bool]
 ) -> AddressNormalization | None:
-    if row.kind == "intersection":
-        # An intersection takes only a point, so a donor on a street point lends nothing.
+    if _takes_only_a_point(row):
+        # A donor on a street point lends nothing to a row that is not on the street.
         same = (*same, AddressNormalization.coordinate_precision == "exact")
     return session.scalars(
         select(AddressNormalization)
@@ -386,7 +386,7 @@ def _look_up(
         nominatim = None
     if locator is not None and (match := locator.locate(row)) is not None:
         return _from_match(match), False
-    if row.kind == "intersection" or _is_point_highway(row):
+    if _takes_only_a_point(row):
         # A street point is the middle of one of the two streets, not where they cross, and
         # a road point is not an exit, a mile marker or a rest area.
         return None, False
@@ -443,6 +443,12 @@ def _from_match(match: Match) -> Placement:
 
 def _is_bare_highway(row: AddressNormalization) -> bool:
     return row.kind == "highway" and not names_a_point(row.normalized_address or "")
+
+
+def _takes_only_a_point(row: AddressNormalization) -> bool:
+    """An intersection, or a highway that names a point, is placed at its point or not at
+    all, so a street point is never a pin for it, whether looked up or copied from a donor."""
+    return row.kind == "intersection" or _is_point_highway(row)
 
 
 def _is_point_highway(row: AddressNormalization) -> bool:

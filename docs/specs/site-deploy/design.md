@@ -25,8 +25,8 @@ The script runs `bun ci --ignore-scripts`, then `bun run build` in `frontend/web
 There is no staging step and no smoke check: if the build passes, it ships.
 `scripts/deploy.sh` replaces the old hand-run script, which uploaded a build with data in it and ran no checks.
 A hand run ships whatever is checked out, on any branch, with local changes and ignored files such as a `.env.local`.
-It prints the branch, the short SHA and whether the tree is dirty before it uploads, and does not stop.
 That is the operator's call, and CI is the path that builds a clean checkout of main.
+The script makes no git calls, runs from the repo root with paths relative to it, and exits with a message if it is run from anywhere else.
 It reads `CLOUDFLARE_PAGES_PROJECT`, and auth comes from `wrangler login` locally or the token in CI.
 
 ## Data in the browser

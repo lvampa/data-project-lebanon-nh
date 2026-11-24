@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the static site and upload it to Cloudflare Pages. CI runs this on merge to main.
-# By hand it ships whatever is checked out: bash scripts/deploy.sh [--dry-run]
+# By hand it ships the checkout as it is: bash scripts/deploy.sh [--dry-run]
 # --dry-run builds and checks the output, then stops before the upload.
 #
 # Auth comes from CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in CI, or from
@@ -13,19 +13,14 @@ die() {
   exit 1
 }
 
-case "${1:-}" in
+[ -f scripts/deploy.sh ] && [ -d frontend/web ] || die "Run scripts/deploy.sh from the repo root."
+
+case "$*" in
   "") dry_run=false ;;
   --dry-run) dry_run=true ;;
-  *) die "unknown argument '$1'; the only option is --dry-run" ;;
+  *) die "unknown argument '$*'; the only option is --dry-run" ;;
 esac
-[ "$#" -le 1 ] || die "too many arguments"
 [ -n "${CLOUDFLARE_PAGES_PROJECT:-}" ] || die "CLOUDFLARE_PAGES_PROJECT is not set"
-
-# A hand run ships whatever is checked out, so say what is about to replace production.
-# This informs the operator and does not stop the upload. It is read first so a missing
-# git history fails before the build.
-dirty=$([ -n "$(git status --porcelain)" ] && echo "with local changes" || echo "clean")
-shipping="$(git rev-parse --abbrev-ref HEAD) at $(git rev-parse --short HEAD) ($dirty)"
 
 # The install and the build run code from the whole dependency tree, so they never get
 # the Cloudflare credentials. Only the upload below does.
@@ -33,7 +28,7 @@ without_credentials() {
   env -u CLOUDFLARE_API_TOKEN -u CLOUDFLARE_ACCOUNT_ID "$@"
 }
 
-cd "$(dirname "$0")/../frontend"
+cd frontend
 echo "→ Installing dependencies..."
 without_credentials bun ci --ignore-scripts
 
@@ -56,7 +51,7 @@ if $dry_run; then
   exit 0
 fi
 
-echo "→ Deploying $shipping to Cloudflare Pages..."
+echo "→ Deploying to Cloudflare Pages..."
 bun run wrangler pages deploy out --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch=main
 
 echo "✓ Done."

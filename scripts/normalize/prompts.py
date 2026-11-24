@@ -19,7 +19,7 @@ from scripts.models.incident_category import IncidentCategory
 from scripts.normalize.streets import street_list_version
 
 INCIDENT_TYPE_PROMPT_VERSION = "incident_type-1"
-LOCATION_PROMPT_VERSION = "location-2"
+LOCATION_PROMPT_VERSION = "location-3"
 
 LocationKind = Literal["address", "intersection", "place", "highway"]
 
@@ -97,7 +97,11 @@ Raw values (JSON): {json.dumps(list(raw_values))}
 """
 
 
-def location_prompt(raw_values: Sequence[str], streets: Sequence[str]) -> str:
+def location_prompt(
+    raw_values: Sequence[str],
+    streets: Sequence[str],
+    known_places: Sequence[str],
+) -> str:
     return f"""\
 You are tidying police dispatch records for a town website. Turn each police log \
 location in Lebanon, NH below into a clean address and say what kind of place it is.
@@ -118,11 +122,21 @@ or an age, a sex, a relation or a role beside a name, as in "F and 2 Yo Child, E
 St" or "Councilman Doe - Example St". Set it to false for a business, school, \
 church, park or building, even when it is named after a person, such as "Carter \
 Community Building".
+- A location inside or beside a place is that place: an aisle, level, floor, room, \
+lot, entrance, lobby, front, rear, "behind", "construction", or a unit or elevator \
+number. Give it the name of the place itself, with kind place, so "Example Market, \
+Aisle 12" becomes "Example Market". Buildings or departments with their own names \
+stay separate: "Sample Hospital Building 9" is not "Sample Hospital Building 1", and \
+a clinic on a hospital campus is not the hospital.
+- When a location is the same place as one in the place names already in use, copy \
+that name exactly. Do not reuse a name for a different place.
 - Set unsure to true when you are guessing.
 - Return exactly one item for each raw value, and copy the raw value exactly, \
 character for character.
 
 Streets in Lebanon, NH (JSON): {json.dumps(list(streets))}
+
+Place names already in use near these locations (JSON): {json.dumps(list(known_places))}
 
 Raw values (JSON): {json.dumps(list(raw_values))}
 """

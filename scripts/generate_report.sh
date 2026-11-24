@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Export Postgres data to frontend/web/public/data for the static build.
-# The output is gitignored and is for local dev.
+# Export Postgres data to data/export. The output is gitignored; local dev serves it with
+# `bun run dev` in frontend/web, and a later publish step uploads it.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -37,4 +37,4 @@ echo "→ Generating report..."
 # The first day of police data the public site covers.
 cargo run -p report-gen --release -- \
   --since 2026-01-01 \
-  --output-dir "$REPO_ROOT/frontend/web/public/data"
+  --output-dir "$REPO_ROOT/data/export"

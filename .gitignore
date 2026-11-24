@@ -225,7 +225,9 @@ scripts/data/budgets/*.txt
 scripts/data/budget_data.json
 
 # report-gen output. It holds names and owner addresses, so it is regenerated
-# locally and never committed. scripts/deploy.sh keeps it out of the published build.
+# locally and never committed. It is not under public/, so it is never in the build.
+/data/export/
+# The old export location. Delete this line once frontend/web/public/data is gone.
 frontend/web/public/data/
 
 # Local scratch files, not for commit

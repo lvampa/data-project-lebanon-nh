@@ -9,7 +9,7 @@
 `report-gen` is a Rust binary that connects to PostgreSQL, runs read-only queries, and writes one JSON file for each of five outputs for the static frontend.
 The police log queries are files in `tools/report-gen/src/sql/`, which `db.rs` includes.
 `scripts/generate_report.sh` runs it in release mode.
-The output lands in `frontend/web/public/data/`, which is gitignored because it carries names and owner addresses.
+The output lands in `data/export/` at the repo root, which is gitignored because it carries names and owner addresses.
 It replaced two Python generators.
 
 ## Data flow

@@ -31,15 +31,18 @@ It reads `CLOUDFLARE_PAGES_PROJECT`, and auth comes from `wrangler login` locall
 
 ## Data in the browser
 
-Four pages used to read `public/data` while building: incidents, properties, public safety and staff.
+Four pages used to read the export while building: incidents, properties, public safety and staff.
 They now fetch their JSON in the browser through `useDataFile`, and show a loading state, then an error with a Try again button.
 The two fetches that already ran in the browser, `activity.json` and each place card, use the same base through `fetchDataFile`, and a place card is read with `useDataFile`.
 `useDataFile` fetches each file once per page load, so moving between pages does not download it again.
 `activity.json` goes through the same cache, and a place card is not cached, so its fetch is aborted when another pin is chosen.
 
 The base is `NEXT_PUBLIC_DATA_URL`, and it defaults to `/data`.
-Local dev and `generate_report.sh` are unchanged: the export still lands in `public/data` and Next serves it.
-A deployed build with no data at `/data` shows the error state on those four pages.
+The export is written to `data/export/` at the repo root, outside `public/`, so it never reaches the build.
+`bun run dev` in `frontend/web` starts `scripts/serve-data.mjs`, which serves that folder on port 4100 with CORS, beside `next dev`.
+A tracked `frontend/web/.env.development` sets `NEXT_PUBLIC_DATA_URL=http://localhost:4100`.
+Dev then reads data from another origin, as production will from R2, and the later publish step uploads `data/export/`.
+A deployed build with nothing at `/data` shows the error state on those four pages.
 `NEXT_PUBLIC_DATA_URL` is read when the build runs, so pointing the site at a data host means a rebuild.
 In CI it comes from the repository variable of the same name, and an empty value counts as unset.
 
@@ -68,10 +71,9 @@ The repo is public, so the workflow is narrow:
   Bun runs the install scripts of packages on its built-in default trust list unless told not to, so the flag is what keeps them off.
 - The deploy workflow has only the `push` trigger, and its own file, so a trigger added to `ci.yml` later cannot deploy by accident.
 - The `deploy` concurrency group queues a second deploy instead of cancelling one that is uploading.
-- `public/` is copied into `out` as is, and a local checkout has `public/data`.
-  The script deletes `out/data` after the build and then fails if `out` has a `data` folder or any dot entry except `.well-known`.
-  Deleting from `out` leaves `public/data` alone, so even a failed build cannot lose the local data.
-  Rejected: moving `public/data` aside and restoring it, which risks the data if the script is killed.
+- `public/` is copied into `out` as is.
+  The export is not under `public/`, so the script only checks, and fails if `out` has a `data` folder or any dot entry except `.well-known`.
+  A leftover `frontend/web/public/data` from the old export location trips that check until it is deleted.
 
 Pages is used as a direct upload only, with no GitHub connection on the Cloudflare project.
 Otherwise Cloudflare would build pull request branches on its own.

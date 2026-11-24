@@ -36,13 +36,9 @@ cd web
 echo "→ Building web..."
 without_credentials bun run build
 
-# Next copies public/ into out/, and a local checkout has public/data. The site fetches its
-# data in the browser, so none of it belongs in the build. Deleting from out/ leaves
-# public/data alone, so even a failed build cannot lose it.
-echo "→ Removing data from the build and checking it..."
-rm -r -- out/data 2>/dev/null || true
-
-# What is left in out/ is what gets published: no data and no dot folders.
+# Next copies public/ into out/, and out/ is what gets published. The site fetches its data
+# in the browser, so the build must hold no data and no dot folders.
+echo "→ Checking the build output..."
 stray=$(find out -name '.*' ! -name .well-known -o -path out/data)
 [ -z "$stray" ] || die "the build output contains data or a dot folder: $stray"
 

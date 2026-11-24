@@ -69,20 +69,21 @@ describe('decodeActivity', () => {
 
 describe('the URL query', () => {
   it('is empty for the map with the default filters', () => {
-    expect(writeQuery('map', DEFAULT_FILTERS)).toBe('')
+    expect(writeQuery('map', DEFAULT_FILTERS, 'roads')).toBe('')
   })
 
   it('carries the view and every changed filter, and reads back the same', () => {
     const filters: Filters = { kind: 'traffic', time: 'night', range: '30', officer: 'C. Day' }
-    const query = writeQuery('busy', filters)
+    const query = writeQuery('busy', filters, 'roads')
     expect(query).toBe('?view=busy&kind=traffic&time=night&range=30&officer=C.+Day')
-    expect(readQuery(query)).toEqual({ view: 'busy', filters })
+    expect(readQuery(query)).toEqual({ view: 'busy', filters, mode: 'roads' })
   })
 
   it('falls back to the default for a value it does not know', () => {
     expect(readQuery('?view=charts&kind=fire&time=dusk&range=7')).toEqual({
       view: 'map',
       filters: DEFAULT_FILTERS,
+      mode: 'roads',
     })
   })
 

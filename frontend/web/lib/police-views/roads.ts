@@ -1,7 +1,7 @@
 import { hiddenCallsByStreet } from '@/lib/police-map/approximate'
 import { pinTotal } from '@/lib/police-map/map-style'
 import type { Address } from '@/lib/types'
-import { roadKey, routeKey } from './route'
+import { explicitRouteKey, roadKey, routeKey } from './route'
 
 export const ROADS_MODES = [
   { id: 'roads', label: 'Roads' },
@@ -44,7 +44,7 @@ export interface Crossing {
 
 // Words that make a highway description, not a pair of roads: "I-89 at Exits 19 and 20".
 const DESCRIBES_A_SPOT =
-  /\b(exits?|near|at|between|toward|northbound|southbound|eastbound|westbound|nb|sb|mile marker|(on|off)[- ]?ramp|ramps?|rest area|weigh station|underpass|median|lane|over)\b/i
+  /\b(exits?|near|at|between|toward|northbound|southbound|eastbound|westbound|nb|sb|mile marker|(on|off)[- ]?ramp|ramps?|rest area|weigh station|underpass|median|(left|right|breakdown|passing) lane|over)\b/i
 
 // "Heater Rd and NH Route 120" is the crossing of those two roads. Anything that is not
 // exactly two roads joined by "and" is not a crossing by its name.
@@ -58,7 +58,7 @@ export function parseCrossing(name: string): [string, string] | null {
 
 const EXIT_PHRASE = /\bexits?\s+\d+[a-z]?(?:\s*(?:and|to|-)\s*\d+[a-z]?)?/gi
 const NOT_A_ROAD =
-  /\b(northbound|southbound|eastbound|westbound|nb|sb|(on|off)[- ]?ramp|ramps?|rest area|weigh station|underpass|median|lane|interchange|mile marker [\d.]+)\b/gi
+  /\b(northbound|southbound|eastbound|westbound|nb|sb|(on|off)[- ]?ramp|ramps?|rest area|weigh station|underpass|median|(left|right|breakdown|passing) lane|interchange|mile marker [\d.]+)\b/gi
 const BETWEEN_PARTS =
   /\b(?:near|at|between|over|under|toward|before|after|from|with|onto|and)\b|[,()]/i
 
@@ -68,6 +68,7 @@ const BETWEEN_PARTS =
 export function parseSpot(
   name: string,
   isRoad: (text: string) => boolean,
+  keyOf: (text: string) => string,
 ): { roads: string[]; point: string | null } | null {
   const exit = name.match(EXIT_PHRASE)?.[0] ?? null
   const parts = name
@@ -78,10 +79,24 @@ export function parseSpot(
     .filter((part) => part !== '')
   const roads: string[] = []
   for (const part of parts) {
-    if (isRoad(part) && !roads.some((road) => roadKey(road) === roadKey(part))) roads.push(part)
+    if (isRoad(part) && !roads.some((road) => keyOf(road) === keyOf(part))) roads.push(part)
   }
   if (roads.length === 0) return null
   return { roads, point: exit ? exit.replace(/^exits?/i, 'Exit') : null }
+}
+
+// The routes the pins spell out in full, such as "US 4", which say what a bare "Route 4" is.
+function explicitRoutes(names: string[]): Set<string> {
+  const found = new Set<string>()
+  for (const name of names) {
+    for (const part of name.split(
+      /\band\b|\b(?:near|at|between|over|under|toward|before|after|from|with|onto)\b|[,()]/i,
+    )) {
+      const key = explicitRouteKey(part.trim())
+      if (key) found.add(key)
+    }
+  }
+  return found
 }
 
 function addWeeks(into: number[], weeks: number[]): number[] {
@@ -118,11 +133,14 @@ export function buildRoads(
     ]
   })
 
+  const explicit = explicitRoutes(pins.map((pin) => pin.name))
+  const keyOf = (text: string) => roadKey(text, explicit)
+
   // Pass one: the roads the plain names give, so a spot description can tell a road from a store.
   const roads = new Map<string, Acc>()
   const roadFor = (name: string): Acc => {
-    let road = roads.get(roadKey(name))
-    if (!road) roads.set(roadKey(name), (road = { name, own: null, items: [] }))
+    let road = roads.get(keyOf(name))
+    if (!road) roads.set(keyOf(name), (road = { name, own: null, items: [] }))
     return road
   }
   const spots: typeof pins = []
@@ -150,7 +168,7 @@ export function buildRoads(
   const crossings = new Map<string, Crossing>()
   const cross = (pin: (typeof pins)[number], a: string, b: string) => {
     const [first, second] = [roadFor(a).name, roadFor(b).name].sort((x, y) => x.localeCompare(y))
-    const key = `${roadKey(first)}|${roadKey(second)}`
+    const key = `${keyOf(first)}|${keyOf(second)}`
     const known = crossings.get(key)
     if (known) {
       known.id = known.n >= pin.n ? known.id : pin.id
@@ -178,7 +196,11 @@ export function buildRoads(
     if (legs) cross(pin, legs[0], legs[1])
   }
   for (const pin of spots) {
-    const spot = parseSpot(pin.name, (text) => roads.has(roadKey(text)) || routeKey(text) !== null)
+    const spot = parseSpot(
+      pin.name,
+      (text) => roads.has(keyOf(text)) || routeKey(text, explicit) !== null,
+      keyOf,
+    )
     if (!spot) {
       // No road in it: it is a road of its own, as it was named.
       const road = roadFor(pin.name)

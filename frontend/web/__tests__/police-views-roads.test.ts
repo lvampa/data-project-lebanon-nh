@@ -31,6 +31,12 @@ describe('routeKey', () => {
     expect(routeKey(name)).toBe(key)
   })
 
+  it('reads a bare Route 4 as the federal road when only that one is named', () => {
+    expect(routeKey('Route 4', new Set(['US 4']))).toBe('US 4')
+    expect(routeKey('Route 4', new Set(['US 4', 'NH 4']))).toBe('NH 4')
+    expect(routeKey('Route 4')).toBe('NH 4')
+  })
+
   it('has no key for a street', () => {
     expect(routeKey('Main St')).toBeNull()
     expect(roadKey('Main St')).toBe('main st')
@@ -49,6 +55,10 @@ describe('parseCrossing', () => {
     },
   )
 
+  it('keeps a road whose name has "lane" in it', () => {
+    expect(parseCrossing('Poverty Lane and Main St')).toEqual(['Poverty Lane', 'Main St'])
+  })
+
   it('keeps a road whose name has "mile" in it', () => {
     expect(parseCrossing('Glen Rd and Miracle Mile')).toEqual(['Glen Rd', 'Miracle Mile'])
   })
@@ -57,38 +67,38 @@ describe('parseCrossing', () => {
 describe('parseSpot', () => {
   const known = new Set(['mechanic st', 'plainfield rd'])
   const isRoad = (text: string) => known.has(roadKey(text)) || routeKey(text) !== null
+  const keyOf = (text: string) => roadKey(text)
 
   it('reads two roads in one name as a crossing', () => {
-    expect(parseSpot('I-89 near Mechanic St', isRoad)).toEqual({
+    expect(parseSpot('I-89 near Mechanic St', isRoad, keyOf)).toEqual({
       roads: ['I-89', 'Mechanic St'],
       point: null,
     })
-    expect(parseSpot('I-89 at NH Route 120 interchange', isRoad)?.roads).toEqual([
+    expect(parseSpot('I-89 at NH Route 120 interchange', isRoad, keyOf)?.roads).toEqual([
       'I-89',
       'NH Route 120',
     ])
-    expect(parseSpot('Plainfield Rd and I-89 southbound near Exit 20', isRoad)?.roads).toEqual([
-      'Plainfield Rd',
-      'I-89',
-    ])
+    expect(
+      parseSpot('Plainfield Rd and I-89 southbound near Exit 20', isRoad, keyOf)?.roads,
+    ).toEqual(['Plainfield Rd', 'I-89'])
   })
 
   it('reads one road and an exit as a point on the road', () => {
-    expect(parseSpot('I-89 northbound on-ramp at Exit 18', isRoad)).toEqual({
+    expect(parseSpot('I-89 northbound on-ramp at Exit 18', isRoad, keyOf)).toEqual({
       roads: ['I-89'],
       point: 'Exit 18',
     })
   })
 
   it('does not take a landmark for a road', () => {
-    expect(parseSpot('Example Storage near I-89 Exit 16', isRoad)).toEqual({
+    expect(parseSpot('Example Storage near I-89 Exit 16', isRoad, keyOf)).toEqual({
       roads: ['I-89'],
       point: 'Exit 16',
     })
   })
 
   it('names no road when the text has none', () => {
-    expect(parseSpot('Example Walking Bridge over Example Creek', isRoad)).toBeNull()
+    expect(parseSpot('Example Walking Bridge over Example Creek', isRoad, keyOf)).toBeNull()
   })
 })
 
@@ -256,6 +266,32 @@ describe('buildRoads', () => {
       expect([crossings[0].n, crossings[0].id]).toEqual([8, 'plainfield-rd-and-i-89'])
     })
 
+    it('counts a crossing of a road named Lane, and a left lane on a highway as the highway', () => {
+      const { roads } = roadsOf([
+        road('Main St', 4),
+        road('Poverty Lane and Main St', 9),
+        road('I-89', 1),
+        road('I-89 southbound left lane near Exit 17', 3),
+      ])
+
+      expect(pick(roads, 'Main St').crossings).toEqual([
+        { id: 'poverty-lane-and-main-st', other: 'Poverty Lane', n: 9 },
+      ])
+      expect(pick(roads, 'I-89').atCrossings).toBe(3)
+    })
+
+    it('joins a bare Route 4 to US Route 4', () => {
+      const { roads } = roadsOf([
+        road('US Route 4', 10),
+        road('Route 4', 5),
+        road('Oak St and Route 4', 2),
+      ])
+
+      const route = roads.filter((r) => routeKey(r.name, new Set(['US 4'])) === 'US 4')
+      expect(route).toHaveLength(1)
+      expect([route[0].headline, route[0].atCrossings]).toEqual([15, 2])
+    })
+
     it('keeps a name with no road in it as a road of its own', () => {
       const { roads } = roadsOf([road('Example Walking Bridge over Example Creek', 2)])
 
@@ -326,6 +362,13 @@ describe('the roads URL', () => {
 })
 
 describe('the kind on the Roads tab', () => {
+  it('rewrites the kind only for the Roads view, so Places keeps the one in the link', () => {
+    const filters = { ...DEFAULT_FILTERS, kind: 'alarms' as const }
+
+    expect(withRoadsKind('roads', filters).kind).toBe('all')
+    expect(withRoadsKind('places', filters).kind).toBe('alarms')
+  })
+
   it.each(['place', 'alarms'] as const)('opens a link with kind %s on all activity', (kind) => {
     expect(withRoadsKind('roads', { ...DEFAULT_FILTERS, kind }).kind).toBe('all')
   })

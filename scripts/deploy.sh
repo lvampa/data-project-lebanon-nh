@@ -31,9 +31,10 @@ require_published_main() {
   # Ignored files are not in CI's checkout but would be in a local build: Next inlines
   # NEXT_PUBLIC_ values from .env files, and everything in public/ is published.
   # public/data is expected and is removed from the build below.
-  local ignored
-  ignored=$(git -C "$REPO_ROOT" status --porcelain --ignored -- frontend/web/public 'frontend/web/.env*' |
-    grep -v '^!! frontend/web/public/data/$' || true)
+  local ignored status
+  status=$(git -C "$REPO_ROOT" status --porcelain --ignored -- frontend/web/public 'frontend/web/.env*')
+  # grep exits 1 when nothing is left, which is the good case.
+  ignored=$(grep -v '^!! frontend/web/public/data/$' <<< "$status" || true)
   [ -z "$ignored" ] || die "ignored files would be built: $ignored"
   git -C "$REPO_ROOT" fetch --quiet origin main
   [ "$(git -C "$REPO_ROOT" rev-parse HEAD)" = "$(git -C "$REPO_ROOT" rev-parse origin/main)" ] ||

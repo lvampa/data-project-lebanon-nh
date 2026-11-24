@@ -21,6 +21,7 @@ import {
   rangeDays,
   rangeLabel,
   readQuery,
+  withRoadsKind,
   writeQuery,
   type Filters,
   type View,
@@ -62,12 +63,14 @@ interface Props {
 }
 
 export function PoliceViews({ addresses, stats }: Props) {
-  const [{ view, filters, mode }, setState] = useState<State>({
+  const [{ view, filters: asRead, mode }, setState] = useState<State>({
     view: 'map',
     filters: DEFAULT_FILTERS,
     mode: 'roads',
   })
   const [attempt, setAttempt] = useState(0)
+  // Roads count every entry or only traffic, so a link with another kind opens on all.
+  const filters = withRoadsKind(view, asRead)
 
   // The query is read after the first render, so the static page and the browser agree.
   useEffect(() => {
@@ -128,6 +131,7 @@ export function PoliceViews({ addresses, stats }: Props) {
           onChange={setFilters}
           count={derived ? derived.countLine(view) : null}
           lens={view === 'places' ? 'Calls from the public only' : null}
+          roadsKind={view === 'roads'}
           showOfficer={view !== 'officers'}
         />
       </div>
@@ -162,7 +166,7 @@ export function PoliceViews({ addresses, stats }: Props) {
             />
           ) : view === 'roads' ? (
             <RoadsView
-              addresses={addresses}
+              addresses={derived.mapAddresses}
               activity={activity}
               kept={derived.kept}
               range={derived.weeks}

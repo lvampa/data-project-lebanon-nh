@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { Tabs } from '@project/ui/components/ui/tabs'
 import { categoryOf } from '@/lib/police-map/categories'
 import {
   DEFAULT_FILTERS,
@@ -18,6 +19,8 @@ interface Props {
   count: string | null
   // Places has one fixed lens, so it shows what it counts instead of the kind chips.
   lens: string | null
+  // Roads count every entry or only traffic, so it shows that switch instead of the kind chips.
+  roadsKind?: boolean
   // On the Officers tab every officer shows, so the officer filter steps aside.
   showOfficer: boolean
 }
@@ -27,7 +30,7 @@ const CHIP =
 const SELECT =
   'h-9 rounded-lg border border-input bg-card px-2.5 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-3 focus:ring-ring/25'
 
-export function FilterBar({ filters, onChange, count, lens, showOfficer }: Props) {
+export function FilterBar({ filters, onChange, count, lens, roadsKind, showOfficer }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const set = (change: Partial<Filters>) => onChange({ ...filters, ...change })
   const hidden = sheetFilterCount(filters)
@@ -65,6 +68,16 @@ export function FilterBar({ filters, onChange, count, lens, showOfficer }: Props
     <div className="mb-3.5 flex flex-wrap items-center gap-x-4 gap-y-2.5">
       {lens ? (
         <p className="text-sm text-muted-foreground">{lens}</p>
+      ) : roadsKind ? (
+        <Tabs
+          variant="pill"
+          items={[
+            { id: 'all', label: 'All activity' },
+            { id: 'traffic', label: 'Traffic' },
+          ]}
+          value={filters.kind}
+          onChange={(id) => set({ kind: id as Filters['kind'] })}
+        />
       ) : (
         <div
           role="group"

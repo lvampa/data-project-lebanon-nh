@@ -2,7 +2,7 @@
 import { useMemo } from 'react'
 import { Tabs } from '@project/ui/components/ui/tabs'
 import type { Activity } from '@/lib/police-views/activity'
-import { tally } from '@/lib/police-views/counts'
+import { cardGroupOf, tally } from '@/lib/police-views/counts'
 import type { WeekRange } from '@/lib/police-views/findings'
 import {
   ROADS_MODES,
@@ -15,6 +15,7 @@ import type { Address } from '@/lib/types'
 import { WeekBars } from './week-bars'
 
 interface Props {
+  // The addresses with the counts the filters keep, as the map shows them.
   addresses: Address[]
   activity: Activity
   kept: Uint8Array
@@ -29,14 +30,11 @@ const SHOWN = 60
 const TOP_CROSSINGS = 3
 
 export function RoadsView({ addresses, activity, kept, range, mode, onMode, onShow }: Props) {
-  const { roads, crossings } = useMemo(
-    () =>
-      buildRoads(
-        addresses,
-        tally(activity, kept, (i) => activity.pin[i]),
-      ),
-    [addresses, activity, kept],
-  )
+  const { roads, crossings } = useMemo(() => {
+    // A street's weeks include the places listed on it, as its number does.
+    const cards = tally(activity, kept, cardGroupOf(activity, addresses))
+    return buildRoads(addresses, new Map([...cards].map(([pin, t]) => [pin, t.weeks])))
+  }, [addresses, activity, kept])
   const shown = (mode === 'roads' ? roads : crossings).slice(0, SHOWN)
   // One scale for every card, so the bars compare across cards.
   const weekMax = Math.max(1, ...shown.flatMap((item) => item.weeks.slice(range.first)))
@@ -50,9 +48,8 @@ export function RoadsView({ addresses, activity, kept, range, mode, onMode, onSh
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === 'roads'
-              ? 'A road and its crossings: the entries on the road itself, plus the entries where it meets another road.'
-              : 'Entries at the point where two roads meet.'}{' '}
-            Places listed on a road are on the Places tab, not here.
+              ? 'The number is the same as on the map: the entries on the road and the places listed on it. What happened where it meets another road is counted separately.'
+              : 'Entries at the point where two roads meet.'}
           </p>
         </div>
         <Tabs
@@ -102,6 +99,17 @@ export function RoadsView({ addresses, activity, kept, range, mode, onMode, onSh
   )
 }
 
+// "+68 at 18 crossings" next to the road's own number, or "at 3 crossings" when the number is
+// what its crossings add up to.
+function crossingsLine(road: Road): string {
+  const n = road.crossings.length.toLocaleString('en-US')
+  const where = `at ${n} ${road.crossings.length === 1 ? 'crossing' : 'crossings'}`
+  if (!road.hasOwnPin) return `All ${where}`
+  return road.crossings.length === 0
+    ? 'No crossings with entries'
+    : `+${road.atCrossings.toLocaleString('en-US')} ${where}`
+}
+
 function Header({ rank, total }: { rank: number; total: number }) {
   return (
     <div className="flex items-baseline justify-between">
@@ -146,7 +154,7 @@ function RoadTile({
   const top = road.crossings.slice(0, TOP_CROSSINGS)
   return (
     <article className="flex flex-col rounded-lg border border-border bg-card p-4">
-      <Header rank={rank} total={road.total} />
+      <Header rank={rank} total={road.headline} />
       <h3 className="mt-2 font-semibold leading-tight">{road.name}</h3>
       <WeekBars
         weeks={road.weeks.slice(range.first)}
@@ -157,13 +165,7 @@ function RoadTile({
         noun="entries"
       />
       <div className="mt-2.5 grid gap-0.5 text-sm text-muted-foreground">
-        <span>
-          <b className="font-medium text-foreground">{road.own.toLocaleString('en-US')}</b> on the
-          road ·{' '}
-          <b className="font-medium text-foreground">{road.atCrossings.toLocaleString('en-US')}</b>{' '}
-          at {road.crossings.length.toLocaleString('en-US')}{' '}
-          {road.crossings.length === 1 ? 'crossing' : 'crossings'}
-        </span>
+        <span>{crossingsLine(road)}</span>
         {top.length > 0 && (
           <span>{top.map((c) => `${c.other} ${c.n.toLocaleString('en-US')}`).join(' · ')}</span>
         )}

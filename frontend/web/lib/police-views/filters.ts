@@ -55,6 +55,12 @@ export function isDefault(filters: Filters): boolean {
   )
 }
 
+// Roads count every entry or only traffic, so a link with any other kind opens on all.
+export function withRoadsKind(view: View, filters: Filters): Filters {
+  const counted = filters.kind === 'all' || filters.kind === 'traffic'
+  return view === 'roads' && !counted ? { ...filters, kind: 'all' } : filters
+}
+
 // The filters behind the Filters button on a phone: everything but the kind, whose chips
 // stay in view.
 export function sheetFilterCount(filters: Filters): number {

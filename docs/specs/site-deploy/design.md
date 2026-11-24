@@ -17,7 +17,8 @@ Re-running an older run deploys that older commit over a newer one, so it is a r
 A backend-only merge does not deploy.
 It does not wait on `ci-ok`, since `ci.yml` is checks only.
 It relies on `ci-ok` being a required check on pull requests, so nothing merges without passing, and the workflow fails on a broken build, so nothing broken ships.
-The frontend job also runs `scripts/deploy.sh --dry-run` on every PR, against a planted data file, so a build break or a broken data guard fails the PR and not main.
+The frontend job also runs `bun run build` on every PR, so a build break fails the PR and not main.
+The script's data removal and output guard run only in the deploy itself and in a local run, not in PR CI.
 The deploy workflow runs `bash scripts/deploy.sh` and nothing else for the build and the upload, so a hand run and CI cannot drift.
 The script runs `bun ci --ignore-scripts`, then `bun run build` in `frontend/web`, then checks `out`, then `wrangler pages deploy out --branch=main`.
 `--dry-run` stops before the upload.

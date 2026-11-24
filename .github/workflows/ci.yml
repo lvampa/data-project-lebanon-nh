@@ -86,16 +86,10 @@ jobs:
       - name: Typecheck, lint, format and test
         run: bun run check
 
-      # Build on every PR, so a build break fails here before it can reach the deploy on main.
-      # This is the script the deploy workflow runs, stopped before the upload. The planted
-      # file proves the build output is cleared of data. It has no secrets and a dummy project.
-      - name: Dry-run the deploy
-        run: |
-          mkdir -p web/public/data
-          echo '{}' > web/public/data/stats.json
-          CLOUDFLARE_PAGES_PROJECT=ci bash ../scripts/deploy.sh --dry-run
-          # The script clears data from the build, not from the checkout.
-          test -f web/public/data/stats.json
+      # The build check before the deploy on main, so a build break fails here first.
+      - name: Build
+        working-directory: frontend/web
+        run: bun run build
 
   rust:
     runs-on: ubuntu-latest

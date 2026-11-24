@@ -38,7 +38,7 @@ without_credentials bun run build
 # Next copies public/ into out/, and a local checkout has public/data. The site fetches its
 # data in the browser, so none of it belongs in the build. Deleting from out/ leaves
 # public/data alone, so even a failed build cannot lose it.
-echo "→ Checking the build has no data..."
+echo "→ Removing data from the build and checking it..."
 rm -r -- out/data 2>/dev/null || true
 
 # What is left in out/ is what gets published: no data and no dot folders.

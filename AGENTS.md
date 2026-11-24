@@ -87,7 +87,7 @@ scripts/                  generate_report.sh, deploy.sh
 1. `build_daily_urls` spider → scrapes PDF links → inserts them into PostgreSQL `pdf_urls` as `pending`
 2. `process_urls` spider → claims `pending` URLs with `FOR UPDATE SKIP LOCKED` (recording `claimed_at` and `attempts`) → downloads PDFs → extracts text → yields one `PoliceLogPdfItem` per PDF carrying its text
 3. `PoliceLogPipeline` → calls `ingest_pdf_url` in `scrapers/ingest/police_log.py`, which parses the text, validates each entry via Pydantic, and upserts `log_entries` (keyed on `case_number`) → the URL becomes `complete` in the same commit, or `error` with a kind (`download`, `parse`, `save`)
-4. `scripts/generate_report.sh` exports JSON into `data/export/` (gitignored), which `bun run dev` in `frontend/web` serves on port 4100. The site's code deploys from CI on merge to main through `scripts/deploy.sh`, with no data in the build; publishing the data is a later change (see `docs/specs/site-deploy/design.md`)
+4. `scripts/generate_report.sh` exports JSON into `data/export/` (gitignored). The site's code deploys from CI on merge to main through `scripts/deploy.sh`, with no data in the build. `scripts/deploy-data.sh` exports, runs `uv run check-export`, and syncs the folder to R2 (see `docs/specs/site-deploy/design.md`)
 
 ### Key Patterns
 
@@ -113,6 +113,12 @@ uv run pytest
 
 # Generate the data for local dev
 bash scripts/generate_report.sh              # exports JSON to data/export
+
+# Publish the data to R2 (needs R2_BUCKET, CLOUDFLARE_ACCOUNT_ID and the AWS_* keys)
+bash scripts/deploy-data.sh [--dry-run]      # export, check, then sync
+
+# Local dev reads /data. To see a fresh export, copy data/export to frontend/web/public/data
+# (gitignored), or set NEXT_PUBLIC_DATA_URL in frontend/web/.env.local to read live data.
 
 # Deploy by hand (CI runs the same script on merge to main)
 bash scripts/deploy.sh [--dry-run]           # ships whatever is checked out

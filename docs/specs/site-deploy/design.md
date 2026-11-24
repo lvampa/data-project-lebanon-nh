@@ -38,25 +38,48 @@ The two fetches that already ran in the browser, `activity.json` and each place 
 `activity.json` goes through the same cache, and a place card is not cached, so its fetch is aborted when another pin is chosen.
 
 The base is `NEXT_PUBLIC_DATA_URL`, and it defaults to `/data`.
-The export is written to `data/export/` at the repo root, outside `public/`, so it never reaches the build.
-`bun run dev` in `frontend/web` starts `scripts/serve-data.mjs`, which serves that folder on port 4100 with CORS, beside `next dev`.
-The `dev:site` script sets `NEXT_PUBLIC_DATA_URL=http://localhost:4100`, so no `.env` file is tracked.
-Dev then reads data from another origin, as production will from R2, and the later publish step uploads `data/export/`.
-A deployed build with nothing at `/data` shows the error state on those four pages.
 `NEXT_PUBLIC_DATA_URL` is read when the build runs, so pointing the site at a data host means a rebuild.
 In CI it comes from the repository variable of the same name, and an empty value counts as unset.
+A deployed build with nothing at the data URL shows the error state on those four pages.
 
-The planned data host is a public R2 bucket on a subdomain of a domain already on Cloudflare, with a Cache Rule so the JSON is cached at the edge.
-Cloudflare does not cache `.json` by default, and `r2.dev` is rate-limited and for development only, so the custom domain and the rule are both needed.
-Publishing the data is a later change.
-The bucket needs a CORS policy that allows GET from the site's origin, or every fetch fails and the pages show the error state.
-Once the host exists, the operator sets the repository variable to its URL.
+## Publishing the data
 
-Nothing publishes data in this change, and it must not reach the public host until the publish step runs the privacy checks.
-Those are the location-pass check, a scan that no flagged person name appears in the export, and a check that the files agree with each other.
-The old design had them, and they move with the publish step.
-A data version in the export, checked by the build, is also part of that step.
-Until it exists, new code can read old data without any check.
+The data side has its own script, `scripts/deploy-data.sh`, run from the repo root like `deploy.sh`.
+It takes `--dry-run`, which stops before the upload.
+1. It runs `generate_report.sh`, which writes the export to `data/export/` at the repo root, outside `public/`, so it never reaches the build.
+2. It runs `uv run check-export data/export`, and nothing uploads unless every check passes.
+3. It runs `aws s3 sync data/export s3://$R2_BUCKET/ --delete` against R2's S3 endpoint, with `application/json` and `Cache-Control: public, max-age=300`.
+
+It is a plain sync of the folder.
+There are no versioned releases, no pointer file and no schema version.
+`--delete` removes a place card that is gone, and the bucket holds only this export.
+`aws` is already on the operator's Mac, and one sync command handles about 1,500 files.
+Credentials come from the environment only: `R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, and `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from an R2 API token.
+R2 rejects the checksum headers newer `aws` versions add, so the script sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`.
+
+The checks are in `scripts/check_export.py`, and they fail closed and print counts, never the matched text:
+- **Person text.** No location flagged as naming a person appears in the export.
+  Strings under 8 characters, a flagged row's own street, and any text an unflagged location also has are skipped, since two raw values can normalize to one address.
+  `properties.json` and `staff.json` are not scanned, since a parcel's address may be the same text.
+- **Prompt version.** No AI location is on an old `LOCATION_PROMPT_VERSION`.
+  Rule rows are not counted, since they store their own version.
+  Until `normalize --field location --redo` has covered every row, this check fails and nothing uploads.
+- **Coverage.** At least 85% of in-range entries sit on a pin.
+- **Files.** Every expected file is present, and every pin in `addresses.json` has a card in `places/`.
+
+An export version that the build checks is not built, so new code can read old data without any check.
+The Airflow `publish_data` DAG that calls the script is the next change, since the Airflow image has no `cargo`.
+
+R2 needs these set in Cloudflare, by the operator:
+- A bucket on a custom subdomain of a domain already on Cloudflare.
+  `r2.dev` is rate-limited and for development only.
+- An API token with Object Read & Write on that one bucket.
+- A CORS rule allowing GET from the site's origin, or every fetch fails and the pages show the error state.
+- A Cache Rule that makes the data host cacheable, since Cloudflare does not cache `.json` by default.
+
+For local dev, `bun run dev` is plain `next dev`, reading `/data`.
+To check a fresh export locally, copy `data/export` into `frontend/web/public/data`, which is gitignored, and `deploy.sh`'s output guard refuses to ship it.
+To read live data, set `NEXT_PUBLIC_DATA_URL` to the subdomain in `frontend/web/.env.local`, which is gitignored.
 
 ## Deploy hardening
 
@@ -86,7 +109,8 @@ Repository settings, set by the operator:
   The deploy workflow does not wait on `ci-ok`, so these settings are what stop untested code from shipping.
   A push that bypasses them deploys whatever it contains, and the script catches a broken build but not a failing test.
 - The `production` environment limited to the main branch.
-- Variable `NEXT_PUBLIC_DATA_URL`, later, once the data host exists.
+- Variable `NEXT_PUBLIC_DATA_URL`, the data subdomain, once the bucket exists.
+- For `deploy-data.sh`, the R2 bucket, its custom subdomain, the R2 API token, the CORS rule and the Cache Rule above.
 
 ## Decisions
 

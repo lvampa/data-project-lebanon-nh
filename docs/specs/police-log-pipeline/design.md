@@ -22,13 +22,13 @@ Normalized values sit in two lookup tables, keyed by the raw value, so each dist
 3 normalize  uv run normalize ─► rule pass, then AI for the leftovers ─► incident_type_categories, address_normalizations
   and        uv run geocode ─► Nominatim ─► coordinates on address_normalizations
   geocode    admin API edits ─► same tables, source = human (no job overwrites them)
-4 export     report-gen ─► JSON in data/export (local dev; publishing is not built)
+4 export     report-gen ─► JSON in data/export ─► check-export ─► aws s3 sync to R2 (scripts/deploy-data.sh)
 ```
 
 The `discover_urls` DAG runs weekly and triggers `process_urls`, which together are stages 1 and 2.
 `police_log_reprocess` is a manually triggered DAG for stage 2.
 Stage 3 runs by hand: `uv run normalize` and `uv run geocode` from the repo root.
-Stage 4 is `scripts/generate_report.sh`, and the site's code deploys separately with `scripts/deploy.sh`, which CI runs; see the site deploy spec.
+Stage 4 is `scripts/deploy-data.sh`, which exports, checks and syncs the data to R2, and the site's code deploys separately with `scripts/deploy.sh`, which CI runs; see the site deploy spec.
 `uv run migrate` applies the Alembic migrations and creates the MongoDB indexes, and backups are hand-run scripts.
 There is no Elasticsearch and no dbt.
 

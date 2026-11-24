@@ -72,7 +72,9 @@ def test_the_incident_type_prompt_carries_the_values_and_the_names_in_use():
 
 
 def test_the_location_prompt_carries_the_values_and_the_whole_street_list():
-    prompt = location_prompt(["HANNAFORDS - MARKET ST"], streets=STREETS)
+    prompt = location_prompt(
+        ["HANNAFORDS - MARKET ST"], streets=STREETS, known_places=[]
+    )
 
     assert json.dumps(["HANNAFORDS - MARKET ST"]) in prompt
     assert json.dumps(STREETS) in prompt
@@ -93,7 +95,7 @@ def test_raw_values_are_presented_as_data_not_instructions():
 def test_a_raw_value_with_quotes_and_newlines_stays_one_json_string():
     value = 'MAIN ST "REAR"\nLOT 2'
 
-    prompt = location_prompt([value], streets=STREETS)
+    prompt = location_prompt([value], streets=STREETS, known_places=[])
 
     assert json.dumps([value]) in prompt
 
@@ -151,7 +153,9 @@ def test_an_abbreviation_matches_only_as_a_whole_word(name, expected):
 
 
 def test_the_location_prompt_asks_for_the_names_person_flag():
-    prompt = location_prompt(["F AND 2 YO CHILD - EXAMPLE ST"], streets=STREETS)
+    prompt = location_prompt(
+        ["F AND 2 YO CHILD - EXAMPLE ST"], streets=STREETS, known_places=[]
+    )
 
     assert "names_person" in prompt
     assert "describes one" in prompt
@@ -165,7 +169,9 @@ def test_the_location_prompt_version_is_3_so_a_redo_asks_again():
 
 
 def test_the_location_prompt_folds_a_part_of_a_place_into_the_place():
-    prompt = location_prompt(["EXAMPLE MARKET AISLE 12"], streets=STREETS)
+    prompt = location_prompt(
+        ["EXAMPLE MARKET AISLE 12"], streets=STREETS, known_places=[]
+    )
 
     assert "aisle, level, floor, room" in prompt
     assert '"Example Market, Aisle 12" becomes "Example Market"' in prompt
@@ -186,7 +192,7 @@ def test_the_location_prompt_carries_the_known_places_before_the_raw_values():
     )
 
 
-def test_the_known_places_default_to_none():
-    prompt = location_prompt(["X"], streets=STREETS)
+def test_an_empty_known_places_list_is_sent_as_an_empty_list():
+    prompt = location_prompt(["X"], streets=STREETS, known_places=[])
 
     assert "already in use near these locations (JSON): []" in prompt

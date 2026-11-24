@@ -69,7 +69,7 @@ from scripts.normalize.backends import AiBackend, AiBackendUnavailable, backend_
 from scripts.normalize.match_review import DEFAULT_DIR as REVIEW_DIR
 from scripts.normalize.match_review import Placed, write_review
 from scripts.normalize.osm_locate import OsmLocator
-from scripts.normalize.place_match import pick_candidate
+from scripts.normalize.place_match import PLACE_MATCH_PROMPT_VERSION, pick_candidate
 
 MAX_ATTEMPTS = 3
 MAX_REQUESTS = 600
@@ -109,6 +109,8 @@ class GeocodeCounts:
     # Groups of rows `--retry-approximate` looked at, and left as they were.
     groups_retried: int = 0
     groups_kept: int = 0
+    # Groups already checked against the current snapshot, so not looked at again.
+    groups_skipped: int = 0
 
     def found_by(self) -> Counter[str]:
         return Counter(item.match.via for item in self.from_snapshot)
@@ -461,11 +463,22 @@ def run_retry(locator: OsmLocator, *, missed: bool = False) -> GeocodeCounts:
     rows that share a normalized address and kind, joined by any place code they share. One
     lookup places the whole group, and a missed group gets its attempts reset. A group
     with a `human` row in it is left alone, and so is a group the snapshot cannot place.
+
+    Each row records what it was looked up with, so a group already checked is skipped and
+    the run reaches the groups that were never asked. A miss is recorded only when the
+    lookup really answered "no". A new snapshot, a new place-match prompt, or a row whose
+    kind, street or address changed is checked again.
     """
     counts = GeocodeCounts()
+    snapshot_id = locator.snapshot.fetched_at
     with open_session() as session:
         groups = _missed_groups(session) if missed else _approximate_groups(session)
         for group in groups:
+            if all(
+                row.snapshot_checked == _lookup_mark(snapshot_id, row) for row in group
+            ):
+                counts.groups_skipped += 1
+                continue
             counts.groups_retried += 1
             if _has_human_row(session, group):
                 counts.groups_kept += 1
@@ -474,13 +487,20 @@ def run_retry(locator: OsmLocator, *, missed: bool = False) -> GeocodeCounts:
             if not rows:
                 session.rollback()
                 continue
+            unanswered_before = locator.unanswered
             match = _first_match(locator, rows)
             if match is None:
-                session.rollback()
                 counts.groups_kept += 1
+                if locator.unanswered == unanswered_before:
+                    for row in rows:
+                        row.snapshot_checked = _lookup_mark(snapshot_id, row)
+                    session.commit()
+                else:
+                    session.rollback()
                 continue
             for row in rows:
                 _apply(row, _from_match(match), counts)
+                row.snapshot_checked = _lookup_mark(snapshot_id, row)
                 if missed:
                     # The review mark is left alone: normalize sets it too, for an unsure
                     # answer or a street off the list, and a placed row can still need it.
@@ -493,6 +513,19 @@ def run_retry(locator: OsmLocator, *, missed: bool = False) -> GeocodeCounts:
         groups=counts.groups_retried,
     )
     return counts
+
+
+def _lookup_mark(snapshot_id: str, row: AddressNormalization) -> str:
+    """Everything a lookup of this row reads, so a change to any of it is a new question."""
+    return "|".join(
+        (
+            snapshot_id,
+            PLACE_MATCH_PROMPT_VERSION,
+            row.kind or "",
+            row.street or "",
+            row.normalized_address or "",
+        )
+    )
 
 
 def _first_match(locator: OsmLocator, rows: list[AddressNormalization]) -> Match | None:
@@ -769,7 +802,8 @@ def _print_summary(
     if retry:
         print(
             f"Retry: {counts.placed} rows placed from the snapshot, "
-            f"{counts.groups_kept} of {counts.groups_retried} groups left as they were."
+            f"{counts.groups_kept} of {counts.groups_retried} groups left as they were, "
+            f"{counts.groups_skipped} skipped as already checked against this snapshot."
         )
     else:
         print(

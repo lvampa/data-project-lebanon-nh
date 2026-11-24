@@ -98,10 +98,15 @@ There is no Elasticsearch and no dbt.
   A match sets `geocoded_via = 'osm'`, `osm_ref` and precision `exact`.
   `--no-llm` skips the AI step.
   `--retry-approximate` looks again, from the snapshot only, at every `ai` or `rule` row on a street point, a group at a time (rows with one normalized address and kind, joined by a shared place code), and skips a group with a `human` row.
-  A miss changes nothing, and a row is re-read under a lock before it is written.
+  A miss changes nothing but the mark below, and a row is re-read under a lock before it is written.
   `--retry-missed` does the same, from the snapshot only, for `ai` and `rule` rows with no point that are marked for review: a row that missed three times, and a bare highway that had no road.
   A hit places the group and resets its attempts, and leaves the review mark, since normalize sets that mark for unsure answers and off-list streets too.
-  A miss changes nothing.
+  A miss changes nothing but the mark below.
+  Both retries record in `snapshot_checked` what a row was looked up with, on a miss as well as a hit: the snapshot, the place-match prompt version, and the row's kind, street and normalized address.
+  A group whose rows all carry the mark they would get now is skipped, so a run reaches the places never asked.
+  A change to any of the five, from normalize or a script, is a new question, so nothing clears the mark.
+  A miss is marked only when the lookup really answered no: not when there was no AI for a place with candidates, the call cap was reached, the backend stopped or a call failed.
+  The retry summary's "skipped as already checked" count is the groups it did not look at for that reason, so a run that places nothing and skips many is done, not broken.
   The two retries cannot be used together.
   Every run that places anything from the snapshot writes `tmp/geocode-matches-<date>.csv` with the old and new coordinates side by side, so a batch can be reverted from the file.
   It runs at 1 request per second, stops at 600 requests, and discards a result outside the city: state New Hampshire, city Lebanon or West Lebanon, and a coarse bounding box.

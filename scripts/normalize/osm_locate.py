@@ -14,9 +14,11 @@ from locations.osm import (
     Match,
     Snapshot,
     locate_address,
+    locate_highway_point,
     locate_intersection,
     locate_road,
     place_candidates,
+    route_in,
 )
 from postgres.models.address_normalization import AddressNormalization
 
@@ -47,6 +49,8 @@ class OsmLocator:
         normalized = row.normalized_address or ""
         if row.kind == "intersection":
             return self._intersection(normalized)
+        if row.kind == "highway":
+            return locate_highway_point(self.snapshot, normalized)
         if row.kind in ("address", "place"):
             return self._address_or_place(row, normalized)
         return None
@@ -63,7 +67,16 @@ class OsmLocator:
         streets = [part.strip() for part in normalized.split(" and ")]
         if len(streets) != 2 or not all(streets):
             return None
-        return locate_intersection(self.snapshot, streets[0], streets[1])
+        return locate_intersection(
+            self.snapshot, *(self._road_of(street) for street in streets)
+        )
+
+    def _road_of(self, street: str) -> str:
+        """A street, or the route inside a part with more words, as in "I-89 southbound
+        near Exit 20"."""
+        if self.snapshot.roads_named(street):
+            return street
+        return route_in(street) or street
 
     def _address_or_place(
         self, row: AddressNormalization, normalized: str

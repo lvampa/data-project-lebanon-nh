@@ -75,6 +75,7 @@ SNAPSHOT = snapshot_from_replies(
             way(3, "Commerce Avenue", (5, 43.650, -72.250), (6, 43.650, -72.245)),
         ]
     },
+    {"elements": []},
 )
 
 
@@ -1100,6 +1101,7 @@ ROUTE_SNAPSHOT = snapshot_from_replies(
             route_way(3, "Hanover St", None, (20, 43.64, -72.25), (2, 43.65, -72.25)),
         ]
     },
+    {"elements": []},
 )
 ROUTE_120_POINT = (43.65, -72.25)
 I_89_POINT = (43.64, -72.25)
@@ -1876,3 +1878,59 @@ def test_a_place_with_no_candidates_and_no_ai_is_still_a_real_miss(db_session):
     geocode_job.run_retry(OsmLocator(SNAPSHOT))
 
     assert checked_with(db_session, "NOWHERE SHOP", "2026-11-20")
+
+
+# --- crossings with no shared node, and highways that name a point ---
+
+
+def test_a_highway_at_a_road_is_placed_where_they_cross(db_session):
+    highway_row(db_session, "I-89 AT ROUTE 120", "I-89 at Route 120")
+
+    counts = geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "I-89 AT ROUTE 120")
+    assert (row.geocoded_via, row.coordinate_precision) == ("osm", "exact")
+    assert row.lat == pytest.approx(43.65, abs=1e-4)
+    assert row.lng == pytest.approx(-72.2375, abs=1e-3)
+    assert counts.found_by() == {"intersection": 1}
+
+
+def test_an_intersection_with_an_interstate_that_carries_extra_words_is_placed(
+    db_session,
+):
+    add_row(
+        db_session,
+        "HANOVER ST & I-89 SB NEAR EXIT 20",
+        kind="intersection",
+        normalized_address="Hanover St and I-89 southbound near Exit 20",
+        street="HANOVER ST",
+    )
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    row = the_row(db_session, "HANOVER ST & I-89 SB NEAR EXIT 20")
+    assert (row.lat, row.lng) == pytest.approx(I_89_POINT)
+    assert row.coordinate_precision == "exact"
+
+
+def test_a_highway_with_an_exit_the_snapshot_lacks_is_still_a_miss(db_session):
+    highway_row(db_session, "I-89 NEAR EXIT 17", "I-89 near Exit 17")
+
+    geocode_job.run(NoNominatim(), locator=OsmLocator(ROUTE_SNAPSHOT))
+
+    assert the_row(db_session, "I-89 NEAR EXIT 17").lat is None
+
+
+def test_the_missed_retry_places_a_highway_that_names_a_road(db_session):
+    highway_row(db_session, "I-89 AT ROUTE 120", "I-89 at Route 120", **missed())
+
+    counts = geocode_job.run_retry(OsmLocator(ROUTE_SNAPSHOT), missed=True)
+
+    row = the_row(db_session, "I-89 AT ROUTE 120")
+    # The review mark stays, as for a bare highway placed by the missed retry.
+    assert (row.coordinate_precision, row.needs_review, row.geocode_attempts) == (
+        "exact",
+        True,
+        0,
+    )
+    assert counts.placed == 1

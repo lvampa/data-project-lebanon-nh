@@ -2,7 +2,12 @@ from datetime import date
 
 import pytest
 from locations.osm import Snapshot
-from locations.overpass import FEATURES_QUERY, ROADS_QUERY, OverpassUnavailable
+from locations.overpass import (
+    FEATURES_QUERY,
+    JUNCTIONS_QUERY,
+    ROADS_QUERY,
+    OverpassUnavailable,
+)
 
 from scripts.normalize.osm_snapshot import build_snapshot, main, write_snapshot
 
@@ -41,6 +46,8 @@ def overpass(query: str) -> dict:
     """Overpass as it behaves: with the city area in the query, only New Hampshire comes
     back. Without it, the whole box does, Vermont included."""
     scoped = "area.city" in query
+    if query == JUNCTIONS_QUERY:
+        return {"elements": []}
     if query == ROADS_QUERY or "way(area" in query or "way[" in query:
         return {"elements": [NH_BRIDGE] if scoped else [NH_BRIDGE, VT_BRIDGE]}
     return {"elements": [NH_SHOP] if scoped else [NH_SHOP, VT_SHOP]}
@@ -62,7 +69,7 @@ def test_the_queries_it_sends_are_the_scoped_ones():
 
     build_snapshot(date(2026, 11, 20), record)
 
-    assert sent == [FEATURES_QUERY, ROADS_QUERY]
+    assert sent == [FEATURES_QUERY, ROADS_QUERY, JUNCTIONS_QUERY]
 
 
 def test_an_empty_answer_is_an_error_not_an_empty_snapshot():

@@ -85,6 +85,7 @@ def snapshot(
         "2026-11-20",
         {"elements": FEATURES if features is None else features},
         {"elements": ROADS if roads is None else roads},
+        {"elements": []},
     )
 
 
@@ -100,7 +101,7 @@ def test_it_round_trips_through_json():
 def test_the_newest_file_is_loaded(tmp_path):
     (tmp_path / "snapshot-2026-01-01.json").write_text(
         snapshot_from_replies(
-            "2026-01-01", {"elements": []}, {"elements": []}
+            "2026-01-01", {"elements": []}, {"elements": []}, {"elements": []}
         ).to_json()
     )
     (tmp_path / "snapshot-2026-11-20.json").write_text(snapshot().to_json())
@@ -339,7 +340,9 @@ def test_a_node_in_the_shape_overpass_returns_is_parsed():
         ]
     }
 
-    parsed = snapshot_from_replies("2026-11-20", reply, {"elements": []})
+    parsed = snapshot_from_replies(
+        "2026-11-20", reply, {"elements": []}, {"elements": []}
+    )
 
     [feature] = parsed.features
     assert (feature.ref, feature.name, feature.kind) == (
@@ -400,7 +403,10 @@ ROUTES = [
 
 def route_snapshot(ways: list[dict] | None = None) -> Snapshot:
     return snapshot_from_replies(
-        "2026-11-23", {"elements": []}, {"elements": ROUTES if ways is None else ways}
+        "2026-11-23",
+        {"elements": []},
+        {"elements": ROUTES if ways is None else ways},
+        {"elements": []},
     )
 
 
@@ -513,7 +519,7 @@ def test_a_place_on_route_120_gets_candidates():
         feature("node", 2, 43.70, -72.26, name="Sample Outlet Annex"),
     ]
     snapshot = snapshot_from_replies(
-        "2026-11-23", {"elements": features}, {"elements": ROUTES}
+        "2026-11-23", {"elements": features}, {"elements": ROUTES}, {"elements": []}
     )
 
     found = place_candidates(snapshot, "Sample Outlet Mall", "ROUTE 120")

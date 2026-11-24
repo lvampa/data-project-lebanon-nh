@@ -56,6 +56,14 @@ ROADS_QUERY = f"""\
 out geom;"""
 
 
+# Highway exits: the node an exit number is tagged on.
+JUNCTIONS_QUERY = f"""\
+[out:json][timeout:{_TIMEOUT_S}];
+{_CITY_AREA}
+node(area.city)["highway"="motorway_junction"];
+out;"""
+
+
 class OverpassUnavailable(Exception):
     """Overpass could not be reached or kept answering that it was busy."""
 

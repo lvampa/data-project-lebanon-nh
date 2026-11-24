@@ -544,9 +544,9 @@ def _first_match(locator: OsmLocator, rows: list[AddressNormalization]) -> Match
 
 def _snapshot_match(locator: OsmLocator, row: AddressNormalization) -> Match | None:
     """What the snapshot gives for a row. A bare highway gets a point on its road, and a
-    highway with an exit or a cross street is not looked up here."""
-    if row.kind == "highway":
-        return locator.locate_highway(row) if _is_bare_highway(row) else None
+    highway that names an exit or a cross street gets that point."""
+    if row.kind == "highway" and _is_bare_highway(row):
+        return locator.locate_highway(row)
     return locator.locate(row)
 
 

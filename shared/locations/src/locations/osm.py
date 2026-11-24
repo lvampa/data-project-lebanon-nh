@@ -1,7 +1,7 @@
 """Find a Lebanon, NH location in a saved OpenStreetMap snapshot.
 
-The snapshot is two Overpass downloads kept in one file: every named or numbered
-feature in the city, and every named road with its nodes. The functions here are pure,
+The snapshot is three Overpass downloads kept in one file: every named or numbered
+feature in the city, every named road with its nodes, and every highway exit. The functions here are pure,
 with no network and no database, so every rule can be tested with a small fixture.
 
 OpenStreetMap spells street names out ("Mount Support Road"). `canonical_address` maps
@@ -22,6 +22,9 @@ from locations.geocode import in_city_bounds
 
 # Nodes of two roads this close together are one crossing, such as a divided road's.
 INTERSECTION_SPREAD_M = 150
+# Roads with no node in common, as an overpass gives, still make a crossing when a
+# segment of one crosses a segment of the other, or the two pass this close.
+NEAR_CROSSING_M = 100
 # A feature this close to its street, or closer, can be a place on it.
 STREET_REACH_M = 200
 # Features with one house number and street this close are one building's parts.
@@ -87,6 +90,20 @@ class Road:
     points: tuple[tuple[float, float], ...]
     # The way's `ref` tag, such as "NH 120;US 4". Snapshots from before it was kept have none.
     route_ref: str = ""
+    # The way's `highway` tag, such as "motorway" or "motorway_link". Snapshots from before
+    # it was kept have none.
+    highway: str = ""
+
+
+@dataclass(frozen=True)
+class Junction:
+    """An exit: a `motorway_junction` node, with its exit number."""
+
+    ref: str
+    exit: str
+    name: str
+    lat: float
+    lng: float
 
 
 @dataclass(frozen=True)
@@ -109,11 +126,17 @@ class Candidate:
 
 class Snapshot:
     def __init__(
-        self, fetched_at: str, features: list[Feature], roads: list[Road]
+        self,
+        fetched_at: str,
+        features: list[Feature],
+        roads: list[Road],
+        junctions: list[Junction] | None = None,
     ) -> None:
         self.fetched_at = fetched_at
         self.features = features
         self.roads = roads
+        # Snapshots from before exits were kept have none, so an exit is a miss.
+        self.junctions = junctions or []
         self._by_address: dict[tuple[str, str], list[Feature]] = {}
         self._by_token: dict[str, list[Feature]] = {}
         self._roads_by_street: dict[str, list[Road]] = {}
@@ -174,6 +197,7 @@ class Snapshot:
                 "fetched_at": self.fetched_at,
                 "features": [asdict(f) for f in self.features],
                 "roads": [asdict(r) for r in self.roads],
+                "junctions": [asdict(j) for j in self.junctions],
             }
         )
 
@@ -190,9 +214,11 @@ class Snapshot:
                     tuple(r["nodes"]),
                     tuple((p[0], p[1]) for p in r["points"]),
                     r.get("route_ref", ""),
+                    r.get("highway", ""),
                 )
                 for r in data["roads"]
             ],
+            [Junction(**j) for j in data.get("junctions", [])],
         )
 
     @classmethod
@@ -229,13 +255,33 @@ def names_the_road(
 
 
 def snapshot_from_replies(
-    fetched_at: str, features_reply: dict[str, Any], roads_reply: dict[str, Any]
+    fetched_at: str,
+    features_reply: dict[str, Any],
+    roads_reply: dict[str, Any],
+    junctions_reply: dict[str, Any],
 ) -> Snapshot:
     features = [
         f for f in map(_feature_of, features_reply["elements"]) if f is not None
     ]
     roads = [r for r in map(_road_of, roads_reply["elements"]) if r is not None]
-    return Snapshot(fetched_at, features, roads)
+    junctions = [
+        j for j in map(_junction_of, junctions_reply["elements"]) if j is not None
+    ]
+    return Snapshot(fetched_at, features, roads, junctions)
+
+
+def _junction_of(element: dict[str, Any]) -> Junction | None:
+    tags = element.get("tags") or {}
+    exit_number = tags.get("ref")
+    if element.get("type") != "node" or not exit_number or "lat" not in element:
+        return None
+    return Junction(
+        ref=f"node/{element['id']}",
+        exit=str(exit_number).strip().upper(),
+        name=tags.get("name") or "",
+        lat=float(element["lat"]),
+        lng=float(element["lon"]),
+    )
 
 
 def _feature_of(element: dict[str, Any]) -> Feature | None:
@@ -274,6 +320,7 @@ def _road_of(element: dict[str, Any]) -> Road | None:
         nodes=tuple(nodes),
         points=tuple((float(p["lat"]), float(p["lon"])) for p in geometry),
         route_ref=route_ref,
+        highway=tags.get("highway") or "",
     )
 
 
@@ -300,6 +347,14 @@ def route_refs(text: str, *, anywhere: bool = False) -> set[str]:
         for alternatives in _route_alternatives(text, anywhere=anywhere)
         for ref in alternatives
     }
+
+
+def route_in(text: str) -> str | None:
+    """The first route number inside the text, spelled as `roads_named` takes it, such as
+    "I 89" from "I-89 southbound near Exit 20", or None."""
+    cleaned = " ".join(text.upper().replace(".", "").replace("-", " ").split())
+    found = _ROUTE.search(cleaned)
+    return f"{found['prefix']} {found['number']}" if found else None
 
 
 def _route_alternatives(text: str, *, anywhere: bool) -> list[tuple[str, ...]]:
@@ -410,18 +465,271 @@ def locate_address(snapshot: Snapshot, housenumber: str, street: str) -> Match |
 def locate_intersection(
     snapshot: Snapshot, street_a: str, street_b: str
 ) -> Match | None:
-    """A node that a road named `street_a` and a road named `street_b` share.
+    """Where a road named `street_a` and a road named `street_b` meet.
 
-    Several shared nodes within 150 m, as a divided road gives, are one crossing, and the
-    pin is their centroid. Nodes farther apart mean the two streets cross in more than
-    one place, which is a miss.
+    A node they share comes first. Several shared nodes within 150 m, as a divided road
+    gives, are one crossing, and the pin is their centroid. Nodes farther apart mean the
+    two streets cross in more than one place, which is a miss.
+
+    An overpass or an interchange shares no node, so then the point where a segment of one
+    road crosses a segment of the other is used, or failing that the point where the two
+    pass within 100 m. The same spread rule holds: a long run of road beside another is not
+    a crossing.
     """
-    nodes_a = _node_points(snapshot.roads_named(street_a))
-    nodes_b = _node_points(snapshot.roads_named(street_b))
+    roads_a = snapshot.roads_named(street_a)
+    roads_b = snapshot.roads_named(street_b)
+    return _crossing(roads_a, roads_b, f"{street_a} and {street_b}")
+
+
+def _crossing(roads_a: list[Road], roads_b: list[Road], name: str) -> Match | None:
+    nodes_a = _node_points(roads_a)
+    nodes_b = _node_points(roads_b)
     shared = nodes_a.keys() & nodes_b.keys()
-    if not shared:
+    if shared:
+        points = [nodes_a[node] for node in shared]
+        return _crossing_match(points, f"node/{min(shared)}", name)
+    found = _geometric_crossings(roads_a, roads_b)
+    if not found:
         return None
-    points = [nodes_a[node] for node in shared]
+    points = [point for point, _ in found]
+    return _crossing_match(points, min(ref for _, ref in found), name)
+
+
+def _crossing_match(
+    points: list[tuple[float, float]], osm_ref: str, name: str
+) -> Match | None:
+    spread = max(meters_between(*p, *q) for p in points for q in points)
+    if spread > INTERSECTION_SPREAD_M:
+        return None
+    lat = sum(p[0] for p in points) / len(points)
+    lng = sum(p[1] for p in points) / len(points)
+    return Match(lat, lng, osm_ref, "intersection", name, "")
+
+
+_Segment = tuple[str, tuple[float, float], tuple[float, float]]
+
+
+def _segments(roads: list[Road]) -> list[_Segment]:
+    return [
+        (road.ref, a, b)
+        for road in roads
+        for a, b in zip(road.points, road.points[1:], strict=False)
+    ]
+
+
+def _geometric_crossings(
+    roads_a: list[Road], roads_b: list[Road]
+) -> list[tuple[tuple[float, float], str]]:
+    """Points where segments of the two roads cross, else where they pass within
+    `NEAR_CROSSING_M`, each with the ids of the two ways. A point that crosses wins over
+    any near one."""
+    segments_b = _segments(roads_b)
+    crossings: list[tuple[tuple[float, float], str]] = []
+    near: list[tuple[tuple[float, float], str]] = []
+    for ref_a, a1, a2 in _segments(roads_a):
+        for ref_b, b1, b2 in segments_b:
+            if _boxes_apart(a1, a2, b1, b2, NEAR_CROSSING_M):
+                continue
+            ref = f"{ref_a}+{ref_b}"
+            crossing = _segment_crossing(a1, a2, b1, b2)
+            if crossing is not None:
+                crossings.append((crossing, ref))
+                continue
+            gap, middle = _closest_approach(a1, a2, b1, b2)
+            if gap <= NEAR_CROSSING_M and _meet_at_an_angle(a1, a2, b1, b2):
+                near.append((middle, ref))
+    return crossings or near
+
+
+def _meet_at_an_angle(
+    a1: tuple[float, float],
+    a2: tuple[float, float],
+    b1: tuple[float, float],
+    b2: tuple[float, float],
+) -> bool:
+    """Whether two segments differ in direction by at least 30 degrees. Roads that run side
+    by side pass close for a long way and never cross, so they make no crossing."""
+    ax, ay = _flat(a1, a2)
+    bx, by = _flat(b1, b2)
+    lengths = math.hypot(ax, ay) * math.hypot(bx, by)
+    if lengths == 0:
+        return False
+    return abs(ax * bx + ay * by) / lengths <= math.cos(math.radians(30))
+
+
+def _boxes_apart(
+    a1: tuple[float, float],
+    a2: tuple[float, float],
+    b1: tuple[float, float],
+    b2: tuple[float, float],
+    reach_m: float,
+) -> bool:
+    """Whether the boxes around two segments are farther apart than `reach_m`, which saves
+    the exact test for segments that cannot be close."""
+    reach_lat = reach_m / 110_540
+    reach_lng = reach_m / (111_320 * math.cos(math.radians(a1[0])))
+    return (
+        max(a1[0], a2[0]) + reach_lat < min(b1[0], b2[0])
+        or max(b1[0], b2[0]) + reach_lat < min(a1[0], a2[0])
+        or max(a1[1], a2[1]) + reach_lng < min(b1[1], b2[1])
+        or max(b1[1], b2[1]) + reach_lng < min(a1[1], a2[1])
+    )
+
+
+def _flat(
+    origin: tuple[float, float], point: tuple[float, float]
+) -> tuple[float, float]:
+    """A point in meters east and north of `origin`, flat-earth like `meters_between`."""
+    return (
+        (point[1] - origin[1]) * 111_320 * math.cos(math.radians(origin[0])),
+        (point[0] - origin[0]) * 110_540,
+    )
+
+
+def _unflat(origin: tuple[float, float], x: float, y: float) -> tuple[float, float]:
+    return (
+        origin[0] + y / 110_540,
+        origin[1] + x / (111_320 * math.cos(math.radians(origin[0]))),
+    )
+
+
+def _segment_crossing(
+    a1: tuple[float, float],
+    a2: tuple[float, float],
+    b1: tuple[float, float],
+    b2: tuple[float, float],
+) -> tuple[float, float] | None:
+    """Where segment a1-a2 crosses segment b1-b2, or None when they do not meet."""
+    ax, ay = _flat(a1, a2)
+    bx1, by1 = _flat(a1, b1)
+    bx2, by2 = _flat(a1, b2)
+    dx, dy = bx2 - bx1, by2 - by1
+    denominator = ax * dy - ay * dx
+    if denominator == 0:
+        return None
+    along_a = (bx1 * dy - by1 * dx) / denominator
+    along_b = (bx1 * ay - by1 * ax) / denominator
+    if not (0 <= along_a <= 1 and 0 <= along_b <= 1):
+        return None
+    return _unflat(a1, along_a * ax, along_a * ay)
+
+
+def _closest_approach(
+    a1: tuple[float, float],
+    a2: tuple[float, float],
+    b1: tuple[float, float],
+    b2: tuple[float, float],
+) -> tuple[float, tuple[float, float]]:
+    """The least distance between two segments that do not cross, in meters, and the point
+    halfway between the two closest points. It is at an end of one of them."""
+    best = (math.inf, a1)
+    for end, other_1, other_2 in (
+        (a1, b1, b2),
+        (a2, b1, b2),
+        (b1, a1, a2),
+        (b2, a1, a2),
+    ):
+        ox, oy = _flat(end, other_1)
+        sx, sy = _flat(end, other_2)
+        vx, vy = sx - ox, sy - oy
+        length_sq = vx * vx + vy * vy
+        t = (
+            0.0
+            if length_sq == 0
+            else max(0.0, min(1.0, -(ox * vx + oy * vy) / length_sq))
+        )
+        nearest_x, nearest_y = ox + t * vx, oy + t * vy
+        gap = math.hypot(nearest_x, nearest_y)
+        if gap < best[0]:
+            best = (gap, _unflat(end, nearest_x / 2, nearest_y / 2))
+    return best
+
+
+# Words in a highway row that are not a road: which way, or what is at the spot.
+_HIGHWAY_FILLER = re.compile(
+    r"\b(NORTHBOUND|SOUTHBOUND|NB|SB|INTERCHANGE|WEIGH STATION|ON RAMP|OFF RAMP|RAMPS?)\b"
+)
+_EXIT_PHRASE = re.compile(r"\bEXITS?\s+(\d+[A-Z]?(?:\s*(?:,|AND|&|TO)\s*\d+[A-Z]?)*)")
+_HIGHWAY_SPLIT = re.compile(
+    r"\b(?:NEAR|AT|BEFORE|AFTER|OVER|UNDER|BETWEEN|AND|ON|TO|TOWARD|FROM)\b|,"
+)
+# Exits are told apart by the way a carriageway runs. I-89 runs west to the Connecticut
+# River in Lebanon, so a way that heads toward lower longitude is northbound.
+_NORTHBOUND_ROUTE = "I 89"
+
+
+def locate_highway_point(snapshot: Snapshot, text: str) -> Match | None:
+    """The point a highway row names: its one exit, or the road it meets, or None.
+
+    "I-89 southbound near Exit 17" is the exit's node. "I-89 near Example Rd" and
+    "I-89 at NH Route 120 interchange" are where the two roads cross. Two exits ("between
+    exits 19 and 20") or a mile marker alone name no one point, so they are a miss.
+    """
+    cleaned = " ".join(text.upper().replace(".", "").replace("-", " ").split())
+    route = _ROUTE.search(cleaned)
+    if route is None:
+        return None
+    route_text = f"{route['prefix']} {route['number']}"
+    route_roads = snapshot.roads_named(route_text)
+    if not route_roads:
+        return None
+    exits = {
+        number
+        for phrase in _EXIT_PHRASE.finditer(cleaned)
+        for number in re.findall(r"\d+[A-Z]?", phrase.group(1))
+    }
+    if len(exits) > 1:
+        return None
+    if exits:
+        found = _exit_match(snapshot, route_roads, route_text, cleaned, exits.pop())
+        if found is not None:
+            return found
+    remainder = _EXIT_PHRASE.sub(" ", cleaned.replace(route.group(0), " "))
+    for candidate in _HIGHWAY_SPLIT.split(_HIGHWAY_FILLER.sub(" ", remainder)):
+        name = " ".join(candidate.split())
+        if not name:
+            continue
+        roads = [
+            road
+            for road in snapshot.roads_in(name)
+            if road.ref not in {r.ref for r in route_roads}
+        ]
+        if roads and (
+            match := _crossing(route_roads, roads, f"{route_text} and {name}")
+        ):
+            return match
+    return None
+
+
+def _exit_match(
+    snapshot: Snapshot,
+    route_roads: list[Road],
+    route_text: str,
+    cleaned: str,
+    number: str,
+) -> Match | None:
+    """The junction node for an exit on this route. With a direction in the text, the one
+    on the carriageway that runs that way; with none, the middle of the two."""
+    on_route = {
+        node: (road, index)
+        for road in route_roads
+        for index, node in enumerate(road.nodes)
+    }
+    junctions = [
+        j
+        for j in snapshot.junctions
+        if j.exit == number and int(j.ref.split("/")[1]) in on_route
+    ]
+    wanted = _direction(cleaned) if route_text == _NORTHBOUND_ROUTE else None
+    if wanted is not None:
+        heading = {
+            j.ref: _heading(*on_route[int(j.ref.split("/")[1])]) for j in junctions
+        }
+        same_way = [j for j in junctions if heading[j.ref] == wanted]
+        junctions = same_way or junctions
+    if not junctions:
+        return None
+    points = [(j.lat, j.lng) for j in junctions]
     spread = max(meters_between(*p, *q) for p in points for q in points)
     if spread > INTERSECTION_SPREAD_M:
         return None
@@ -430,11 +738,30 @@ def locate_intersection(
     return Match(
         lat,
         lng,
-        f"node/{min(shared)}",
-        "intersection",
-        f"{street_a} and {street_b}",
+        min(j.ref for j in junctions),
+        "road",
+        f"{route_text} exit {number}",
         "",
     )
+
+
+def _direction(cleaned: str) -> str | None:
+    north = re.search(r"\b(NORTHBOUND|NB)\b", cleaned) is not None
+    south = re.search(r"\b(SOUTHBOUND|SB)\b", cleaned) is not None
+    if north == south:
+        return None
+    return "N" if north else "S"
+
+
+def _heading(road: Road, index: int) -> str | None:
+    """N or S for a way of a motorway at one of its nodes, from the order of its nodes.
+    Other ways, such as a ramp or a two-way road, have no direction here."""
+    if road.highway != "motorway" or len(road.points) < 2:
+        return None
+    after = index + 1 < len(road.points)
+    here, there = (index, index + 1) if after else (index - 1, index)
+    westward = road.points[there][1] < road.points[here][1]
+    return "N" if westward else "S"
 
 
 def place_candidates(

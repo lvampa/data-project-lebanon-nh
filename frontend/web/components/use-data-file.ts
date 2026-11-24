@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { dataUrl } from '@/lib/data'
+import { dataUrl, fetchJson } from '@/lib/data'
 
 export type DataState<T> =
   { status: 'loading' } | { status: 'error'; retry: () => void } | { status: 'ready'; data: T }
@@ -18,11 +18,7 @@ export function useDataFile<T>(filename: string): DataState<T> {
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch(dataUrl(filename), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json() as Promise<T>
-      })
+    fetchJson<T>(dataUrl(filename), controller.signal)
       .then((data) => setResult({ key, value: { ok: true, data } }))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return

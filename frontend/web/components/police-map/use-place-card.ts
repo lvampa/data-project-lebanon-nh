@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { dataUrl } from '@/lib/data'
+import { dataUrl, fetchJson } from '@/lib/data'
 import type { PlaceCard } from '@/lib/types'
 
 export type CardState =
@@ -16,11 +16,7 @@ export function usePlaceCard(id: string | null, attempt = 0): CardState | null {
   useEffect(() => {
     if (!id) return
     const controller = new AbortController()
-    fetch(dataUrl(`places/${encodeURIComponent(id)}.json`), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json() as Promise<PlaceCard>
-      })
+    fetchJson<PlaceCard>(dataUrl(`places/${encodeURIComponent(id)}.json`), controller.signal)
       .then((card) => setState({ key, value: { status: 'ready', card } }))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === 'AbortError') return

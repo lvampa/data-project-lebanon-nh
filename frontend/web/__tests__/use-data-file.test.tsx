@@ -9,7 +9,16 @@ function Probe() {
   return <p>total {file.data.total}</p>
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => vi.unstubAllGlobals())
+
+function TwoFiles() {
+  const first = useDataFile<number>('a.json')
+  const second = useDataFile<number>('b.json')
+  if (first.status !== 'ready' || second.status !== 'ready') {
+    return <DataStatus states={[first, second]} />
+  }
+  return <p>both ready</p>
+}
 
 describe('useDataFile', () => {
   it('shows loading, then the data', async () => {
@@ -33,5 +42,19 @@ describe('useDataFile', () => {
     fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
     await waitFor(() => expect(screen.getByText('total 7')).toBeInTheDocument())
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries every failed file with one click', async () => {
+    const fetchMock = vi.fn((url: string) =>
+      Promise.resolve(
+        fetchMock.mock.calls.length <= 2
+          ? { ok: false, status: 500 }
+          : { ok: true, json: () => Promise.resolve(url.length) },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    render(<TwoFiles />)
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+    expect(await screen.findByText('both ready')).toBeInTheDocument()
   })
 })

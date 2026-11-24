@@ -86,6 +86,11 @@ jobs:
       - name: Typecheck, lint, format and test
         run: bun run check
 
+      # The deploy job builds this same way, so a build break fails the PR, not main.
+      - name: Build
+        working-directory: frontend/web
+        run: bun run build
+
   rust:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -241,8 +246,9 @@ jobs:
         with:
           bun-version-file: frontend/package.json
 
+      # No install scripts, because this job later holds the Cloudflare token.
       - name: Install
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build
         working-directory: frontend/web
@@ -251,13 +257,15 @@ jobs:
           NEXT_PUBLIC_DATA_URL: ${{ vars.NEXT_PUBLIC_DATA_URL }}
         run: bun run build
 
-      # public/ is copied into out/ as is, so a stray dot folder there would be published.
-      - name: Refuse to deploy a build that contains a .claude folder
+      # public/ is copied into out/ as is. The build must hold no data and no dot folder,
+      # so nothing private that sits in public/ can be published.
+      - name: Refuse to deploy a build that contains data or a dot folder
         working-directory: frontend/web
         run: |
-          stray=$(find out -name .claude)
+          stray=$(find out -name '.*' ! -name .well-known -o -path out/data)
           if [ -n "$stray" ]; then
-            echo "Found a .claude folder in the build output."
+            echo "The build output contains data or a dot folder:"
+            echo "$stray"
             exit 1
           fi
 
@@ -267,4 +275,4 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
-        run: bunx wrangler@4.159.0 pages deploy out --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch=main
+        run: bun run wrangler pages deploy out --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch=main

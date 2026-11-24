@@ -1,8 +1,9 @@
-// A route number as the log writes it, so "NH Route 120" and "Route 120" are one road.
+// A route number as the log writes it, so "NH Route 120" and "Route 120" are one road, and
+// so are "I-89" and "I-89 South".
 // This is the same rule as locations/osm.py: the text is upper case, with dots dropped and
 // hyphens as spaces, so "I-89" is "I 89".
 const ROUTE =
-  /^(INTERSTATE|NEW HAMPSHIRE ROUTE|STATE ROUTE|STATE RTE|STATE RT|STATE HWY|US ROUTE|US HIGHWAY|US HWY|NH ROUTE|NH RTE|NH RT|NH HWY|ROUTE|HIGHWAY|RTE|RT|HWY|US|U S|NH|I)\s*(\d{1,3}[A-Z]?)$/
+  /^(INTERSTATE|NEW HAMPSHIRE ROUTE|STATE ROUTE|STATE RTE|STATE RT|STATE HWY|US ROUTE|US HIGHWAY|US HWY|NH ROUTE|NH RTE|NH RT|NH HWY|ROUTE|HIGHWAY|RTE|RT|HWY|US|U S|NH|I)\s*(\d{1,3}[A-Z]?)(?:\s+(?:NORTH|SOUTH|EAST|WEST|NORTHBOUND|SOUTHBOUND|EASTBOUND|WESTBOUND|NB|SB|EB|WB))?$/
 const BARE = new Set(['ROUTE', 'HIGHWAY', 'RTE', 'RT', 'HWY'])
 
 function parse(name: string): { prefix: string; number: string } | null {

@@ -58,7 +58,7 @@ export function parseCrossing(name: string): [string, string] | null {
 
 const EXIT_PHRASE = /\bexits?\s+\d+[a-z]?(?:\s*(?:and|to|-)\s*\d+[a-z]?)?/gi
 const NOT_A_ROAD =
-  /\b(northbound|southbound|eastbound|westbound|nb|sb|(on|off)[- ]?ramp|ramps?|rest area|weigh station|underpass|median|(left|right|breakdown|passing) lane|interchange|mile marker [\d.]+)\b/gi
+  /\b((?:north|south|east|west)bound lane|northbound|southbound|eastbound|westbound|nb|sb|(on|off)[- ]?ramp|ramps?|rest area|weigh station|underpass|median|(left|right|breakdown|passing) lane|left turn|right turn|just|(north|south|east|west) of|interchange|mile marker [\d.]+)\b/gi
 const BETWEEN_PARTS =
   /\b(?:near|at|between|over|under|toward|before|after|from|with|onto|and)\b|[,()]/i
 
@@ -98,6 +98,9 @@ function explicitRoutes(names: string[]): Set<string> {
   }
   return found
 }
+
+// "Between 14 and 17 Village Ln" is on Village Ln, between two house numbers.
+const HOUSE_NUMBER_RANGE = /^between\s+\d+[a-z]?\s+and\s+\d+[a-z]?\s+(.+)$/i
 
 function addWeeks(into: number[], weeks: number[]): number[] {
   const sum = [...into, ...new Array(Math.max(0, weeks.length - into.length)).fill(0)]
@@ -155,9 +158,9 @@ export function buildRoads(
       continue
     }
     const road = roadFor(pin.name)
-    road.name = pin.name
     // Two pins with one name are one road, shown on the busier. The map still draws both.
     const known = road.own
+    if (!known || pin.n > known.n) road.name = pin.name
     road.own = {
       id: known && known.n >= pin.n ? known.id : pin.id,
       n: (known?.n ?? 0) + pin.n,
@@ -196,6 +199,16 @@ export function buildRoads(
     if (legs) cross(pin, legs[0], legs[1])
   }
   for (const pin of spots) {
+    const street = HOUSE_NUMBER_RANGE.exec(pin.name)?.[1]
+    if (street) {
+      roadFor(street).items.push({
+        id: pin.id,
+        other: 'between house numbers',
+        n: pin.n,
+        weeks: pin.weeks,
+      })
+      continue
+    }
     const spot = parseSpot(
       pin.name,
       (text) => roads.has(keyOf(text)) || routeKey(text, explicit) !== null,
@@ -237,7 +250,12 @@ export function buildRoads(
       showId: own?.id ?? items[0].id,
     }
   })
-  result.sort((a, b) => b.headline - a.headline || a.name.localeCompare(b.name))
+  // The map's number leads each card, but a road is ranked by all of its activity, so a highway
+  // whose entries are mostly at its exits and crossings is not buried.
+  // With no pin of its own the headline already is its crossings.
+  const activity = (road: Road) =>
+    road.hasOwnPin ? road.headline + road.atCrossings : road.headline
+  result.sort((a, b) => activity(b) - activity(a) || a.name.localeCompare(b.name))
   const crossingList = [...crossings.values()].sort(
     (a, b) => b.n - a.n || a.name.localeCompare(b.name),
   )

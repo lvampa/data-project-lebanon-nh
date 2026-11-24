@@ -21,6 +21,8 @@ const pick = (roads: ReturnType<typeof roadsOf>['roads'], name: string) =>
 describe('routeKey', () => {
   it.each([
     ['I-89', 'I 89'],
+    ['I-89 South', 'I 89'],
+    ['Route 120 North', 'NH 120'],
     ['Interstate 89', 'I 89'],
     ['NH Route 120', 'NH 120'],
     ['Route 120', 'NH 120'],
@@ -168,14 +170,29 @@ describe('buildRoads', () => {
     ])
   })
 
-  it('sorts roads by the number they lead with', () => {
+  it('sorts roads by all of their activity, not only the number they lead with', () => {
     const { roads } = roadsOf([
       road('Small St', 3),
       road('Big St', 30),
       road('Alpha Rd and Small St', 50),
     ])
 
-    expect(roads.map((r) => r.name)).toEqual(['Alpha Rd', 'Big St', 'Small St'])
+    expect(roads.map((r) => r.name)).toEqual(['Small St', 'Alpha Rd', 'Big St'])
+  })
+
+  it('ranks a highway whose entries are mostly at its exits above a busier street', () => {
+    const { roads } = roadsOf([
+      road('I-89', 79),
+      road('I-89 southbound near Exit 18', 500),
+      road('I-89 near Mechanic St', 300),
+      road('Mechanic St', 700),
+    ])
+
+    expect(roads.map((r) => [r.name, r.headline])).toEqual([
+      ['Mechanic St', 700],
+      ['I-89', 79],
+    ])
+    expect(roads[0].atCrossings).toBe(300)
   })
 
   it('leaves out a pin with no entries', () => {
@@ -290,6 +307,39 @@ describe('buildRoads', () => {
       const route = roads.filter((r) => routeKey(r.name, new Set(['US 4'])) === 'US 4')
       expect(route).toHaveLength(1)
       expect([route[0].headline, route[0].atCrossings]).toEqual([15, 2])
+    })
+
+    it.each([
+      'I-89 northbound just before exit 20',
+      'I-89 southbound just south of Exit 20',
+      'I-89 southbound left turn at Exit 20',
+      'I-89 southbound lane near Exit 20',
+    ])('counts "%s" as a point on I-89 at its exit', (name) => {
+      const { roads } = roadsOf([road('I-89', 5), road(name, 2)])
+
+      expect(roads).toHaveLength(1)
+      expect(roads[0].crossings.map((c) => [c.other, c.n])).toEqual([['Exit 20', 2]])
+    })
+
+    it('joins "I-89 South" and "Route 120 North" to their routes', () => {
+      const { roads } = roadsOf([
+        road('I-89', 79),
+        road('I-89 South', 2),
+        road('NH Route 120', 149),
+        road('Route 120 North', 1),
+      ])
+
+      expect(roads.map((r) => [r.name, r.headline])).toEqual([
+        ['NH Route 120', 150],
+        ['I-89', 81],
+      ])
+    })
+
+    it('counts a house-number range on a street toward that street', () => {
+      const { roads } = roadsOf([road('Village Ln', 8), road('Between 14 and 17 Village Ln', 3)])
+
+      expect(roads).toHaveLength(1)
+      expect([roads[0].name, roads[0].headline, roads[0].atCrossings]).toEqual(['Village Ln', 8, 3])
     })
 
     it('keeps a name with no road in it as a road of its own', () => {

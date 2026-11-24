@@ -68,7 +68,6 @@ export function PoliceViews({ addresses, stats }: Props) {
     filters: DEFAULT_FILTERS,
     mode: 'roads',
   })
-  const [attempt, setAttempt] = useState(0)
   // Roads count every entry or only traffic, so a link with another kind opens on all.
   const filters = withRoadsKind(view, asRead)
 
@@ -90,7 +89,7 @@ export function PoliceViews({ addresses, stats }: Props) {
   const setFilters = (next: Filters) => go({ view, filters: next, mode })
 
   const wanted = view !== 'map' || !isDefault(filters)
-  const state = useActivity(addresses, wanted, attempt)
+  const state = useActivity(addresses, wanted)
   const activity = state.status === 'ready' ? state.activity : null
 
   const derived = useDerived(activity, addresses, stats, filters)
@@ -152,7 +151,7 @@ export function PoliceViews({ addresses, stats }: Props) {
       ) : (
         <div>
           {state.status === 'error' ? (
-            <LoadError onRetry={() => setAttempt((n) => n + 1)} />
+            <LoadError onRetry={state.retry} />
           ) : !activity || !derived ? (
             <p className="py-10 text-muted-foreground">Loading the activity…</p>
           ) : view === 'places' ? (
@@ -194,7 +193,7 @@ export function PoliceViews({ addresses, stats }: Props) {
           )}
         </div>
       )}
-      {onMap && state.status === 'error' && <LoadError onRetry={() => setAttempt((n) => n + 1)} />}
+      {onMap && state.status === 'error' && <LoadError onRetry={state.retry} />}
       <ChartTooltip />
     </div>
   )

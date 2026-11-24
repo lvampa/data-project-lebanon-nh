@@ -22,6 +22,9 @@ class DagSpec:
     triggers: tuple[str, ...] = ()
     # Keyword arguments for airflow.models.param.Param, keyed by param name.
     params: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # An Airflow Connection the task reads when it runs, when the command needs one. The
+    # task then runs as a Python task, so the secret goes to the command's environment only.
+    connection: str | None = None
 
 
 SPECS = [
@@ -148,5 +151,17 @@ SPECS = [
         command="scrapy crawl budget_discovery",
         timeout=timedelta(hours=1),
         tags=("budget",),
+    ),
+    DagSpec(
+        dag_id="publish_data",
+        # By hand: the location normalization and geocoding it depends on run outside the
+        # police-log chain, so no clock time is right. The script refuses an old prompt.
+        schedule=None,
+        command="bash scripts/deploy-data.sh",
+        # The export reads the whole database, and the sync uploads about 1,500 files.
+        timeout=timedelta(hours=2),
+        tags=("publish",),
+        # The R2 key pair, endpoint and bucket come from the `r2_data` Airflow Connection.
+        connection="r2_data",
     ),
 ]

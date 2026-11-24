@@ -68,7 +68,12 @@ export function IncidentsTable({ incidents }: Props) {
               </TableCell>
               <TableCell className="text-xs">
                 {row.source_url ? (
-                  <Link href={row.source_url} target="_blank" className="underline">
+                  <Link
+                    href={row.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
                     {row.case_number ?? '—'}
                   </Link>
                 ) : (

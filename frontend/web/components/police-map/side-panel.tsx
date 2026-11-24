@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { FilteredCard } from '@/components/police-map/filtered-section'
 import { ReportCard } from '@/components/police-map/report-card'
 import { TownSummary } from '@/components/police-map/town-summary'
@@ -18,8 +18,7 @@ interface Props {
 
 // The panel beside the map: the report card of the selected place, or the town as a whole.
 export function SidePanel({ addresses, stats, place, onChoose, onClose, filtered = null }: Props) {
-  const [attempt, setAttempt] = useState(0)
-  const state = usePlaceCard(place?.id ?? null, attempt)
+  const state = usePlaceCard(place?.id ?? null)
   const kind = place?.kind
   const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
   const counts = useMemo(() => (kind ? rankCounts(addresses, kind) : []), [addresses, kind])
@@ -47,7 +46,6 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose, filtered
       year={stats.since.slice(0, 4)}
       since={stats.since}
       onClose={onClose}
-      onRetry={() => setAttempt((n) => n + 1)}
       filtered={filtered}
     />
   )

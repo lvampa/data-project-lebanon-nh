@@ -81,10 +81,15 @@ jobs:
       - name: Install
         env:
           BUN_INSTALL_CACHE_DIR: ${{ runner.temp }}/bun-install-cache
-        run: bun install --frozen-lockfile
+        run: bun ci --ignore-scripts
 
       - name: Typecheck, lint, format and test
         run: bun run check
+
+      # The build check before the deploy on main, so a build break fails here first.
+      - name: Build
+        working-directory: frontend/web
+        run: bun run build
 
   rust:
     runs-on: ubuntu-latest

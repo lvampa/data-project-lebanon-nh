@@ -16,7 +16,7 @@ use std::path::PathBuf;
 #[command(about = "Generate static JSON report files from PostgreSQL")]
 struct Args {
     /// Output directory for JSON files
-    #[arg(long, default_value = "frontend/web/public/data")]
+    #[arg(long, default_value = "data/export")]
     output_dir: PathBuf,
 
     /// First day of police log data to publish, as YYYY-MM-DD

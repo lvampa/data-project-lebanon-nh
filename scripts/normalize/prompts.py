@@ -20,6 +20,11 @@ from scripts.normalize.streets import street_list_version
 
 INCIDENT_TYPE_PROMPT_VERSION = "incident_type-1"
 LOCATION_PROMPT_VERSION = "location-3"
+# The first location prompt that flags a location as naming a person. An older answer has no
+# flag, so its rows could publish a name in full. Later versions changed matching, not privacy,
+# so the export check requires this one, not the current one. Raise it only when a prompt
+# change affects what the flag catches.
+MIN_PRIVACY_LOCATION_PROMPT = 2
 
 LocationKind = Literal["address", "intersection", "place", "highway"]
 

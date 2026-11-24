@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Export Postgres data to frontend/web/public/data for the static build.
-# The output is gitignored; scripts/deploy.sh runs this before building.
+# Export Postgres data to data/export. The output is gitignored; local dev serves it with
+# `bun run dev` in frontend/web, and a later publish step uploads it.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -34,7 +34,13 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 echo "→ Generating report..."
+# The Airflow image has no Rust toolchain, so it sets REPORT_GEN_BIN to a built binary.
+if [ -n "${REPORT_GEN_BIN:-}" ]; then
+  report_gen=("$REPORT_GEN_BIN")
+else
+  report_gen=(cargo run -p report-gen --release --)
+fi
 # The first day of police data the public site covers.
-cargo run -p report-gen --release -- \
+"${report_gen[@]}" \
   --since 2026-01-01 \
-  --output-dir "$REPO_ROOT/frontend/web/public/data"
+  --output-dir "$REPO_ROOT/data/export"

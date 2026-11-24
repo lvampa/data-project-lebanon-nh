@@ -87,7 +87,7 @@ scripts/                  generate_report.sh, deploy.sh
 1. `build_daily_urls` spider → scrapes PDF links → inserts them into PostgreSQL `pdf_urls` as `pending`
 2. `process_urls` spider → claims `pending` URLs with `FOR UPDATE SKIP LOCKED` (recording `claimed_at` and `attempts`) → downloads PDFs → extracts text → yields one `PoliceLogPdfItem` per PDF carrying its text
 3. `PoliceLogPipeline` → calls `ingest_pdf_url` in `scrapers/ingest/police_log.py`, which parses the text, validates each entry via Pydantic, and upserts `log_entries` (keyed on `case_number`) → the URL becomes `complete` in the same commit, or `error` with a kind (`download`, `parse`, `save`)
-4. `scripts/deploy.sh` → runs `generate_report.sh` to export JSON into `public/data/` (gitignored) → `bun run build` → `wrangler pages deploy`
+4. `scripts/generate_report.sh` exports JSON into `data/export/` (gitignored). The site's code deploys from CI on merge to main through `scripts/deploy.sh`, with no data in the build. `scripts/deploy-data.sh` holds unsafe person locations (`privacy-holds mark`), exports, runs `uv run check-export`, and syncs the folder to R2 (see `docs/specs/site-deploy/design.md`)
 
 ### Key Patterns
 
@@ -111,9 +111,23 @@ uv run python run_process_urls.py --limit 10   # exits non-zero if a PDF fails
 # Tests
 uv run pytest
 
-# Generate + deploy
-bash scripts/generate_report.sh              # exports JSON and commits
-bash scripts/deploy.sh                       # deploys to Cloudflare Pages
+# Generate the data for local dev
+bash scripts/generate_report.sh              # exports JSON to data/export
+
+# Publish the data to R2. By hand it needs R2_BUCKET, CLOUDFLARE_ACCOUNT_ID and AWS_PROFILE
+# (`aws configure --profile <name>`). The Airflow publish_data DAG runs it with the r2_data
+# Connection, made in the Airflow UI; see docs/specs/site-deploy/design.md.
+bash scripts/deploy-data.sh [--dry-run]      # export, check, then sync
+
+# Hold person locations that are not clearly safe, and release them after a look
+uv run privacy-holds list                    # id, kind and raw text, for your terminal only
+uv run privacy-holds handled <id> [<id>...]
+
+# Local dev has no data server. Without NEXT_PUBLIC_DATA_URL the data pages show the error
+# state. Set it to the R2 URL in frontend/web/.env.local to read live data.
+
+# Deploy by hand (CI runs the same script on merge to main)
+bash scripts/deploy.sh [--dry-run]           # ships whatever is checked out
 ```
 
 ### Testing Conventions
@@ -129,7 +143,7 @@ bash scripts/deploy.sh                       # deploys to Cloudflare Pages
 
 - Use `uv` instead of `pip` for all Python package management (`uv add`, `uv run`, `uv sync`)
 - Use `docker compose` (not `docker-compose`) for Airflow, Mongo, Postgres
-- Use `wrangler pages deploy` (via `bash scripts/deploy.sh`) for Cloudflare Pages deployment
+- Cloudflare Pages deploys from `.github/workflows/deploy.yml` on merge to main, and the workflow only runs `scripts/deploy.sh`. Use that script, not a bare `wrangler pages deploy`. A redeploy is "Re-run all jobs" on the last run (re-running an older run rolls production back to that commit; use Pages Rollback for that), and another branch deploys with a local `scripts/deploy.sh`, run from the repo root.
 - Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
 - CI (`.github/workflows/ci.yml`) runs the pre-push checks plus Rust and, when Docker inputs change, the image builds; `ci-ok` is the one required check.

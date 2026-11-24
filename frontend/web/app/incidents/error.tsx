@@ -18,7 +18,7 @@ export default function Error({
   return (
     <ErrorPanel
       title="Failed to load incidents"
-      message="The incidents data could not be loaded. Please try again."
+      message="Something went wrong showing the incidents. Please try again."
       onRetry={retry}
     />
   )

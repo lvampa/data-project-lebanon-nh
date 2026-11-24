@@ -4,7 +4,7 @@ import { HowWeCount } from '@/components/police-map/how-we-count'
 import { CallRow } from '@/components/police-map/call-row'
 import { FilteredSection, type FilteredCard } from '@/components/police-map/filtered-section'
 import { OutcomeLabel, TypeLabel } from '@/components/police-map/labels'
-import type { CardState } from '@/components/police-map/use-place-card'
+import type { DataState } from '@/components/use-data-file'
 import { categoriesFor } from '@/lib/police-map/categories'
 import { remainder } from '@/lib/police-map/card'
 import { isApproximatePlace, streetTotal } from '@/lib/police-map/approximate'
@@ -28,13 +28,12 @@ interface Props {
   // The approximate places listed on this street's card, busiest first.
   onStreet: Address[]
   onChoose: (id: string) => void
-  state: CardState
+  state: DataState<PlaceCard>
   // The call count of every pin of this kind, for the rank.
   counts: number[]
   year: string
   since: string
   onClose: () => void
-  onRetry: () => void
   // Set while filters are on: the count above is the filtered one, and the card says so.
   filtered?: FilteredCard | null
 }
@@ -54,7 +53,6 @@ export function ReportCard({
   year,
   since,
   onClose,
-  onRetry,
   filtered = null,
 }: Props) {
   const road = address.kind === 'road'
@@ -119,7 +117,7 @@ export function ReportCard({
           <p>The details for this place did not load.</p>
           <button
             type="button"
-            onClick={onRetry}
+            onClick={state.retry}
             className="mt-2 font-medium text-primary underline underline-offset-4"
           >
             Try again
@@ -127,7 +125,7 @@ export function ReportCard({
         </div>
       )}
       {state.status === 'ready' && (
-        <CardDetails address={address} card={state.card} street={street} onStreet={onStreet} />
+        <CardDetails address={address} card={state.data} street={street} onStreet={onStreet} />
       )}
 
       {/* 7. Method */}

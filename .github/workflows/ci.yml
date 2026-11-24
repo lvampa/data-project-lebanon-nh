@@ -86,10 +86,13 @@ jobs:
       - name: Typecheck, lint, format and test
         run: bun run check
 
-      # The deploy workflow builds this same way, so a build break fails the PR, not main.
-      - name: Build
-        working-directory: frontend/web
-        run: bun run build
+      # The same script the deploy workflow runs, stopped before the upload. The planted file
+      # proves the build output is cleared of data, so a broken guard fails the PR, not main.
+      - name: Dry-run the deploy
+        run: |
+          mkdir -p web/public/data
+          echo '{}' > web/public/data/stats.json
+          CLOUDFLARE_PAGES_PROJECT=ci bash ../scripts/deploy.sh --dry-run
 
   rust:
     runs-on: ubuntu-latest

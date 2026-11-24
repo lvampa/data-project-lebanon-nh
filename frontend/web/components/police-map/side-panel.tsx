@@ -18,7 +18,7 @@ interface Props {
 
 // The panel beside the map: the report card of the selected place, or the town as a whole.
 export function SidePanel({ addresses, stats, place, onChoose, onClose, filtered = null }: Props) {
-  const { state, retry } = usePlaceCard(place?.id ?? null)
+  const state = usePlaceCard(place?.id ?? null)
   const kind = place?.kind
   const places = useMemo(() => new Map(addresses.map((a) => [a.id, a])), [addresses])
   const counts = useMemo(() => (kind ? rankCounts(addresses, kind) : []), [addresses, kind])
@@ -46,7 +46,6 @@ export function SidePanel({ addresses, stats, place, onChoose, onClose, filtered
       year={stats.since.slice(0, 4)}
       since={stats.since}
       onClose={onClose}
-      onRetry={retry}
       filtered={filtered}
     />
   )

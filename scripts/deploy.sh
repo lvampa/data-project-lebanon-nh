@@ -21,6 +21,12 @@ esac
 [ "$#" -le 1 ] || die "too many arguments"
 [ -n "${CLOUDFLARE_PAGES_PROJECT:-}" ] || die "CLOUDFLARE_PAGES_PROJECT is not set"
 
+# A hand run ships whatever is checked out, so say what is about to replace production.
+# This informs the operator and does not stop the upload. It is read first so a missing
+# git history fails before the build.
+dirty=$([ -n "$(git status --porcelain)" ] && echo "with local changes" || echo "clean")
+shipping="$(git rev-parse --abbrev-ref HEAD) at $(git rev-parse --short HEAD) ($dirty)"
+
 # The install and the build run code from the whole dependency tree, so they never get
 # the Cloudflare credentials. Only the upload below does.
 without_credentials() {
@@ -50,12 +56,7 @@ if $dry_run; then
   exit 0
 fi
 
-# A hand run ships whatever is checked out, so say what is about to replace production.
-# This informs the operator and does not stop the upload.
-branch=$(git rev-parse --abbrev-ref HEAD)
-commit=$(git rev-parse --short HEAD)
-dirty=$([ -n "$(git status --porcelain)" ] && echo "with local changes" || echo "clean")
-echo "→ Deploying $branch at $commit ($dirty) to Cloudflare Pages..."
+echo "→ Deploying $shipping to Cloudflare Pages..."
 bun run wrangler pages deploy out --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch=main
 
 echo "✓ Done."

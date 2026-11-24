@@ -31,6 +31,7 @@ Four pages used to read `public/data` while building: incidents, properties, pub
 They now fetch their JSON in the browser through `useDataFile`, and show a loading state, then an error with a Try again button.
 The two fetches that already ran in the browser, `activity.json` and each place card, use the same base through `fetchDataFile`, and a place card is read with `useDataFile`.
 `useDataFile` fetches each file once per page load, so moving between pages does not download it again.
+`activity.json` is fetched by its own hook and is already asked for once.
 
 The base is `NEXT_PUBLIC_DATA_URL`, and it defaults to `/data`.
 Local dev and `generate_report.sh` are unchanged: the export still lands in `public/data` and Next serves it.

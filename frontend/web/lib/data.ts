@@ -21,7 +21,7 @@ export function dataUrl(filename: string): string {
   return `${DATA_URL}/${filename}`
 }
 
-export async function fetchDataFile<T>(filename: string, signal: AbortSignal): Promise<T> {
+export async function fetchDataFile<T>(filename: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(dataUrl(filename), { signal })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return (await response.json()) as T

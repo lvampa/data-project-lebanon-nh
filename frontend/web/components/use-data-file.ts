@@ -13,7 +13,7 @@ function loadOnce<T>(filename: string): Promise<T> {
   let load = loads.get(filename) as Promise<T> | undefined
   if (!load) {
     // The load is shared, so no single page's unmount can abort it.
-    load = fetchDataFile<T>(filename, new AbortController().signal)
+    load = fetchDataFile<T>(filename)
     loads.set(filename, load)
     load.catch(() => loads.delete(filename))
   }

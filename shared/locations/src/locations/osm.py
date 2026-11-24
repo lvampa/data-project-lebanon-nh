@@ -62,7 +62,7 @@ _FEATURE_KINDS = (
     "building",
 )
 
-Via = Literal["address", "intersection", "road", "llm"]
+Via = Literal["address", "intersection", "road", "exit", "llm"]
 
 
 @dataclass(frozen=True)
@@ -710,9 +710,11 @@ def _exit_match(
 ) -> Match | None:
     """The junction node for an exit on this route. With a direction in the text, the one
     on the carriageway that runs that way; with none, the middle of the two."""
+    # A node on both a carriageway and a ramp takes the carriageway, so its heading is the
+    # carriageway's. Motorway ways are put last, which is the one a dict keeps.
     on_route = {
         node: (road, index)
-        for road in route_roads
+        for road in sorted(route_roads, key=lambda r: r.highway == "motorway")
         for index, node in enumerate(road.nodes)
     }
     junctions = [
@@ -739,7 +741,7 @@ def _exit_match(
         lat,
         lng,
         min(j.ref for j in junctions),
-        "road",
+        "exit",
         f"{route_text} exit {number}",
         "",
     )

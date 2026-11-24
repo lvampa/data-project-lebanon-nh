@@ -200,8 +200,23 @@ def test_an_exit_is_its_junction_node():
     match = locate_highway_point(highway_snapshot(), "I-89 near Exit 17")
 
     assert match is not None
-    assert (match.via, match.precision) == ("road", "exact")
+    assert (match.via, match.precision) == ("exit", "exact")
     assert meters_between(match.lat, match.lng, 43.6509, -72.2100) < 1
+
+
+def test_an_exit_node_shared_with_a_ramp_still_takes_the_carriageway_heading():
+    ramp = way(
+        13,
+        {"highway": "motorway_link", "ref": "I 89"},
+        (21, 43.6510, -72.2100),
+        (50, 43.6520, -72.2110),
+    )
+    snap = snapshot([NORTHBOUND, SOUTHBOUND, ramp], EXITS)
+
+    south = locate_highway_point(snap, "I-89 southbound near Exit 17")
+
+    assert south is not None
+    assert south.osm_ref == "node/31"
 
 
 def test_an_exit_with_a_direction_takes_that_carriageway():

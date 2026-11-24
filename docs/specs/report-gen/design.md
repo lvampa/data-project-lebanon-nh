@@ -8,23 +8,20 @@
 
 `report-gen` is a Rust binary that connects to PostgreSQL, runs read-only queries, and writes one JSON file for each of five outputs for the static frontend.
 The police log queries are files in `tools/report-gen/src/sql/`, which `db.rs` includes.
-`scripts/generate_report.sh` runs it in release mode, and `scripts/deploy.sh` runs that script before building and deploying the site.
+`scripts/generate_report.sh` runs it in release mode.
 The output lands in `frontend/web/public/data/`, which is gitignored because it carries names and owner addresses.
 It replaced two Python generators.
 
 ## Data flow
 
 ```
-scripts/deploy.sh
-  ├─ scripts/generate_report.sh   load .env, derive DATABASE_URL from POSTGRES_* if unset,
-  │                               then cargo run -p report-gen --release -- --since 2026-01-01 --output-dir <dir>
-  │     stats.json  incidents.json  addresses.json  staff.json  properties.json
-  ├─ bun run build                (frontend/web)
-  └─ wrangler pages deploy        (frontend/web/out)
+scripts/generate_report.sh   load .env, derive DATABASE_URL from POSTGRES_* if unset,
+                             then cargo run -p report-gen --release -- --since 2026-01-01 --output-dir <dir>
+      stats.json  incidents.json  addresses.json  staff.json  properties.json
 ```
 
 Each query runs and its file is written before the next starts.
-`main` returns `anyhow::Result<()>`, so any error prints and exits 1, and the deploy script stops before building.
+`main` returns `anyhow::Result<()>`, so any error prints and exits 1, and the script stops.
 
 ## What each file holds
 
@@ -64,10 +61,8 @@ A type mismatch shows up at run time, as it did with `EXTRACT(DOW)`, which retur
   Runtime queries build anywhere, and catch type mismatches only when run.
 - **Write each file right after its query.**
   Rejected: fetching everything first and then writing, which would avoid partial output.
-  The deploy script already refuses to build from a failed run.
 - **Generated data is not committed.**
-  The publish script used to commit the JSON for a CI deploy, but there is no CI deploy, and the files carry names and owner addresses.
-  The deploy script regenerates the data right before it builds.
+  The files carry names and owner addresses, so they are regenerated locally and never committed.
   Rejected: empty placeholder files in git, which would let a build without the exporter ship empty pages.
 - **Incidents with no reported time sort last, and the cap is printed.**
   The stdout line shows the row count next to the total, so a run that hits the 2,000 cap says so.

@@ -15,6 +15,7 @@ It needs `ci-ok`, so it runs only after every check passed on that commit.
 The frontend job also runs `bun run build` on every PR, so a build break fails the PR and not main.
 The deploy job runs `bun install --frozen-lockfile --ignore-scripts` and `bun run build` in `frontend/web`, then `wrangler pages deploy out --branch=main`.
 There is no staging step and no smoke check: if the build passes, it ships.
+The old hand-run `scripts/deploy.sh` is removed, so CI is the only thing that uploads to the Pages project.
 
 ## Data in the browser
 

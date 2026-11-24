@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Export Postgres data to frontend/web/public/data for the static build.
-# The output is gitignored; scripts/deploy.sh runs this before building.
+# The output is gitignored and is for local dev.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

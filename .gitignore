@@ -224,8 +224,8 @@ scripts/data/budgets/*.pdf
 scripts/data/budgets/*.txt
 scripts/data/budget_data.json
 
-# report-gen output. It holds names and owner addresses, and deploy.sh
-# regenerates it before every build.
+# report-gen output. It holds names and owner addresses, so it is regenerated
+# locally and never committed.
 frontend/web/public/data/
 
 # Local scratch files, not for commit

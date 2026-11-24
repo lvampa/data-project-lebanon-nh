@@ -20,8 +20,8 @@ The script runs `bun ci --ignore-scripts`, then `bun run build` in `frontend/web
 `--dry-run` stops before the upload.
 There is no staging step and no smoke check: if the build passes, it ships.
 `scripts/deploy.sh` replaces the old hand-run script, which uploaded a build with data in it and ran no checks.
-Outside CI (`GITHUB_ACTIONS` unset) the script refuses to run unless the branch is `main`, the tree is clean, nothing ignored but `public/data` sits in `public/` or is a `.env*` file, and HEAD is `origin/main` after a fetch.
-So a hand run cannot ship an untested branch or an ignored file that CI would not have.
+A hand run ships whatever is checked out, on any branch, with local changes and ignored files such as a `.env.local`.
+That is the operator's call, and CI is the path that builds a clean checkout of main.
 It reads `CLOUDFLARE_PAGES_PROJECT`, and auth comes from `wrangler login` locally or the token in CI.
 
 ## Data in the browser

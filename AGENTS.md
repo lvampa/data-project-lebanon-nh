@@ -115,7 +115,7 @@ uv run pytest
 bash scripts/generate_report.sh              # exports JSON to public/data
 
 # Deploy by hand (CI runs the same script on merge to main)
-bash scripts/deploy.sh [--dry-run]           # needs main, clean tree, at origin/main
+bash scripts/deploy.sh [--dry-run]           # ships whatever is checked out
 ```
 
 ### Testing Conventions

@@ -28,14 +28,17 @@ without_credentials() {
 }
 
 cd "$(dirname "$0")/../frontend"
+echo "→ Installing dependencies..."
 without_credentials bun ci --ignore-scripts
 
 cd web
+echo "→ Building web..."
 without_credentials bun run build
 
 # Next copies public/ into out/, and a local checkout has public/data. The site fetches its
 # data in the browser, so none of it belongs in the build. Deleting from out/ leaves
 # public/data alone, so even a failed build cannot lose it.
+echo "→ Checking the build has no data..."
 rm -r -- out/data 2>/dev/null || true
 
 # What is left in out/ is what gets published: no data and no dot folders.
@@ -43,7 +46,11 @@ stray=$(find out -name '.*' ! -name .well-known -o -path out/data)
 [ -z "$stray" ] || die "the build output contains data or a dot folder: $stray"
 
 if $dry_run; then
-  echo "deploy: dry run, not uploading"
+  echo "✓ Dry run, not uploading."
   exit 0
 fi
+
+echo "→ Deploying to Cloudflare Pages..."
 bun run wrangler pages deploy out --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch=main
+
+echo "✓ Done."

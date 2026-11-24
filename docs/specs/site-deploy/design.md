@@ -74,6 +74,10 @@ Repository settings, set by the operator:
 - Secret `CLOUDFLARE_API_TOKEN`, in the `production` environment, with the Cloudflare Pages: Edit permission only.
 - Variable `CLOUDFLARE_ACCOUNT_ID`.
 - Variable `CLOUDFLARE_PAGES_PROJECT`, the name of the Pages project.
+- Branch protection on main: `ci-ok` required, "Require branches to be up to date before merging" on, and direct pushes blocked with no admin bypass.
+  The deploy workflow does not wait on `ci-ok`, so these settings are what stop untested code from shipping.
+  A push that bypasses them deploys whatever it contains, and the script catches a broken build but not a failing test.
+- The `production` environment limited to the main branch.
 - Variable `NEXT_PUBLIC_DATA_URL`, later, once the data host exists.
 
 ## Decisions

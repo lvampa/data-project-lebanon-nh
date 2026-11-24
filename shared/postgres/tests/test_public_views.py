@@ -362,3 +362,54 @@ def test_an_unflagged_row_never_takes_a_street_name(db_session):
     add_location(db_session, "SHOP")
 
     assert location(db_session, "SHOP")["normalized_address"] == "Shop"
+
+
+def test_a_held_location_has_no_name_street_or_pin(db_session):
+    add_bare_street(db_session)
+    add_location(db_session, "HELD PLACE", names_person=True, privacy_hold=True)
+
+    row = location(db_session, "HELD PLACE")
+
+    assert (row["normalized_address"], row["kind"], row["street"]) == (None, None, None)
+    assert (row["names_person"], row["lat"], row["lng"]) == (False, None, None)
+
+
+def test_a_held_locations_entries_stay_with_no_location(db_session):
+    add_bare_street(db_session)
+    add_location(db_session, "HELD PLACE", names_person=True, privacy_hold=True)
+    add_entry(db_session, 1, location="HELD PLACE")
+
+    row = entry(db_session, 1)
+
+    assert row["location"] is None
+    assert row["case_number"] == "26-1"
+
+
+def test_a_handled_hold_publishes_as_a_flagged_location_with_its_street_only(
+    db_session,
+):
+    add_bare_street(db_session)
+    add_location(
+        db_session,
+        "HELD PLACE",
+        names_person=True,
+        privacy_hold=True,
+        privacy_handled_at=NOW,
+    )
+
+    row = location(db_session, "HELD PLACE")
+
+    assert (row["normalized_address"], row["kind"], row["street"]) == (
+        "Main St",
+        "road",
+        "MAIN ST",
+    )
+    assert (row["names_person"], row["lat"], row["lng"]) == (True, None, None)
+
+
+def test_a_hold_on_an_unflagged_row_still_hides_it(db_session):
+    add_location(db_session, "SHOP", privacy_hold=True)
+
+    row = location(db_session, "SHOP")
+
+    assert (row["normalized_address"], row["lat"], row["lng"]) == (None, None, None)

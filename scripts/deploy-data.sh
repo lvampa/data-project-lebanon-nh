@@ -28,6 +28,11 @@ if ! $dry_run; then
   done
 fi
 
+# Hold flagged locations that are not clearly safe, so the export leaves them out. It only
+# adds holds, and prints counts.
+echo "→ Holding unsafe person locations..."
+uv run --frozen privacy-holds mark
+
 echo "→ Exporting the report data..."
 bash scripts/generate_report.sh
 

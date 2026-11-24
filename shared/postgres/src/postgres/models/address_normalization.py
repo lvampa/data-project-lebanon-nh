@@ -68,5 +68,11 @@ class AddressNormalization(ProvenanceMixin, Base):
     # retries skip a row whose mark is what they would write now.
     snapshot_checked: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
+    # A location that names a person and is not clearly safe is held out of the public data
+    # until a person sets `privacy_handled_at`. The public views read both.
+    privacy_hold: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    privacy_handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

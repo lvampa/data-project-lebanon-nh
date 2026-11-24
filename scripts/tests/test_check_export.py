@@ -87,34 +87,35 @@ def test_a_flagged_person_location_in_the_export_fails_without_printing_it(
     assert PLACE not in " ".join(problems)
 
 
-ADDRESS = "12 Placeholder Lane"
-
-
-def test_a_plain_address_that_an_unflagged_location_shares_is_not_a_leak(
+def test_a_normalized_text_that_an_unflagged_location_also_produces_is_not_a_leak(
     export, db_session
 ):
-    street = "Placeholder Lane"
-    add_location(
-        db_session,
-        "RAW ONE",
-        normalized_address=ADDRESS,
-        street=street,
-        names_person=True,
-    )
-    add_location(
-        db_session,
-        "RAW TWO",
-        normalized_address=ADDRESS,
-        street=street,
-        names_person=False,
-    )
-    write(export, "incidents.json", [{"location": ADDRESS}])
+    add_location(db_session, "RAW ONE", normalized_address=PLACE, names_person=True)
+    add_location(db_session, "RAW TWO", normalized_address=PLACE, names_person=False)
+    write(export, "incidents.json", [{"location": PLACE}])
     assert check_person_text(export, db_session) == []
 
 
-def test_a_shared_text_that_is_not_a_plain_address_still_fails(export, db_session):
-    add_location(db_session, "RAW ONE", normalized_address=PLACE, names_person=True)
-    add_location(db_session, "RAW TWO", normalized_address=PLACE, names_person=False)
+def test_a_flagged_rows_raw_text_in_the_export_fails_even_with_an_unflagged_twin(
+    export, db_session
+):
+    raw = "ZZ RAW PERSON TEXT 7"
+    add_location(db_session, raw, normalized_address=PLACE, names_person=True)
+    add_location(db_session, "OTHER", normalized_address=PLACE, names_person=False)
+    write(export, "incidents.json", [{"location": raw}])
+    assert check_person_text(export, db_session) == [
+        "1 flagged person locations appear in the export"
+    ]
+
+
+def test_a_held_rows_text_in_the_export_still_fails(export, db_session):
+    add_location(
+        db_session,
+        PLACE,
+        normalized_address=PLACE,
+        names_person=True,
+        privacy_hold=True,
+    )
     write(export, "incidents.json", [{"location": PLACE}])
     assert check_person_text(export, db_session) == [
         "1 flagged person locations appear in the export"

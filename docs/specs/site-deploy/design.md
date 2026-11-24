@@ -46,9 +46,10 @@ A deployed build with nothing at the data URL shows the error state on those fou
 
 The data side has its own script, `scripts/deploy-data.sh`, run from the repo root like `deploy.sh`.
 It takes `--dry-run`, which stops before the upload.
-1. It runs `generate_report.sh`, which writes the export to `data/export/` at the repo root, outside `public/`, so it never reaches the build.
-2. It runs `uv run check-export data/export`, and nothing uploads unless every check passes.
-3. It runs `aws s3 sync data/export s3://$R2_BUCKET/ --delete` against R2's S3 endpoint, with `application/json` and `Cache-Control: public, max-age=300`.
+1. It runs `uv run privacy-holds mark`, which holds unsafe person locations (below).
+2. It runs `generate_report.sh`, which writes the export to `data/export/` at the repo root, outside `public/`, so it never reaches the build.
+3. It runs `uv run check-export data/export`, and nothing uploads unless every check passes.
+4. It runs `aws s3 sync data/export s3://$R2_BUCKET/ --delete` against R2's S3 endpoint, with `application/json` and `Cache-Control: public, max-age=300`.
 
 It is a plain sync of the folder.
 There are no versioned releases, no pointer file and no schema version.
@@ -58,12 +59,32 @@ The script reads `R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID` and `AWS_PROFILE` from the
 `AWS_PROFILE` names an aws CLI profile that holds the R2 API token's key pair, set up once with `aws configure --profile <name>`, so no key is in the script or its environment.
 R2 rejects the checksum headers newer `aws` versions add, so the script sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`.
 
+### Privacy holds
+
+A location the AI flagged as naming a person is published as its street only.
+When it is unclear that this is enough, the publish does not fail: the location is held out and listed for a person to handle.
+- `address_normalizations` has `privacy_hold` and `privacy_handled_at`, from one migration.
+  A row is held while `privacy_hold` is true and `privacy_handled_at` is null.
+- The public views `public_locations` and `public_log_entries` treat a held location as unmapped: no name, no street, no pin, and no place card.
+  Its log entries stay, with no location, and count in the totals.
+  This is in the views, so report-gen is unchanged.
+- `privacy-holds mark` holds every flagged location that is not clearly safe, and never clears a hold.
+  A flagged location is clearly safe when its normalized text is a plain address (a house number and a street from the street list, or a street), or an unflagged location has the same normalized text and publishes it already.
+  The view never publishes a flagged row's raw text, so that text cannot reach the export.
+  One small function, `is_clearly_safe`, holds the rule.
+- `privacy-holds list` prints the id, kind and raw text of each held location, for the operator's terminal only.
+  `privacy-holds handled <id>...` sets `privacy_handled_at`, and the location then publishes as any flagged location does.
+  Moving this into the admin app is later work.
+- The migration and `mark` write to the database, so the operator runs `uv run migrate` before the first publish.
+
 The checks are in `scripts/check_export.py`, and they fail closed and print counts, never the matched text:
-- **Person text.** No location flagged as naming a person appears in the export.
+- **Person text.** No flagged location's text appears in the export.
+  A flagged row's raw text must not appear at all.
+  Its normalized text may appear only when an unflagged location has the same text, since two raw values can normalize to one address.
+  A held row is checked the same way.
   Strings under 8 characters and a flagged row's own street are skipped.
-  A text an unflagged location also has is skipped only when it is a plain address, a house number and a street or a street, since two raw values can normalize to one address.
-  Any other shared text still fails, because the unflagged twin could publish a name.
   `properties.json` and `staff.json` are not scanned, since a parcel's address may be the same text.
+  This is the guard after the holds: it fails closed if anything slips through.
 - **Prompt version.** No AI location is on a prompt older than `MIN_PRIVACY_LOCATION_PROMPT`, the first one that flags a person.
   The number is parsed from `location-<n>+streets-<hash>`, since the street suffix varies.
   Later prompts changed matching, not privacy, so the current version is not required.

@@ -66,14 +66,15 @@ def check_coverage(export: Path) -> list[str]:
     return []
 
 
-def is_plain_address(text: str, streets: set[str]) -> bool:
-    """A street, or a house number and a street, from the street list."""
-    match = re.match(r"\d+[a-z]?(-\d+)? (.+)$", text)
-    return text in streets or bool(match and match.group(2) in streets)
-
-
 def check_person_text(export: Path, session: Session) -> list[str]:
-    """No location flagged as naming a person appears anywhere in the export."""
+    """No flagged location's text appears in the export.
+
+    A flagged row's raw text is never published, so it must not appear at all. Its
+    normalized text may appear only when an unflagged location has the same text, since two
+    raw values can normalize to one address and the unflagged row publishes it. A held row
+    is checked like any other: a hold keeps it out of the view, so its text appearing means
+    something else published it.
+    """
     rows = session.execute(
         select(
             AddressNormalization.raw_address,
@@ -81,41 +82,33 @@ def check_person_text(export: Path, session: Session) -> list[str]:
             AddressNormalization.street,
         ).where(AddressNormalization.names_person.is_(True))
     ).all()
-    # Two raw values can normalize to one address, so a flagged row may share its
-    # normalized text with an unflagged row. Only a plain address may be shared: a house
-    # number and a street, or a street. Any other shared text could be a name.
-    streets = {
-        street.casefold()
-        for street in session.scalars(
-            select(AddressNormalization.street).where(
-                AddressNormalization.street.is_not(None)
+    unflagged_texts = {
+        normalized.casefold()
+        for normalized in session.scalars(
+            select(AddressNormalization.normalized_address).where(
+                AddressNormalization.names_person.is_(False),
+                AddressNormalization.normalized_address.is_not(None),
             )
         )
-        if street
+        if normalized
     }
-    public_texts = {
-        text.casefold()
-        for raw, normalized in session.execute(
-            select(
-                AddressNormalization.raw_address,
-                AddressNormalization.normalized_address,
-            ).where(AddressNormalization.names_person.is_(False))
-        ).all()
-        for text in (raw, normalized)
-        if text and is_plain_address(text.casefold(), streets)
-    }
-    texts = {
-        text.casefold()
-        for raw, normalized, street in rows
-        for text in (raw, normalized)
-        if text and len(text) >= MIN_PERSON_TEXT and text != street
-    } - public_texts
+
+    def scannable(text: str | None, street: str | None) -> str | None:
+        if text and len(text) >= MIN_PERSON_TEXT and text != street:
+            return text.casefold()
+        return None
+
+    raw_texts = {scannable(raw, street) for raw, _, street in rows}
+    normalized_texts = {
+        scannable(normalized, street) for _, normalized, street in rows
+    } - unflagged_texts
+    texts = (raw_texts | normalized_texts) - {None}
     exported = "\n".join(
         path.read_text()
         for path in export.rglob("*.json")
         if path.name not in NOT_POLICE_DATA
     ).casefold()
-    found = sum(1 for text in texts if text in exported)
+    found = sum(1 for text in texts if text and text in exported)
     return [f"{found} flagged person locations appear in the export"] if found else []
 
 

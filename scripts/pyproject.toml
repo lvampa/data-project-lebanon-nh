@@ -26,6 +26,7 @@ geocode = "scripts.normalize.geocode:main"
 osm-snapshot = "scripts.normalize.osm_snapshot:main"
 place-sheet = "scripts.normalize.place_sheet:main"
 check-export = "scripts.check_export:main"
+privacy-holds = "scripts.privacy_holds:main"
 
 [tool.uv.sources]
 bootstrap = { workspace = true }

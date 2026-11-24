@@ -3,9 +3,9 @@
 # From the repo root: bash scripts/deploy-data.sh [--dry-run]
 # --dry-run exports and checks, then stops before the upload.
 #
-# The upload needs R2_BUCKET, CLOUDFLARE_ACCOUNT_ID, AWS_ACCESS_KEY_ID and
-# AWS_SECRET_ACCESS_KEY, the last two from an R2 API token with Object Read & Write on
-# that one bucket. They come from the environment only.
+# The upload needs R2_BUCKET and CLOUDFLARE_ACCOUNT_ID, and AWS_PROFILE naming an aws CLI
+# profile that holds the key pair of an R2 API token with Object Read & Write on that one
+# bucket. Set it up once with `aws configure --profile <name>`. No key is read from here.
 set -euo pipefail
 
 die() {
@@ -13,7 +13,7 @@ die() {
   exit 1
 }
 
-[ -f scripts/deploy-data.sh ] && [ -d frontend/web ] || die "Run scripts/deploy-data.sh from the repo root."
+[ -f scripts/deploy-data.sh ] && [ -f scripts/generate_report.sh ] || die "Run scripts/deploy-data.sh from the repo root."
 
 case "$*" in
   "") dry_run=false ;;
@@ -23,7 +23,7 @@ esac
 
 # Fail before the slow export, not after it.
 if ! $dry_run; then
-  for name in R2_BUCKET CLOUDFLARE_ACCOUNT_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+  for name in R2_BUCKET CLOUDFLARE_ACCOUNT_ID AWS_PROFILE; do
     [ -n "${!name:-}" ] || die "$name is not set"
   done
 fi
@@ -33,7 +33,7 @@ bash scripts/generate_report.sh
 
 # Nothing is uploaded unless every check passes. The checks print counts, never the text.
 echo "→ Checking the export..."
-uv run check-export data/export
+uv run --frozen check-export data/export
 
 if $dry_run; then
   echo "✓ Dry run, not uploading."

@@ -54,7 +54,8 @@ It is a plain sync of the folder.
 There are no versioned releases, no pointer file and no schema version.
 `--delete` removes a place card that is gone, and the bucket holds only this export.
 `aws` is already on the operator's Mac, and one sync command handles about 1,500 files.
-Credentials come from the environment only: `R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, and `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from an R2 API token.
+The script reads `R2_BUCKET`, `CLOUDFLARE_ACCOUNT_ID` and `AWS_PROFILE` from the environment.
+`AWS_PROFILE` names an aws CLI profile that holds the R2 API token's key pair, set up once with `aws configure --profile <name>`, so no key is in the script or its environment.
 R2 rejects the checksum headers newer `aws` versions add, so the script sets `AWS_REQUEST_CHECKSUM_CALCULATION` and `AWS_RESPONSE_CHECKSUM_VALIDATION` to `when_required`.
 
 The checks are in `scripts/check_export.py`, and they fail closed and print counts, never the matched text:
@@ -68,7 +69,15 @@ The checks are in `scripts/check_export.py`, and they fail closed and print coun
 - **Files.** Every expected file is present, and every pin in `addresses.json` has a card in `places/`.
 
 An export version that the build checks is not built, so new code can read old data without any check.
-The Airflow `publish_data` DAG that calls the script is the next change, since the Airflow image has no `cargo`.
+
+The Airflow `publish_data` DAG runs `bash scripts/deploy-data.sh` as its one task, so the script stays the single entrypoint.
+It is manual only: normalizing and geocoding run outside the police-log chain, so no clock time is right, and the prompt-version check refuses an export that ran too early.
+The Airflow image gets what the script needs:
+- A multi-stage build compiles `report-gen` on `rust:1.98.1-bookworm` and copies the binary in, and `REPORT_GEN_BIN` points `generate_report.sh` at it, so the image has no Rust toolchain.
+- The aws CLI v2, installed from AWS's zip, which is a bundled binary and cannot clash with the boto packages Airflow pins.
+- `compose.yml` passes `AWS_PROFILE`, `R2_BUCKET` and `CLOUDFLARE_ACCOUNT_ID` from the host's environment and mounts `~/.aws` read-only.
+The DAG's task fails until those are set.
+The image build is not tested here.
 
 R2 needs these set in Cloudflare, by the operator:
 - A bucket on a custom subdomain of a domain already on Cloudflare.
@@ -111,6 +120,7 @@ Repository settings, set by the operator:
 - The `production` environment limited to the main branch.
 - Variable `NEXT_PUBLIC_DATA_URL`, the data subdomain, once the bucket exists.
 - For `deploy-data.sh`, the R2 bucket, its custom subdomain, the R2 API token, the CORS rule and the Cache Rule above.
+- For `deploy-data.sh`, an aws profile with the token's key pair (`aws configure --profile <name>`), and `AWS_PROFILE`, `R2_BUCKET` and `CLOUDFLARE_ACCOUNT_ID` in the host environment, which compose passes to Airflow.
 
 ## Decisions
 

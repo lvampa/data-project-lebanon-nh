@@ -149,4 +149,14 @@ SPECS = [
         timeout=timedelta(hours=1),
         tags=("budget",),
     ),
+    DagSpec(
+        dag_id="publish_data",
+        # By hand: the location normalization and geocoding it depends on run outside the
+        # police-log chain, so no clock time is right. The script refuses an old prompt.
+        schedule=None,
+        command="bash scripts/deploy-data.sh",
+        # The export reads the whole database, and the sync uploads about 1,500 files.
+        timeout=timedelta(hours=2),
+        tags=("publish",),
+    ),
 ]

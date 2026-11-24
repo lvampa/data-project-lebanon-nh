@@ -34,7 +34,13 @@ if [ -z "${DATABASE_URL:-}" ]; then
 fi
 
 echo "→ Generating report..."
+# The Airflow image has no Rust toolchain, so it sets REPORT_GEN_BIN to a built binary.
+if [ -n "${REPORT_GEN_BIN:-}" ]; then
+  report_gen=("$REPORT_GEN_BIN")
+else
+  report_gen=(cargo run -p report-gen --release --)
+fi
 # The first day of police data the public site covers.
-cargo run -p report-gen --release -- \
+"${report_gen[@]}" \
   --since 2026-01-01 \
   --output-dir "$REPO_ROOT/data/export"

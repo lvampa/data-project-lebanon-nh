@@ -114,7 +114,8 @@ uv run pytest
 # Generate the data for local dev
 bash scripts/generate_report.sh              # exports JSON to data/export
 
-# Publish the data to R2 (needs R2_BUCKET, CLOUDFLARE_ACCOUNT_ID and the AWS_* keys)
+# Publish the data to R2 (needs R2_BUCKET, CLOUDFLARE_ACCOUNT_ID and AWS_PROFILE, an aws
+# profile made with `aws configure --profile <name>`). The Airflow publish_data DAG runs it.
 bash scripts/deploy-data.sh [--dry-run]      # export, check, then sync
 
 # Local dev reads /data. To see a fresh export, copy data/export to frontend/web/public/data

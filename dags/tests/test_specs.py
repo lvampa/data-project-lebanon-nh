@@ -52,6 +52,8 @@ def test_command_target_exists(spec):
             assert (REPO_ROOT / spec.cwd / f"{module.replace('.', '/')}.py").is_file()
         case ["python", script, *_]:
             assert (REPO_ROOT / spec.cwd / script).is_file()
+        case ["bash", script]:
+            assert (REPO_ROOT / spec.cwd / script).is_file()
         case _:
             pytest.fail(f"unrecognized command: {spec.command}")
 
@@ -100,3 +102,10 @@ def test_the_police_log_reprocess_takes_a_date_range_or_everything():
     assert set(spec.params) == {"date_from", "date_to"}
     assert "--from '{{ params.date_from }}' --to '{{ params.date_to }}'" in spec.command
     assert "--all" in spec.command
+
+
+def test_publish_data_is_run_by_hand_and_only_calls_the_script():
+    spec = SPECS_BY_ID["publish_data"]
+    assert spec.schedule is None
+    assert spec.command == "bash scripts/deploy-data.sh"
+    assert all("publish_data" not in other.triggers for other in SPECS)

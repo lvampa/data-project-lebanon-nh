@@ -28,7 +28,7 @@ Normalized values sit in two lookup tables, keyed by the raw value, so each dist
 The `discover_urls` DAG runs weekly and triggers `process_urls`, which together are stages 1 and 2.
 `police_log_reprocess` is a manually triggered DAG for stage 2.
 Stage 3 runs by hand: `uv run normalize` and `uv run geocode` from the repo root.
-Stage 4 is `scripts/generate_report.sh`, and the site's code deploys separately from CI; see the site deploy spec.
+Stage 4 is `scripts/generate_report.sh`, and the site's code deploys separately with `scripts/deploy.sh`, which CI runs; see the site deploy spec.
 `uv run migrate` applies the Alembic migrations and creates the MongoDB indexes, and backups are hand-run scripts.
 There is no Elasticsearch and no dbt.
 

@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { DataStatus } from '@/components/data-status'
-import { useDataFile } from '@/components/use-data-file'
+import { clearDataFileCache, useDataFile } from '@/components/use-data-file'
 
 function Probe() {
   const file = useDataFile<{ total: number }>('stats.json')
   if (file.status !== 'ready') return <DataStatus states={[file]} />
   return <p>total {file.data.total}</p>
 }
-
-afterEach(() => vi.unstubAllGlobals())
 
 function TwoFiles() {
   const first = useDataFile<number>('a.json')
@@ -20,41 +18,57 @@ function TwoFiles() {
   return <p>both ready</p>
 }
 
+function ok(body: unknown) {
+  return { ok: true, json: () => Promise.resolve(body) }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  clearDataFileCache()
+})
+
 describe('useDataFile', () => {
   it('shows loading, then the data', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ total: 42 }) }),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok({ total: 42 })))
     render(<Probe />)
-    expect(screen.getByRole('status')).toHaveTextContent('Loading')
+    expect(screen.getByRole('status')).toBeInTheDocument()
     expect(await screen.findByText('total 42')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith('/data/stats.json', expect.anything())
   })
 
-  it('shows an error on a failed response, and Try again fetches again', async () => {
+  it('announces a failed response, and Try again fetches again', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: false, status: 404 })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ total: 7 }) })
+      .mockResolvedValueOnce(ok({ total: 7 }))
     vi.stubGlobal('fetch', fetchMock)
     render(<Probe />)
-    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }))
     await waitFor(() => expect(screen.getByText('total 7')).toBeInTheDocument())
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('retries every failed file with one click', async () => {
+    let healed = false
     const fetchMock = vi.fn((url: string) =>
-      Promise.resolve(
-        fetchMock.mock.calls.length <= 2
-          ? { ok: false, status: 500 }
-          : { ok: true, json: () => Promise.resolve(url.length) },
-      ),
+      Promise.resolve(healed ? ok(url.length) : { ok: false, status: 500 }),
     )
     vi.stubGlobal('fetch', fetchMock)
     render(<TwoFiles />)
-    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+    const retry = await screen.findByRole('button', { name: /try again/i })
+    healed = true
+    fireEvent.click(retry)
     expect(await screen.findByText('both ready')).toBeInTheDocument()
+  })
+
+  it('fetches a file once for two mounts', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok({ total: 1 })))
+    const first = render(<Probe />)
+    await screen.findByText('total 1')
+    first.unmount()
+    render(<Probe />)
+    await screen.findByText('total 1')
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

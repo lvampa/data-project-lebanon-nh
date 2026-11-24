@@ -13,15 +13,20 @@ The build contains no data, so CI can build it.
 The deploy is the `deploy` job in `.github/workflows/ci.yml`.
 It needs `ci-ok`, so it runs only after every check passed on that commit.
 The frontend job also runs `bun run build` on every PR, so a build break fails the PR and not main.
-The deploy job runs `bun install --frozen-lockfile --ignore-scripts` and `bun run build` in `frontend/web`, then `wrangler pages deploy out --branch=main`.
+The deploy job runs `bash scripts/deploy.sh` and nothing else for the build and the upload, so a hand run and CI cannot drift.
+The script runs `bun ci`, then `bun run build` in `frontend/web`, then checks `out`, then `wrangler pages deploy out --branch=main`.
+`--dry-run` stops before the upload.
 There is no staging step and no smoke check: if the build passes, it ships.
-The old hand-run `scripts/deploy.sh` is removed, so CI is the only thing that uploads to the Pages project.
+`scripts/deploy.sh` replaces the old hand-run script, which uploaded a build with data in it and ran no checks.
+Outside CI the script refuses to run unless the branch is `main`, the tree is clean and HEAD is `origin/main` after a fetch, so a hand run cannot ship an untested branch.
+It reads `CLOUDFLARE_PAGES_PROJECT`, and auth comes from `wrangler login` locally or the token in CI.
 
 ## Data in the browser
 
 Four pages used to read `public/data` while building: incidents, properties, public safety and staff.
 They now fetch their JSON in the browser through `useDataFile`, and show a loading state, then an error with a Try again button.
-The two fetches that already ran in the browser, `activity.json` and each place card, use the same base.
+The two fetches that already ran in the browser, `activity.json` and each place card, use the same base through `fetchDataFile`, and a place card is read with `useDataFile`.
+`useDataFile` fetches each file once per page load, so moving between pages does not download it again.
 
 The base is `NEXT_PUBLIC_DATA_URL`, and it defaults to `/data`.
 Local dev and `generate_report.sh` are unchanged: the export still lands in `public/data` and Next serves it.
@@ -49,10 +54,15 @@ The repo is public, so the workflow is narrow:
 - It runs in the `production` environment, which is limited to the main branch in the repository settings.
   The API token is a secret of that environment, so a branch cannot read it.
 - `permissions: contents: read`, and every action is pinned by SHA.
-- Wrangler is a pinned devDependency of `frontend/web`, installed from the lockfile with `--ignore-scripts`, so the step that holds the token runs only locked code.
+- Wrangler is a pinned devDependency of `frontend/web`, installed with `bun ci`, which fails on a stale lockfile.
+  Bun does not run a dependency's lifecycle scripts unless the project trusts it, and none is trusted.
+  Both CI installs and the script use `bun ci`.
+- The deploy gate allows only `push` and `workflow_dispatch`, so a trigger added to the file later cannot deploy by accident.
 - The `deploy` concurrency group queues a second deploy instead of cancelling one that is uploading.
-- The job fails if `out` has a `data` folder or any dot entry except `.well-known`.
-  `public/` is copied into `out` as is, so this keeps data and stray folders out of what is published.
+- `public/` is copied into `out` as is, and a local checkout has `public/data`.
+  The script deletes `out/data` after the build and then fails if `out` has a `data` folder or any dot entry except `.well-known`.
+  Deleting from `out` leaves `public/data` alone, so even a failed build cannot lose the local data.
+  Rejected: moving `public/data` aside and restoring it, which risks the data if the script is killed.
 
 Pages is used as a direct upload only, with no GitHub connection on the Cloudflare project.
 Otherwise Cloudflare would build pull request branches on its own.
@@ -69,6 +79,10 @@ Repository settings, set by the operator:
   The job deploys the commit the checks just passed on.
   `workflow_run` runs against the default branch's latest commit and is a trigger that zizmor flags as dangerous.
   Rejected: a separate `deploy.yml`.
+- **One script for CI and hand runs.**
+  Rejected: a workflow with its own build and upload steps, which would drift from what a person runs.
+  The cost is that the build step also sees the Cloudflare token in CI.
+  The build is this repo's own code from main, installed from a lockfile, with no dependency scripts.
 - **Fetch in the browser, not at build time.**
   CI has no database and no export, so a build that needs data cannot run there.
   Cost: the four lists are not in the page HTML, so a crawler that does not run JavaScript sees a loading state.

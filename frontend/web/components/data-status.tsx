@@ -1,5 +1,6 @@
 'use client'
-import { Button } from '@project/ui/components/ui/button'
+import { OperaHouseLoader } from '@project/ui/components/site/opera-house-loader'
+import { ErrorPanel } from '@/components/error-panel'
 import type { DataState } from '@/components/use-data-file'
 
 // What a page shows until all of its files are ready.
@@ -9,18 +10,16 @@ export function DataStatus({ states }: { states: DataState<unknown>[] }) {
   )
   if (failed.length > 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-        <h2 className="text-xl font-semibold">The data did not load</h2>
-        <p className="text-muted-foreground">Check your connection and try again.</p>
-        <Button variant="outline" onClick={() => failed.forEach((state) => state.retry())}>
-          Try again
-        </Button>
-      </div>
+      <ErrorPanel
+        title="The data did not load"
+        message="Check your connection and try again."
+        onRetry={() => failed.forEach((state) => state.retry())}
+      />
     )
   }
   return (
-    <p role="status" className="py-20 text-center text-sm text-muted-foreground">
-      Loading the data…
-    </p>
+    <div className="flex justify-center py-20">
+      <OperaHouseLoader size={80} label="Loading the data" />
+    </div>
   )
 }

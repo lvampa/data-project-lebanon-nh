@@ -225,7 +225,7 @@ scripts/data/budgets/*.txt
 scripts/data/budget_data.json
 
 # report-gen output. It holds names and owner addresses, so it is regenerated
-# locally and never committed.
+# locally and never committed. scripts/deploy.sh keeps it out of the published build.
 frontend/web/public/data/
 
 # Local scratch files, not for commit

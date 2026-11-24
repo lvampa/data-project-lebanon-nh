@@ -79,7 +79,7 @@ api/                      FastAPI (geocoding)
 frontend/web/             Next.js frontend (static, generated JSON)
 frontend/admin/           Next.js admin app
 frontend/shared/          Shared UI components (@project/ui)
-scripts/                  generate_report.sh
+scripts/                  generate_report.sh, deploy.sh
 ```
 
 ### Data Flow
@@ -87,7 +87,7 @@ scripts/                  generate_report.sh
 1. `build_daily_urls` spider → scrapes PDF links → inserts them into PostgreSQL `pdf_urls` as `pending`
 2. `process_urls` spider → claims `pending` URLs with `FOR UPDATE SKIP LOCKED` (recording `claimed_at` and `attempts`) → downloads PDFs → extracts text → yields one `PoliceLogPdfItem` per PDF carrying its text
 3. `PoliceLogPipeline` → calls `ingest_pdf_url` in `scrapers/ingest/police_log.py`, which parses the text, validates each entry via Pydantic, and upserts `log_entries` (keyed on `case_number`) → the URL becomes `complete` in the same commit, or `error` with a kind (`download`, `parse`, `save`)
-4. `scripts/generate_report.sh` exports JSON into `public/data/` (gitignored), which local dev serves. The site's code deploys from CI on merge to main, with no data in the build; publishing the data is a later change (see `docs/specs/site-deploy/design.md`)
+4. `scripts/generate_report.sh` exports JSON into `public/data/` (gitignored), which local dev serves. The site's code deploys from CI on merge to main through `scripts/deploy.sh`, with no data in the build; publishing the data is a later change (see `docs/specs/site-deploy/design.md`)
 
 ### Key Patterns
 
@@ -113,6 +113,9 @@ uv run pytest
 
 # Generate the data for local dev
 bash scripts/generate_report.sh              # exports JSON to public/data
+
+# Deploy by hand (CI runs the same script on merge to main)
+bash scripts/deploy.sh [--dry-run]           # needs main, clean tree, at origin/main
 ```
 
 ### Testing Conventions
@@ -128,7 +131,7 @@ bash scripts/generate_report.sh              # exports JSON to public/data
 
 - Use `uv` instead of `pip` for all Python package management (`uv add`, `uv run`, `uv sync`)
 - Use `docker compose` (not `docker-compose`) for Airflow, Mongo, Postgres
-- Cloudflare Pages deploys from the `deploy` job in `.github/workflows/ci.yml` on merge to main. Do not run `wrangler pages deploy` by hand.
+- Cloudflare Pages deploys from the `deploy` job in `.github/workflows/ci.yml` on merge to main, and the job only runs `scripts/deploy.sh`. Use that script, not a bare `wrangler pages deploy`.
 - Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
 - CI (`.github/workflows/ci.yml`) runs the pre-push checks plus Rust and, when Docker inputs change, the image builds; `ci-ok` is the one required check.

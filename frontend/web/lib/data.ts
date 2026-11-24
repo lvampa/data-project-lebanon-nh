@@ -3,12 +3,12 @@
 // An empty value, as an unset CI variable gives, counts as unset.
 const DATA_URL = (process.env.NEXT_PUBLIC_DATA_URL || '/data').replace(/\/+$/, '')
 
-export async function fetchJson<T>(url: string, signal: AbortSignal): Promise<T> {
-  const response = await fetch(url, { signal })
-  if (!response.ok) throw new Error(`HTTP ${response.status}`)
-  return (await response.json()) as T
-}
-
 export function dataUrl(filename: string): string {
   return `${DATA_URL}/${filename}`
+}
+
+export async function fetchDataFile<T>(filename: string, signal: AbortSignal): Promise<T> {
+  const response = await fetch(dataUrl(filename), { signal })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return (await response.json()) as T
 }

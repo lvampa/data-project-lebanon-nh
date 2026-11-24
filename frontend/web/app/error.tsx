@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Button } from '@project/ui/components/ui/button'
+import { ErrorPanel } from '@/components/error-panel'
 
 export default function Error({
   error,
@@ -16,12 +16,10 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-      <h2 className="text-xl font-semibold">Something went wrong</h2>
-      <p className="text-muted-foreground">An unexpected error occurred. Please try again.</p>
-      <Button variant="outline" onClick={() => retry()}>
-        Try again
-      </Button>
-    </div>
+    <ErrorPanel
+      title="Something went wrong"
+      message="An unexpected error occurred. Please try again."
+      onRetry={retry}
+    />
   )
 }

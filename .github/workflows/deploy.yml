@@ -3,7 +3,8 @@ name: Deploy
 # The static site, built and uploaded to Cloudflare Pages when code merges to main.
 # There is no `needs: ci-ok` here: `ci-ok` must be a required check on pull requests, so
 # what merges has passed, and scripts/deploy.sh fails on a broken build. No pull_request
-# trigger, and no workflow_run.
+# trigger, no workflow_run and no manual trigger. A redeploy is "Re-run all jobs" on the last
+# run, and another branch deploys with a local scripts/deploy.sh.
 on:
   push:
     branches: [main]
@@ -11,14 +12,12 @@ on:
       - "frontend/**"
       - "scripts/deploy.sh"
       - ".github/workflows/deploy.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Secrets live in this environment, which is limited to main in the repository settings.

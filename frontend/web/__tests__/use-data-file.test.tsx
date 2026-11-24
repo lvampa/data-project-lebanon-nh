@@ -71,4 +71,22 @@ describe('useDataFile', () => {
     await screen.findByText('total 1')
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+
+  it('aborts a file that is not shared when the caller unmounts', async () => {
+    let signal: AbortSignal | undefined
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init: RequestInit) => {
+        signal = init.signal ?? undefined
+        return new Promise(() => {})
+      }),
+    )
+    function Unshared() {
+      useDataFile<number>('places/a.json', { shared: false })
+      return null
+    }
+    const view = render(<Unshared />)
+    view.unmount()
+    expect(signal?.aborted).toBe(true)
+  })
 })

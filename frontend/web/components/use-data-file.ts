@@ -25,8 +25,12 @@ export function clearDataFileCache(): void {
 }
 
 // One exported JSON file, fetched in the browser when the page mounts. A null filename fetches
-// nothing and stays loading.
-export function useDataFile<T>(filename: string | null): DataState<T> {
+// nothing and stays loading. A file with `shared: false` is not kept, and its fetch is aborted
+// when the caller moves on, which suits many small files such as place cards.
+export function useDataFile<T>(
+  filename: string | null,
+  { shared = true }: { shared?: boolean } = {},
+): DataState<T> {
   const [attempt, setAttempt] = useState(0)
   const [result, setResult] = useState<{
     key: string
@@ -39,13 +43,16 @@ export function useDataFile<T>(filename: string | null): DataState<T> {
   useEffect(() => {
     if (filename === null) return
     let current = true
-    loadOnce<T>(filename)
+    const controller = shared ? null : new AbortController()
+    const load = controller ? fetchDataFile<T>(filename, controller.signal) : loadOnce<T>(filename)
+    load
       .then((data) => current && setResult({ key, value: { ok: true, data } }))
       .catch(() => current && setResult({ key, value: { ok: false } }))
     return () => {
       current = false
+      controller?.abort()
     }
-  }, [filename, key])
+  }, [filename, key, shared])
 
   if (result?.key !== key) return { status: 'loading' }
   if (!result.value.ok) return { status: 'error', retry: () => setAttempt((n) => n + 1) }

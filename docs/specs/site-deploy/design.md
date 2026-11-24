@@ -11,10 +11,12 @@ The data is published separately, to a data host described below.
 The build contains no data, so CI can build it.
 
 The deploy is its own workflow, `.github/workflows/deploy.yml`, which runs when a push lands on main and touches `frontend/**`, `scripts/deploy.sh` or the workflow itself.
+That push is its only trigger.
+A redeploy is "Re-run all jobs" on the last run, and a deploy from another branch is a local `scripts/deploy.sh`.
 A backend-only merge does not deploy.
 It does not wait on `ci-ok`, since `ci.yml` is checks only.
 It relies on `ci-ok` being a required check on pull requests, so nothing merges without passing, and the workflow fails on a broken build, so nothing broken ships.
-The frontend job also runs `bun run build` on every PR, so a build break fails the PR and not main.
+The frontend job also runs `scripts/deploy.sh --dry-run` on every PR, against a planted data file, so a build break or a broken data guard fails the PR and not main.
 The deploy workflow runs `bash scripts/deploy.sh` and nothing else for the build and the upload, so a hand run and CI cannot drift.
 The script runs `bun ci --ignore-scripts`, then `bun run build` in `frontend/web`, then checks `out`, then `wrangler pages deploy out --branch=main`.
 `--dry-run` stops before the upload.
@@ -31,7 +33,7 @@ Four pages used to read `public/data` while building: incidents, properties, pub
 They now fetch their JSON in the browser through `useDataFile`, and show a loading state, then an error with a Try again button.
 The two fetches that already ran in the browser, `activity.json` and each place card, use the same base through `fetchDataFile`, and a place card is read with `useDataFile`.
 `useDataFile` fetches each file once per page load, so moving between pages does not download it again.
-`activity.json` is fetched by its own hook and is already asked for once.
+`activity.json` goes through the same cache, and a place card is not cached, so its fetch is aborted when another pin is chosen.
 
 The base is `NEXT_PUBLIC_DATA_URL`, and it defaults to `/data`.
 Local dev and `generate_report.sh` are unchanged: the export still lands in `public/data` and Next serves it.
@@ -54,7 +56,7 @@ Until it exists, new code can read old data without any check.
 ## Deploy hardening
 
 The repo is public, so the workflow is narrow:
-- The workflow runs only on a push to main or a manual run on main.
+- The workflow runs only on a push to main.
   There is no `pull_request` or `pull_request_target` path to it.
 - It runs in the `production` environment, which is limited to the main branch in the repository settings.
   The API token is a secret of that environment, so a branch cannot read it.
@@ -62,7 +64,7 @@ The repo is public, so the workflow is narrow:
 - Wrangler is a devDependency of `frontend/web` at `~4.168`, and the lockfile fixes the exact version that `bun ci` installs, failing on a stale lockfile.
   Both CI installs and the script use `bun ci --ignore-scripts`.
   Bun runs the install scripts of packages on its built-in default trust list unless told not to, so the flag is what keeps them off.
-- The deploy workflow has only the `push` and `workflow_dispatch` triggers, and its own file, so a trigger added to `ci.yml` later cannot deploy by accident.
+- The deploy workflow has only the `push` trigger, and its own file, so a trigger added to `ci.yml` later cannot deploy by accident.
 - The `deploy` concurrency group queues a second deploy instead of cancelling one that is uploading.
 - `public/` is copied into `out` as is, and a local checkout has `public/data`.
   The script deletes `out/data` after the build and then fails if `out` has a `data` folder or any dot entry except `.well-known`.

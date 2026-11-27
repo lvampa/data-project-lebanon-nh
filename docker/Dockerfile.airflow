@@ -59,10 +59,7 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m)-${AWSC
 RUN mkdir -p /opt/project && chown airflow /opt/project
 
 # The cache mount is on another filesystem than the venv, so uv has to copy, not link.
-# The cache lives in /tmp because BuildKit would create a missing ~/.cache as root, and
-# Playwright then could not write its browser there.
-ENV UV_CACHE_DIR=/tmp/uv-cache \
-    UV_COMPILE_BYTECODE=1 \
+ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
 WORKDIR /opt/project
@@ -78,8 +75,11 @@ COPY --chown=airflow shared/bootstrap/pyproject.toml ./shared/bootstrap/
 COPY --chown=airflow shared/locations/pyproject.toml ./shared/locations/
 COPY --chown=airflow shared/mongo/pyproject.toml ./shared/mongo/
 COPY --chown=airflow shared/postgres/pyproject.toml ./shared/postgres/
+# The cache is in /tmp, set on the command and not in ENV, because BuildKit would create a
+# missing ~/.cache as root and Playwright then could not write its browser there. ENV would
+# also point every DAG task's uv at a root-owned folder.
 RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
-    uv sync --frozen --no-install-workspace --package scrapers --package scripts
+    UV_CACHE_DIR=/tmp/uv-cache uv sync --frozen --no-install-workspace --package scrapers --package scripts
 
 # shared/* and scripts/ need their source to build. The volume mounts overlay them at runtime.
 COPY --chown=airflow shared/bootstrap ./shared/bootstrap/
@@ -88,7 +88,7 @@ COPY --chown=airflow shared/mongo ./shared/mongo/
 COPY --chown=airflow shared/postgres ./shared/postgres/
 COPY --chown=airflow scripts ./scripts/
 RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
-    uv sync --frozen --package scrapers --package scripts
+    UV_CACHE_DIR=/tmp/uv-cache uv sync --frozen --package scrapers --package scripts
 
 # scrape_llcs and scrape_civicclerk drive Chromium. The browser goes in the airflow
 # user's cache; its system libraries need root.

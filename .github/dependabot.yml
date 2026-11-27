@@ -51,3 +51,7 @@ updates:
     groups:
       docker:
         patterns: ["*"]
+    ignore:
+      # Both are pinned in ci.yml too. Bump them together by hand.
+      - dependency-name: rust
+      - dependency-name: ghcr.io/astral-sh/uv

@@ -8,5 +8,4 @@ data
 tmp
 **/.env*
 !**/.env.example
-.envrc
 frontend

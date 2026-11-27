@@ -108,7 +108,7 @@ An export version that the build checks is not built, so new code can read old d
 The Airflow `publish_data` DAG runs `bash scripts/deploy-data.sh` as its one task, so the script stays the single entrypoint.
 It is manual only: normalizing and geocoding run outside the police-log chain, so no clock time is right, and the prompt-version check refuses an export that ran too early.
 The Airflow image gets what the script needs:
-- A multi-stage build compiles `report-gen` on `rust:1.98.1-bookworm` and copies the binary in, and `REPORT_GEN_BIN` points `generate_report.sh` at it, so the image has no Rust toolchain.
+- A multi-stage build compiles `report-gen` on `rust:1.100.0-bookworm` and copies the binary in, and `REPORT_GEN_BIN` points `generate_report.sh` at it, so the image has no Rust toolchain.
 - The aws CLI v2, installed from AWS's zip at a pinned version, which is a bundled binary and cannot clash with the boto packages Airflow pins.
 The R2 credentials are an Airflow Connection, `r2_data`, not container environment and not a mounted file:
 - It is an `aws` Connection. The login is the R2 access key id and the password is its secret.

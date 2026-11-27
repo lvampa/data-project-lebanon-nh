@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # report-gen, built here so the Airflow image needs no Rust toolchain. Bookworm matches the
 # Airflow image's libc. Keep the version the same as the Rust job in ci.yml.
-FROM rust:1.98.1-bookworm AS report-gen
+FROM rust:1.100.0-bookworm AS report-gen
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY tools/report-gen ./tools/report-gen/
@@ -48,7 +48,7 @@ RUN case "$(uname -m)" in \
 # The aws CLI, for scripts/deploy-data.sh to sync the export to R2. Version 2 is a bundled
 # binary, so it cannot clash with the boto packages Airflow pins. The version is pinned, so a
 # new release cannot change what runs with the R2 keys. Bump it by hand.
-ARG AWSCLI_VERSION=2.22.35
+ARG AWSCLI_VERSION=2.42.5
 RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m)-${AWSCLI_VERSION}.zip" -o /tmp/awscli.zip \
     && unzip -q /tmp/awscli.zip -d /tmp \
     && /tmp/aws/install \

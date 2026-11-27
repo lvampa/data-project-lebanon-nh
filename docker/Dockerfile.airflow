@@ -13,7 +13,7 @@ FROM apache/airflow:2.10.4
 # Overwrite it, so the builds and every DAG task run this version.
 COPY --from=ghcr.io/astral-sh/uv:0.13.10 --chown=50000:0 /uv /uvx /home/airflow/.local/bin/
 
-# The base image's users by number, which is what hadolint wants: root is 0 and airflow is 50000.
+# The base image's users by number: root is 0 and airflow is 50000.
 USER 0
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -59,7 +59,10 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m)-${AWSC
 RUN mkdir -p /opt/project && chown airflow /opt/project
 
 # The cache mount is on another filesystem than the venv, so uv has to copy, not link.
-ENV UV_COMPILE_BYTECODE=1 \
+# The cache lives in /tmp because BuildKit would create a missing ~/.cache as root, and
+# Playwright then could not write its browser there.
+ENV UV_CACHE_DIR=/tmp/uv-cache \
+    UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 
 WORKDIR /opt/project
@@ -75,7 +78,7 @@ COPY --chown=airflow shared/bootstrap/pyproject.toml ./shared/bootstrap/
 COPY --chown=airflow shared/locations/pyproject.toml ./shared/locations/
 COPY --chown=airflow shared/mongo/pyproject.toml ./shared/mongo/
 COPY --chown=airflow shared/postgres/pyproject.toml ./shared/postgres/
-RUN --mount=type=cache,target=/home/airflow/.cache/uv,uid=50000,gid=0 \
+RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
     uv sync --frozen --no-install-workspace --package scrapers --package scripts
 
 # shared/* and scripts/ need their source to build. The volume mounts overlay them at runtime.
@@ -84,7 +87,7 @@ COPY --chown=airflow shared/locations ./shared/locations/
 COPY --chown=airflow shared/mongo ./shared/mongo/
 COPY --chown=airflow shared/postgres ./shared/postgres/
 COPY --chown=airflow scripts ./scripts/
-RUN --mount=type=cache,target=/home/airflow/.cache/uv,uid=50000,gid=0 \
+RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
     uv sync --frozen --package scrapers --package scripts
 
 # scrape_llcs and scrape_civicclerk drive Chromium. The browser goes in the airflow

@@ -41,3 +41,13 @@ updates:
       # Dependabot can't read frontend/.nvmrc. Bump this with the Node version.
       - dependency-name: "@types/node"
         versions: [">=27"]
+
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      docker:
+        patterns: ["*"]

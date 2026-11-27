@@ -16,6 +16,7 @@ x-airflow-common:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?see .env.example}
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: America/New_York
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?see .env.example}
     MONGO_HOST: mongo
     MONGO_PORT: "27017"
@@ -117,6 +118,12 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     command: webserver
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   airflow-scheduler:
     <<: *airflow-common
@@ -126,6 +133,12 @@ services:
       airflow-init:
         condition: service_completed_successfully
     command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
 volumes:
   mongo_data:

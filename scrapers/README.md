@@ -30,6 +30,8 @@ docker compose up -d
 ```
 
 - Airflow UI: http://localhost:8080
+- `docker compose ps` shows the webserver and scheduler as `healthy` once they are up.
+- The Airflow UI shows times in New York time. DAG schedules are still UTC.
 - MongoDB: localhost:27017
 
 Initialize Mongo indexes (safe to run multiple times). This creates an index on `urls.state`:

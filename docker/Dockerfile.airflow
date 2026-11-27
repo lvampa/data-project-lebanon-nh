@@ -29,7 +29,7 @@ RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     && rm -rf /var/lib/apt/lists/*
 
 # mongodump and mongorestore, for the hand-run MongoDB backup script. They have to match
-# mongo:8. MongoDB's apt repository has no arm64 Debian packages, so this takes MongoDB's
+# mongo:8.3. MongoDB's apt repository has no arm64 Debian packages, so this takes MongoDB's
 # prebuilt tools tarball instead, which works on both architectures. The ubuntu2204 build is
 # the only one published for arm64, and its glibc 2.35 is older than bookworm's 2.36. The
 # version is pinned and each tarball is checked against its sha256. Bump the version by hand,
@@ -45,7 +45,9 @@ RUN case "$(uname -m)" in \
     && mkdir /tmp/mongo-tools \
     && tar -xzf /tmp/mongo-tools.tgz -C /tmp/mongo-tools --strip-components=1 \
     && cp /tmp/mongo-tools/bin/mongodump /tmp/mongo-tools/bin/mongorestore /usr/local/bin/ \
-    && rm -rf /tmp/mongo-tools /tmp/mongo-tools.tgz
+    && rm -rf /tmp/mongo-tools /tmp/mongo-tools.tgz \
+    && mongodump --version \
+    && mongorestore --version
 
 # The aws CLI, for scripts/deploy-data.sh to sync the export to R2. Version 2 is a bundled
 # binary, so it cannot clash with the boto packages Airflow pins. The version is pinned, so a

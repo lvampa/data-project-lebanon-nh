@@ -35,15 +35,24 @@ RUN uv sync --frozen --package scrapers --package scripts
 RUN .venv/bin/playwright install chromium
 USER root
 RUN /opt/project/.venv/bin/playwright install-deps chromium
-# mongodump and mongorestore, for the hand-run MongoDB backup script. Debian does not package
-# MongoDB's tools, so they come from MongoDB's own repository, matching mongo:8.
-RUN curl -fsSL https://pgp.mongodb.com/server-8.0.asc \
-        | gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] http://repo.mongodb.org/apt/debian bookworm/mongodb-org/8.0 main" \
-        > /etc/apt/sources.list.d/mongodb-org-8.0.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends mongodb-database-tools \
-    && rm -rf /var/lib/apt/lists/*
+# mongodump and mongorestore, for the hand-run MongoDB backup script. They have to match
+# mongo:8. MongoDB's apt repository has no arm64 Debian packages, so this takes MongoDB's
+# prebuilt tools tarball instead, which works on both architectures. The ubuntu2204 build is
+# the only one published for arm64, and its glibc 2.35 is older than bookworm's 2.36. The
+# version is pinned and each tarball is checked against its sha256. Bump the version by hand,
+# and update both checksums with it (https://downloads.mongodb.org/tools/db/release.json).
+ARG MONGO_TOOLS_VERSION=100.20.1
+RUN case "$(uname -m)" in \
+        x86_64) arch=x86_64; sha256=2d56bb351383f7a42ffb866666631da8b7bcd82503b273e0c16d3be201ad12c1 ;; \
+        aarch64) arch=arm64; sha256=02e492384155af7d0623148668bc9eaf228529c32555e33d450b3ec18c8dcdd0 ;; \
+        *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-${arch}-${MONGO_TOOLS_VERSION}.tgz" -o /tmp/mongo-tools.tgz \
+    && echo "${sha256}  /tmp/mongo-tools.tgz" | sha256sum -c - \
+    && mkdir /tmp/mongo-tools \
+    && tar -xzf /tmp/mongo-tools.tgz -C /tmp/mongo-tools --strip-components=1 \
+    && cp /tmp/mongo-tools/bin/mongodump /tmp/mongo-tools/bin/mongorestore /usr/local/bin/ \
+    && rm -rf /tmp/mongo-tools /tmp/mongo-tools.tgz
 # pg_dump, for the PostgreSQL backup script. Debian bookworm packages version 15,
 # and pg_dump refuses a newer server, so version 16 comes from the PostgreSQL
 # repository, matching postgres:16.

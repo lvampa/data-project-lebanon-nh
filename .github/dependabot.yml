@@ -54,9 +54,13 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
     ignore:
-      # Both are pinned in ci.yml too. Bump them together by hand.
+      # Rust and uv are pinned in ci.yml too. Bump them together by hand.
+      # Python stays on 3.12 with .python-version, ruff's target-version and the Airflow
+      # image. Dependabot reads python:3.12-slim as 3.12 and would group a bump to 3.13
+      # with the routine ones.
       - dependency-name: rust
       - dependency-name: ghcr.io/astral-sh/uv
+      - dependency-name: python
 
   - package-ecosystem: docker-compose
     directory: /
@@ -65,7 +69,9 @@ updates:
     cooldown:
       default-days: 7
     groups:
-      # Majors come as their own PRs. A Postgres major needs a dump and restore.
+      # Majors come as their own PRs. A Postgres major needs a dump and restore,
+      # and `postgresql-client-16` in docker/Dockerfile.airflow bumped with it, or pg_dump
+      # refuses the newer server.
       compose:
         patterns: ["*"]
         update-types: [minor, patch]

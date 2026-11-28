@@ -84,6 +84,14 @@ COPY --chown=airflow shared/postgres/pyproject.toml ./shared/postgres/
 RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
     UV_CACHE_DIR=/tmp/uv-cache uv sync --frozen --no-install-workspace --package scrapers --package scripts
 
+# scrape_llcs and scrape_civicclerk drive Chromium. The browser goes in the airflow
+# user's cache; its system libraries need root. This sits before the source COPYs, so a
+# code change keeps these layers. The playwright package comes from the sync above.
+RUN .venv/bin/playwright install chromium
+USER 0
+RUN /opt/project/.venv/bin/playwright install-deps chromium
+USER 50000
+
 # shared/* and scripts/ need their source to build. The volume mounts overlay them at runtime.
 COPY --chown=airflow shared/bootstrap ./shared/bootstrap/
 COPY --chown=airflow shared/locations ./shared/locations/
@@ -92,12 +100,6 @@ COPY --chown=airflow shared/postgres ./shared/postgres/
 COPY --chown=airflow scripts ./scripts/
 RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
     UV_CACHE_DIR=/tmp/uv-cache uv sync --frozen --package scrapers --package scripts
-
-# scrape_llcs and scrape_civicclerk drive Chromium. The browser goes in the airflow
-# user's cache; its system libraries need root.
-RUN .venv/bin/playwright install chromium
-USER 0
-RUN /opt/project/.venv/bin/playwright install-deps chromium
 
 COPY --from=report-gen /build/target/release/report-gen /usr/local/bin/report-gen
 ENV REPORT_GEN_BIN=/usr/local/bin/report-gen

@@ -2,12 +2,10 @@ from datetime import timedelta
 from pathlib import PurePosixPath
 
 import pendulum
-from airflow import DAG
-from airflow.hooks.base import BaseHook
-from airflow.models.param import Param
-from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator
-from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.providers.standard.operators.bash import BashOperator
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.sdk import DAG, BaseHook, Param
 from publish import run_with_r2
 from specs import SPECS, DagSpec
 

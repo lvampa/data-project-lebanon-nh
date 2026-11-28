@@ -30,7 +30,9 @@ docker compose up -d
 ```
 
 - Airflow UI: http://localhost:8080
-- `docker compose ps` shows the webserver and scheduler as `healthy` once they are up.
+- `docker compose ps` shows the API server, DAG processor and scheduler as `healthy` once they are up.
+- The Airflow UI has no login, because it only listens on `127.0.0.1`. Add one before exposing it.
+- Airflow 3 starts with an empty `airflow` database. Create the `r2_data` Connection again in the UI, and keep the same `AIRFLOW_FERNET_KEY` in `.env`, or Airflow cannot decrypt the Connections it stores.
 - The Airflow UI shows times in New York time. DAG schedules are still UTC.
 - MongoDB: localhost:27017
 

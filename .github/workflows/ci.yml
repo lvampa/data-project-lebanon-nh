@@ -48,7 +48,7 @@ jobs:
       - name: Start Postgres and MongoDB
         run: docker compose --env-file .github/ci.env up --detach --wait postgres mongo
 
-      # Same command as the pre-push hook in .pre-commit-config.yaml.
+      # The pre-push hook skips the tests, so this is the only full run.
       - name: Pytest
         run: |
           set -a
@@ -135,9 +135,9 @@ jobs:
             exit 0
           fi
           changed=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")
-          # What the images are built from or mount: Docker and compose files, the
-          # workspace packages and lockfile, the DAGs, and this workflow.
-          pattern='^docker/|(^|/)Dockerfile|^compose\.yml$|(^|/)uv\.lock$|(^|/)pyproject\.toml$|^(dags|shared|scripts)/|^\.github/(ci\.env|workflows/ci\.yml)$'
+          # Only the DAGs and the Docker files, so most PRs skip the slow Airflow image.
+          # Pushes to main always build, which catches a break from the packages or lockfile.
+          pattern='^dags/|^docker/|(^|/)Dockerfile|^compose\.yml$|^\.dockerignore$'
           if grep -qE "$pattern" <<< "$changed"; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
@@ -158,14 +158,14 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.api
-          tags: ci-api
+          tags: data-project-api
           load: true
           cache-from: type=gha,scope=api
           # Only main writes the layer cache. The Airflow image is gigabytes, and PR
           # writes would evict the uv, bun and Rust caches under GitHub's 10 GB limit.
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=api' || '' }}
 
-      # Tagged with the names compose gives these services' images, so the step
+      # Tagged with the image name compose gives every Airflow service, so the step
       # below runs this build instead of building again.
       - name: Build the Airflow image
         if: steps.changes.outputs.build == 'true'
@@ -173,9 +173,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.airflow
-          tags: |
-            ci-airflow-init
-            ci-airflow-scheduler
+          tags: data-project-airflow
           load: true
           cache-from: type=gha,scope=airflow
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=airflow' || '' }}
@@ -187,6 +185,10 @@ jobs:
         run: |
           docker compose --env-file .github/ci.env up --detach --wait postgres
           docker compose --env-file .github/ci.env run --rm --no-deps airflow-init
+          # Airflow 3 reads DAGs and import errors from the database, which the
+          # dag-processor service fills. Reserialize parses the folder once here instead.
+          docker compose --env-file .github/ci.env run --rm --no-deps \
+            airflow-scheduler airflow dags reserialize
           docker compose --env-file .github/ci.env run --rm --no-deps \
             airflow-scheduler airflow dags list-import-errors
           # No import errors also means nothing if no DAGs loaded, as with an empty

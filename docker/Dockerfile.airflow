@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
-# report-gen, built here so the Airflow image needs no Rust toolchain. Bookworm matches the
+# report-gen, built here so the Airflow image needs no Rust toolchain. Trixie matches the
 # Airflow image's libc. Keep the version the same as the Rust job in ci.yml.
-FROM rust:1.100.0-bookworm AS report-gen
+FROM rust:1.100.0-trixie AS report-gen
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY tools/report-gen ./tools/report-gen/
 RUN cargo build --release --locked -p report-gen
 
-FROM apache/airflow:2.10.4
+FROM apache/airflow:3.4.0-python3.12
 
 # The base image ships an older uv in the airflow user's .local/bin, ahead of /bin on PATH.
 # Overwrite it, so the builds and every DAG task run this version.
@@ -17,21 +17,22 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.10 --chown=50000:0 /uv /uvx /home/airflow/
 USER 0
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# pg_dump and unzip. pg_dump is for the PostgreSQL backup script. Debian bookworm packages
-# version 15, and pg_dump refuses a newer server, so version 16 comes from the PostgreSQL
-# repository, matching postgres:16. unzip is for the aws CLI below.
+# pg_dump, unzip and gzip. pg_dump is for the PostgreSQL backup script. Debian trixie packages
+# version 17, and pg_dump refuses a newer server, so version 16 comes from the PostgreSQL
+# repository, matching postgres:16. unzip is for the aws CLI below, and
+# gzip is for tar to unpack the MongoDB tools, which the hardened base image leaves out.
 RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-16 unzip \
+    && apt-get install -y --no-install-recommends postgresql-client-16 unzip gzip \
     && rm -rf /var/lib/apt/lists/*
 
 # mongodump and mongorestore, for the hand-run MongoDB backup script. They have to match
 # mongo:8.3. MongoDB's apt repository has no arm64 Debian packages, so this takes MongoDB's
 # prebuilt tools tarball instead, which works on both architectures. The ubuntu2204 build is
-# the only one published for arm64, and its glibc 2.35 is older than bookworm's 2.36. The
+# the only one published for arm64 (debian13 has an x86_64 build only), and its glibc 2.35 is older than trixie's 2.41. The
 # version is pinned and each tarball is checked against its sha256. Bump the version by hand,
 # and update both checksums with it (https://downloads.mongodb.org/tools/db/release.json).
 ARG MONGO_TOOLS_VERSION=100.20.1
@@ -83,6 +84,14 @@ COPY --chown=airflow shared/postgres/pyproject.toml ./shared/postgres/
 RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
     UV_CACHE_DIR=/tmp/uv-cache uv sync --frozen --no-install-workspace --package scrapers --package scripts
 
+# scrape_llcs and scrape_civicclerk drive Chromium. The browser goes in the airflow
+# user's cache; its system libraries need root. This sits before the source COPYs, so a
+# code change keeps these layers. The playwright package comes from the sync above.
+RUN .venv/bin/playwright install chromium
+USER 0
+RUN /opt/project/.venv/bin/playwright install-deps chromium
+USER 50000
+
 # shared/* and scripts/ need their source to build. The volume mounts overlay them at runtime.
 COPY --chown=airflow shared/bootstrap ./shared/bootstrap/
 COPY --chown=airflow shared/locations ./shared/locations/
@@ -91,12 +100,6 @@ COPY --chown=airflow shared/postgres ./shared/postgres/
 COPY --chown=airflow scripts ./scripts/
 RUN --mount=type=cache,target=/tmp/uv-cache,uid=50000,gid=0 \
     UV_CACHE_DIR=/tmp/uv-cache uv sync --frozen --package scrapers --package scripts
-
-# scrape_llcs and scrape_civicclerk drive Chromium. The browser goes in the airflow
-# user's cache; its system libraries need root.
-RUN .venv/bin/playwright install chromium
-USER 0
-RUN /opt/project/.venv/bin/playwright install-deps chromium
 
 COPY --from=report-gen /build/target/release/report-gen /usr/local/bin/report-gen
 ENV REPORT_GEN_BIN=/usr/local/bin/report-gen

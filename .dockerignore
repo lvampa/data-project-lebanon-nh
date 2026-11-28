@@ -4,6 +4,7 @@
 **/.venv
 target
 data
+scripts/data
 .claude
 tmp
 **/.env*

@@ -52,7 +52,8 @@ The test run creates it if it is missing and applies the migrations to it.
 Each test runs inside a transaction that is rolled back, so the database stays empty.
 Postgres has to be running: `docker compose up -d postgres`.
 MongoDB tests do the same with a database such as `scraped_data_my_worktree_test`, never `scraped_data`; start it with `docker compose up -d mongo`, and set `TEST_MONGO_DB` to use another `_test` name.
-The pre-push hook runs the tests, so it needs Postgres up too.
+The pre-push hook does not run the tests; CI does, and `ci-ok` blocks the merge.
+Run `uv run pytest` yourself when you want them before pushing.
 Set `TEST_POSTGRES_DB` to use another database; the run stops unless its name ends in `_test`.
 The run leaves that database at the newest migration of the branch you tested, and a worktree that is reused for an older branch should drop it first.
 

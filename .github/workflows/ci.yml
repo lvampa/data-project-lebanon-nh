@@ -137,7 +137,7 @@ jobs:
           changed=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")
           # What the images are built from or mount: Docker and compose files, the
           # workspace packages and lockfile, the DAGs, and this workflow.
-          pattern='^docker/|(^|/)Dockerfile|^compose\.yml$|(^|/)uv\.lock$|(^|/)pyproject\.toml$|^(dags|shared|scripts)/|^\.github/(ci\.env|workflows/ci\.yml)$'
+          pattern='^docker/|(^|/)Dockerfile|^compose\.yml$|^\.dockerignore$|^tools/|(^|/)uv\.lock$|(^|/)pyproject\.toml$|^(dags|shared|scripts)/|^\.github/(ci\.env|workflows/ci\.yml)$'
           if grep -qE "$pattern" <<< "$changed"; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else

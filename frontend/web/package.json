@@ -18,7 +18,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "lucide-react": "catalog:",
-    "maplibre-gl": "^6.16.0",
+    "maplibre-gl": "^6.19.0",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
@@ -29,7 +29,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@maplibre/maplibre-gl-style-spec": "26.5.1",
+    "@maplibre/maplibre-gl-style-spec": "26.9.0",
     "@playwright/test": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@types/node": "catalog:",

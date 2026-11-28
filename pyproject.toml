@@ -1,6 +1,8 @@
 [tool.uv.workspace]
 members = ["scrapers", "scripts", "shared/postgres", "shared/mongo", "shared/locations", "shared/bootstrap", "api"]
 
+[tool.uv]
+required-version = ">=0.13.10"
 
 [dependency-groups]
 dev = [

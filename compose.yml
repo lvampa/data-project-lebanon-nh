@@ -19,7 +19,9 @@ x-airflow-common: &airflow-common
   environment: &airflow-env
     <<: [*postgres-env, *mongo-env]
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    # No login: the simple auth manager makes everyone an admin. That is safe only because the
+    # UI listens on 127.0.0.1. Add a login before exposing it.
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET:?see .env.example}
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?see .env.example}
@@ -106,10 +108,7 @@ services:
     environment:
       <<: *airflow-env
       _AIRFLOW_DB_MIGRATE: "true"
-      _AIRFLOW_WWW_USER_CREATE: "true"
-      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:?see .env.example}
-    # The entrypoint migrates the database and creates the user before it runs this.
+    # The entrypoint migrates the database before it runs this.
     command: version
 
   airflow-api-server:

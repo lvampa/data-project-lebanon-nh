@@ -59,14 +59,6 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m)-${AWSC
     && /tmp/aws/install \
     && rm -rf /tmp/aws /tmp/awscli.zip
 
-# The FAB auth manager keeps the login users in Airflow's database. The constraints file
-# keeps every other package at the version the image shipped with. Does nothing if the
-# image already has the provider.
-USER 50000
-RUN pip install --no-cache-dir apache-airflow-providers-fab \
-        --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.12.txt"
-USER 0
-
 RUN mkdir -p /opt/project && chown airflow /opt/project
 
 # The cache mount is on another filesystem than the venv, so uv has to copy, not link.

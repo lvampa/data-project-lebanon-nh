@@ -27,7 +27,7 @@ line-length = 88
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "ANN"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "ANN", "AIR"]
 ignore = ["E501", "E402"]
 
 [tool.ruff.lint.flake8-annotations]

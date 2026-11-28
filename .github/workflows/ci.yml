@@ -187,6 +187,10 @@ jobs:
         run: |
           docker compose --env-file .github/ci.env up --detach --wait postgres
           docker compose --env-file .github/ci.env run --rm --no-deps airflow-init
+          # Airflow 3 reads DAGs and import errors from the database, which the
+          # dag-processor service fills. Reserialize parses the folder once here instead.
+          docker compose --env-file .github/ci.env run --rm --no-deps \
+            airflow-scheduler airflow dags reserialize
           docker compose --env-file .github/ci.env run --rm --no-deps \
             airflow-scheduler airflow dags list-import-errors
           # No import errors also means nothing if no DAGs loaded, as with an empty

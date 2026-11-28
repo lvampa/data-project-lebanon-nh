@@ -14,7 +14,7 @@ x-mongo-env: &mongo-env
 
 x-airflow-common: &airflow-common
   # One image for every Airflow service, so compose builds it once.
-  image: data-project-airflow:local
+  image: data-project-airflow
   build:
     context: .
     dockerfile: docker/Dockerfile.airflow
@@ -90,7 +90,7 @@ services:
       retries: 5
 
   api:
-    image: data-project-api:local
+    image: data-project-api
     build:
       context: .
       dockerfile: docker/Dockerfile.api

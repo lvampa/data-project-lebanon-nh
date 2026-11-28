@@ -158,7 +158,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.api
-          tags: data-project-api:local
+          tags: data-project-api
           load: true
           cache-from: type=gha,scope=api
           # Only main writes the layer cache. The Airflow image is gigabytes, and PR
@@ -173,7 +173,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.airflow
-          tags: data-project-airflow:local
+          tags: data-project-airflow
           load: true
           cache-from: type=gha,scope=airflow
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=airflow' || '' }}

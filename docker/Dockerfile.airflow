@@ -7,7 +7,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY tools/report-gen ./tools/report-gen/
 RUN cargo build --release --locked -p report-gen
 
-FROM apache/airflow:2.10.4
+FROM apache/airflow:3.4.0
 
 # The base image ships an older uv in the airflow user's .local/bin, ahead of /bin on PATH.
 # Overwrite it, so the builds and every DAG task run this version.

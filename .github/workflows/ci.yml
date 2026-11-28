@@ -135,9 +135,9 @@ jobs:
             exit 0
           fi
           changed=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD")
-          # What the images are built from or mount: Docker and compose files, the
-          # workspace packages and lockfile, the DAGs, and this workflow.
-          pattern='^docker/|(^|/)Dockerfile|^compose\.yml$|^\.dockerignore$|^tools/|(^|/)uv\.lock$|(^|/)pyproject\.toml$|^(dags|shared|scripts)/|^\.github/(ci\.env|workflows/ci\.yml)$'
+          # Only the DAGs and the Docker files, so most PRs skip the slow Airflow image.
+          # Pushes to main always build, which catches a break from the packages or lockfile.
+          pattern='^dags/|^docker/|(^|/)Dockerfile|^compose\.yml$|^\.dockerignore$'
           if grep -qE "$pattern" <<< "$changed"; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else

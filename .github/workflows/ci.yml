@@ -158,14 +158,14 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.api
-          tags: ci-api
+          tags: data-project-api:local
           load: true
           cache-from: type=gha,scope=api
           # Only main writes the layer cache. The Airflow image is gigabytes, and PR
           # writes would evict the uv, bun and Rust caches under GitHub's 10 GB limit.
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=api' || '' }}
 
-      # Tagged with the names compose gives these services' images, so the step
+      # Tagged with the image name compose gives every Airflow service, so the step
       # below runs this build instead of building again.
       - name: Build the Airflow image
         if: steps.changes.outputs.build == 'true'
@@ -173,9 +173,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.airflow
-          tags: |
-            ci-airflow-init
-            ci-airflow-scheduler
+          tags: data-project-airflow:local
           load: true
           cache-from: type=gha,scope=airflow
           cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=airflow' || '' }}

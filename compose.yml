@@ -30,7 +30,6 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?see .env.example}@postgres/airflow
     AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "30"
-    AIRFLOW__API__DEFAULT_UI_TIMEZONE: America/New_York
     AIRFLOW__API__SECRET_KEY: ${AIRFLOW_SECRET_KEY:?see .env.example}
   volumes:
     - ./dags:/opt/airflow/dags
@@ -126,8 +125,15 @@ services:
       retries: 5
       start_period: 30s
 
+  # Every task calls the execution API, so the scheduler waits for the API server to be healthy.
   airflow-scheduler:
     <<: *airflow-service
+    depends_on:
+      <<: *airflow-depends
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-api-server:
+        condition: service_healthy
     command: scheduler
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']

@@ -32,8 +32,17 @@ docker compose up -d
 - Airflow UI: http://localhost:8080
 - `docker compose ps` shows the API server, DAG processor and scheduler as `healthy` once they are up.
 - The Airflow UI has no login, because it only listens on `127.0.0.1`. Add one before exposing it.
-- Airflow 3 starts with an empty `airflow` database. Create the `r2_data` Connection again in the UI, and keep the same `AIRFLOW_FERNET_KEY` in `.env`, or Airflow cannot decrypt the Connections it stores.
-- The Airflow UI shows times in New York time. DAG schedules are still UTC.
+- Airflow 3 should start on a fresh `airflow` database.
+  On an existing stack the Postgres volume already holds the Airflow 2.10 database, and `docker/postgres-init.sh` only runs on a new volume, so `airflow-init` would upgrade the old database in place.
+  To start fresh, stop the Airflow services, then recreate the database before `airflow-init`:
+  ```bash
+  docker compose stop airflow-api-server airflow-scheduler airflow-dag-processor
+  docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE airflow" -c "CREATE DATABASE airflow OWNER $POSTGRES_USER"'
+  docker compose run --rm airflow-init
+  docker compose up -d
+  ```
+  Then create the `r2_data` Connection again in the UI, and keep the same `AIRFLOW_FERNET_KEY` in `.env`, or Airflow cannot decrypt the Connections it stores.
+- The Airflow UI shows UTC. For New York time, pick the timezone in the UI's user menu; it is saved per browser. DAG schedules are always UTC.
 - MongoDB: localhost:27017
 
 Initialize Mongo indexes (safe to run multiple times). This creates an index on `urls.state`:

@@ -145,12 +145,12 @@ bash scripts/deploy.sh [--dry-run]           # ships whatever is checked out
 - Use `docker compose` (not `docker-compose`) for Airflow, Mongo, Postgres
 - The Dockerfiles take uv from its image (`COPY --from=ghcr.io/astral-sh/uv`), the same version as `.github/workflows/ci.yml`, and install dependencies from the lockfile before the source is copied.
 - `.dockerignore` leaves out `frontend/`, so an image that needs a file from there has to stop ignoring it first.
-- Airflow shows times in `America/New_York` (`AIRFLOW__API__DEFAULT_UI_TIMEZONE` in `compose.yml`). DAG schedules stay UTC, because `dags/build_dags.py` gives every DAG a UTC `start_date`, and the core timezone is left at its default.
+- Airflow 3 has no server-side UI timezone setting, so the UI shows UTC until you pick New York in its user menu (a per-browser setting). DAG schedules stay UTC, because `dags/build_dags.py` gives every DAG a UTC `start_date`, and the core timezone is left at its default.
 - Cloudflare Pages deploys from `.github/workflows/deploy.yml` on merge to main, and the workflow only runs `scripts/deploy.sh`. Use that script, not a bare `wrangler pages deploy`. A redeploy is "Re-run all jobs" on the last run (re-running an older run rolls production back to that commit; use Pages Rollback for that), and another branch deploys with a local `scripts/deploy.sh`, run from the repo root.
 - Use `bun` instead of `npm` for all frontend package management and scripts (`bun install`, `bun add`, `bun run`), from the `frontend/` workspace.
 - Check `pyproject.toml` for project scripts before reaching for raw commands
 - CI (`.github/workflows/ci.yml`) runs the pre-push checks plus pytest, Rust and, when Docker inputs change, the image builds; `ci-ok` is the one required check.
-- The pre-push hook skips pytest, which takes about 3 minutes. Run the tests that cover your change before pushing.
+- The pre-push hook skips pytest, which takes about 75 seconds. Run the tests that cover your change before pushing.
 - Use Pyrefly for Python type checking (`uv run pyrefly check`). New code is strict; files on the not-yet-strict list in `pyproject.toml` are not, and only come off it.
 
 ## 7. Frontend

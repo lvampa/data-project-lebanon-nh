@@ -48,7 +48,7 @@ jobs:
       - name: Start Postgres and MongoDB
         run: docker compose --env-file .github/ci.env up --detach --wait postgres mongo
 
-      # Same command as the pre-push hook in .pre-commit-config.yaml.
+      # The pre-push hook skips the tests, so this is the only full run.
       - name: Pytest
         run: |
           set -a

@@ -25,14 +25,6 @@ repos:
         pass_filenames: false
         stages: [pre-push]
 
-      - id: pytest
-        name: pytest
-        language: system
-        entry: uv run pytest -q
-        types: [python]
-        pass_filenames: false
-        stages: [pre-push]
-
       # Lint only the pushed files. CI runs the full lint, which catches cross-file breaks
       # like a token change in a stylesheet. ESLint runs from frontend/, where its config lives.
       - id: frontend-lint

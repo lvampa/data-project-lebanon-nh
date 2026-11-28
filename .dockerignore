@@ -1,0 +1,11 @@
+# Nothing the images are built from lives in these. frontend is not copied by either Dockerfile.
+.git
+**/node_modules
+**/.venv
+target
+data
+.claude
+tmp
+**/.env*
+!**/.env.example
+frontend

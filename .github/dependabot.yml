@@ -41,3 +41,31 @@ updates:
       # Dependabot can't read frontend/.nvmrc. Bump this with the Node version.
       - dependency-name: "@types/node"
         versions: [">=27"]
+
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      # Majors come as their own PRs, since they can need code changes.
+      docker:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # Both are pinned in ci.yml too. Bump them together by hand.
+      - dependency-name: rust
+      - dependency-name: ghcr.io/astral-sh/uv
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      # Majors come as their own PRs. A Postgres major needs a dump and restore.
+      compose:
+        patterns: ["*"]
+        update-types: [minor, patch]

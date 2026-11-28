@@ -17,15 +17,16 @@ COPY --from=ghcr.io/astral-sh/uv:0.13.10 --chown=50000:0 /uv /uvx /home/airflow/
 USER 0
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# pg_dump and unzip. pg_dump is for the PostgreSQL backup script. Debian trixie packages
+# pg_dump, unzip and gzip. pg_dump is for the PostgreSQL backup script. Debian trixie packages
 # version 17, and pg_dump refuses a newer server, so version 16 comes from the PostgreSQL
-# repository, matching postgres:16. unzip is for the aws CLI below.
+# repository, matching postgres:16. unzip is for the aws CLI below, and
+# gzip is for tar to unpack the MongoDB tools, which the hardened base image leaves out.
 RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client-16 unzip \
+    && apt-get install -y --no-install-recommends postgresql-client-16 unzip gzip \
     && rm -rf /var/lib/apt/lists/*
 
 # mongodump and mongorestore, for the hand-run MongoDB backup script. They have to match

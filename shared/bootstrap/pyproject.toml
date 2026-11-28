@@ -5,7 +5,7 @@ description = "One setup step for every entry point: load .env, then configure L
 requires-python = ">=3.12"
 dependencies = [
     "logfire>=5.4.0",
-    "pydantic-settings>=2.14.1",
+    "pydantic-settings>=2.16.3",
     "python-dotenv>=1.2.4",
 ]
 
